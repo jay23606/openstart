@@ -271,6 +271,23 @@ footer b { color: white; }
 .captain-dashboard h3 small { color: var(--muted); font-size: 10px; font-weight: 400; }
 .captain-dashboard article p { align-items: center; border-top: 1px solid var(--line); display: flex; font-size: 11px; justify-content: space-between; margin: 0; padding: 8px 0; }
 .captain-dashboard article p b { color: var(--green); text-transform: capitalize; }
+.race-day-metrics { display: grid; gap: 10px; grid-template-columns: repeat(3,1fr); margin-bottom: 18px; }
+.race-day-metrics span { background: var(--cream); color: var(--muted); font-size: 10px; padding: 16px; }
+.race-day-metrics b { color: var(--ink); display: block; font-family: Georgia,serif; font-size: 30px; font-weight: 500; margin-bottom: 5px; }
+.scanner-panel { background: var(--green-dark); color: white; margin-bottom: 18px; padding: 16px; }
+.scanner-panel video { display: block; margin-top: 14px; max-height: 360px; object-fit: cover; width: 100%; }
+.scanner-panel p { color: #c6d1cc; font-size: 11px; margin: 10px 0 0; }
+.race-day-results { border-top: 1px solid var(--line); margin-top: 14px; }
+.race-day-results > div { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 15px; justify-content: space-between; padding: 12px 0; }
+.race-day-results b, .race-day-results small { display: block; }
+.race-day-results small { color: var(--muted); margin-top: 4px; }
+.checkin-actions { display: flex; gap: 7px; }
+.staff-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.staff-list span { background: var(--cream); border-radius: 999px; font-size: 10px; padding: 7px 10px; }
+.pass-modal { max-width: 480px; text-align: center; }
+.pass-modal .form-heading { text-align: left; }
+.pass-qr svg { height: auto; max-width: 300px; width: 100%; }
+.pass-note { color: var(--muted); font-size: 12px; margin: 18px 0 0; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }

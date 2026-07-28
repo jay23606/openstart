@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=13";
+} from "./core.js?v=14";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   createManualRegistration, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listCaptainTeams, listOrganizerEvents, listPublishedEvents, listRegistrations,
-  listRunnerRegistrations, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
+  listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
   updateRegistration, updateWaitlist,
-} from "./data.js?v=13";
+} from "./data.js?v=14";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -217,6 +217,7 @@ function renderRoster(event) {
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
         <button class="subtle-button" data-add-participant="${event.id}" type="button">+ Manual entry</button>
         <button class="subtle-button" data-export-roster="${event.id}" type="button">Export CSV</button>
+        <button class="subtle-button" data-race-day="${event.id}" type="button">Race day</button>
         <button class="subtle-button" data-pricing-settings="${event.id}" type="button">Pricing</button>
         <button class="subtle-button" data-registration-settings="${event.id}" type="button">Form settings</button>
       </div>
@@ -321,6 +322,7 @@ function runnerRegistrationForm(item) {
       <button class="primary-button" type="submit">Save participant details</button>
     </form>
     <div class="self-service-actions">
+      ${item.status === "confirmed" ? `<button class="primary-button" data-view-pass="${item.id}" type="button">View QR pass</button>` : ""}
       ${item.status === "confirmed" && item.os_events?.allow_transfers ? `<button class="subtle-button" data-create-transfer="${item.id}" type="button">Create transfer link</button>` : ""}
       ${item.status === "confirmed" && item.os_events?.allow_refund_requests ? `<button class="danger-button" data-request-cancel="${item.id}" type="button">Request cancellation</button>` : ""}
     </div>
@@ -362,6 +364,61 @@ function pricingSettingsForm(event) {
   </section>`;
 }
 
+function raceDayForm(event) {
+  const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
+  const pickedUp = entries.filter((item) => item.packet_picked_up_at).length;
+  const checkedIn = entries.filter((item) => item.checked_in_at).length;
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Race-day operations</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="race-day-metrics"><span><b>${entries.length}</b>Confirmed</span><span><b>${pickedUp}</b>Packets picked up</span><span><b>${checkedIn}</b>Checked in</span></div>
+    <div class="scanner-panel"><button class="primary-button" data-start-scanner="${event.id}" type="button">Scan QR pass</button><video id="qr-scanner" class="hidden" playsinline></video><p id="scanner-status"></p></div>
+    <form id="race-day-lookup-form" data-event-id="${event.id}"><label>Find participant<input name="term" placeholder="Name, email, or bib" minlength="2" required></label><button class="primary-button" type="submit">Search</button></form>
+    <div id="race-day-results"></div>
+    <h3>Bib assignment</h3>
+    <form id="bulk-bib-form" data-event-id="${event.id}"><div class="split-fields"><label>Registration option<select name="tier_id"><option value="">All options</option>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><label>Starting bib<input name="start_number" type="number" min="1" value="1" required></label></div><button class="subtle-button" type="submit">Assign unassigned bibs</button></form>
+    <h3>Race-day staff</h3>
+    <div class="staff-list">${(event.os_event_staff || []).map((staff) => `<span>${escapeHtml(staff.email)} · ${escapeHtml(staff.role)}</span>`).join("") || "<p>No staff assigned.</p>"}</div>
+    <form id="staff-form" data-event-id="${event.id}"><div class="split-fields"><label>Verified account email<input name="email" type="email" required></label><label>Role<select name="role"><option value="scanner">Scanner</option><option value="packet_pickup">Packet pickup</option><option value="registration">Registration desk</option><option value="admin">Race-day admin</option></select></label></div><button class="subtle-button" type="submit">Add staff member</button></form>
+    <h3>Walk-up registration</h3>
+    <form id="walkup-form" data-event-id="${event.id}"><label>Entry<select name="tier_id">${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div><label>Email<input name="email" type="email" required></label><label>Emergency contact<input name="emergency_contact" required></label><label>Bib number<input name="bib_number"></label><button class="primary-button" type="submit">Add and confirm walk-up</button></form>
+  </section>`;
+}
+
+function raceDayResults(items) {
+  return items.length ? `<div class="race-day-results">${items.map((item) => `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(item.os_event_tiers?.name || "")} · Bib ${escapeHtml(item.bib_number || "—")}</small></span><span class="checkin-actions"><button class="subtle-button" data-pickup="${item.id}" type="button">${item.packet_picked_up_at ? "✓ Packet" : "Mark packet"}</button><button class="primary-button" data-checkin="${item.id}" type="button">${item.checked_in_at ? "✓ Checked in" : "Check in"}</button></span></div>`).join("")}</div>` : '<div class="empty-state">No matching participants.</div>';
+}
+
+function passForm(item, pass) {
+  return `<section class="modal pass-modal"><div class="form-heading"><div><p>Race-day pass</p><h2>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="pass-qr">${pass.qrSvg}</div><div class="registration-facts"><span><b>Race</b>${escapeHtml(item.os_events?.name || "")}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Entry</b>${escapeHtml(item.os_event_tiers?.name || "")}</span><span><b>Status</b>${escapeHtml(item.status)}</span></div><p class="pass-note">Show this code at packet pickup or check-in.</p></section>`;
+}
+
+async function startQrScanner(eventId) {
+  if (!("BarcodeDetector" in window)) throw new Error("QR scanning requires a current Chrome or Edge browser.");
+  const video = document.querySelector("#qr-scanner");
+  const status = document.querySelector("#scanner-status");
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+  video.srcObject = stream;
+  video.classList.remove("hidden");
+  await video.play();
+  status.textContent = "Point the camera at an OpenStart QR pass.";
+  const detector = new BarcodeDetector({ formats: ["qr_code"] });
+  const stop = () => stream.getTracks().forEach((track) => track.stop());
+  const scan = async () => {
+    if (!video.srcObject) return;
+    const codes = await detector.detect(video).catch(() => []);
+    if (codes[0]?.rawValue) {
+      stop();
+      video.srcObject = null;
+      video.classList.add("hidden");
+      const result = await raceDayAction("scan", { token: codes[0].rawValue });
+      document.querySelector("#race-day-results").innerHTML = raceDayResults([result.registration]);
+      status.textContent = "Pass verified.";
+      return;
+    }
+    requestAnimationFrame(scan);
+  };
+  requestAnimationFrame(scan);
+}
+
 function eventForm() {
   return `
     <section class="modal">
@@ -382,6 +439,11 @@ function eventForm() {
 function openDialog(content) {
   dialogContent.innerHTML = content;
   dialog.showModal();
+}
+function stopScanner() {
+  const video = document.querySelector("#qr-scanner");
+  video?.srcObject?.getTracks().forEach((track) => track.stop());
+  if (video) video.srcObject = null;
 }
 
 function exportRoster(event) {
@@ -509,6 +571,8 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.addParticipant) openDialog(manualRegistrationForm(eventById(target.dataset.addParticipant)));
   if (target.dataset.registrationSettings) openDialog(registrationSettingsForm(eventById(target.dataset.registrationSettings)));
   if (target.dataset.pricingSettings) openDialog(pricingSettingsForm(eventById(target.dataset.pricingSettings)));
+  if (target.dataset.raceDay) openDialog(raceDayForm(eventById(target.dataset.raceDay)));
+  if (target.dataset.startScanner) await startQrScanner(target.dataset.startScanner);
   if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
   if (target.matches("[data-export-finance]")) exportFinancials();
   if (target.dataset.editRegistration) {
@@ -518,6 +582,23 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.manageRunner) {
     const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.manageRunner);
     openDialog(runnerRegistrationForm(item));
+  }
+  if (target.dataset.viewPass) {
+    const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.viewPass);
+    const pass = await raceDayAction("get_pass", { registrationId: item.id });
+    openDialog(passForm(item, pass));
+  }
+  if (target.dataset.pickup) {
+    await raceDayAction("pickup", { registrationId: target.dataset.pickup });
+    target.textContent = "✓ Packet";
+    target.disabled = true;
+    showNotice("Packet pickup recorded.");
+  }
+  if (target.dataset.checkin) {
+    await raceDayAction("checkin", { registrationId: target.dataset.checkin });
+    target.textContent = "✓ Checked in";
+    target.disabled = true;
+    showNotice("Participant checked in.");
   }
   if (target.dataset.createTransfer) {
     const result = await registrationAction("create_transfer", { registrationId: target.dataset.createTransfer });
@@ -568,7 +649,10 @@ document.addEventListener("click", async (event) => {
     showNotice("Scheduled price removed.");
   }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
-  if (target.matches("[data-close-dialog]")) dialog.close();
+  if (target.matches("[data-close-dialog]")) {
+    stopScanner();
+    dialog.close();
+  }
   if (target.matches("[data-reset-demo]")) {
     resetDemo();
     await go("dashboard");
@@ -781,6 +865,42 @@ document.addEventListener("submit", async (event) => {
       showNotice("Promo code created.");
     }
 
+    if (form.id === "race-day-lookup-form") {
+      const result = await raceDayAction("lookup", { eventId: form.dataset.eventId, term: data.get("term") });
+      form.parentElement.querySelector("#race-day-results").innerHTML = raceDayResults(result.registrations || []);
+    }
+
+    if (form.id === "bulk-bib-form") {
+      const result = await raceDayAction("bulk_assign_bibs", {
+        eventId: form.dataset.eventId, tierId: data.get("tier_id") || null,
+        startNumber: Number(data.get("start_number")),
+      });
+      await loadDashboard();
+      openDialog(raceDayForm(eventById(form.dataset.eventId)));
+      showNotice(`${result.assigned} bibs assigned.`);
+    }
+
+    if (form.id === "staff-form") {
+      await raceDayAction("add_staff", {
+        eventId: form.dataset.eventId, email: data.get("email"), role: data.get("role"),
+      });
+      await loadDashboard();
+      openDialog(raceDayForm(eventById(form.dataset.eventId)));
+      showNotice("Race-day staff member added.");
+    }
+
+    if (form.id === "walkup-form") {
+      await raceDayAction("walkup", {
+        eventId: form.dataset.eventId, tierId: data.get("tier_id"),
+        firstName: data.get("first_name"), lastName: data.get("last_name"),
+        email: data.get("email"), emergencyContact: data.get("emergency_contact"),
+        bibNumber: data.get("bib_number") || null,
+      });
+      await loadDashboard();
+      openDialog(raceDayForm(eventById(form.dataset.eventId)));
+      showNotice("Walk-up participant added.");
+    }
+
     if (form.id === "event-form") {
       const name = data.get("name");
       await createEvent({
@@ -818,7 +938,10 @@ signOutButton.addEventListener("click", async () => {
   await go("discover");
 });
 dialog.addEventListener("click", (event) => {
-  if (event.target === dialog) dialog.close();
+  if (event.target === dialog) {
+    stopScanner();
+    dialog.close();
+  }
 });
 
 async function boot() {

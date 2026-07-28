@@ -1,14 +1,26 @@
 import Stripe from "npm:stripe@18.5.0";
+import QRCode from "npm:qrcode@1.5.4";
 import { adminClient, json } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 const resendKey = Deno.env.get("RESEND_API_KEY");
 const confirmationFrom = Deno.env.get("RESEND_FROM_EMAIL");
+const raceDaySigningSecret = Deno.env.get("RACE_DAY_SIGNING_SECRET");
 const stripe = stripeKey
   ? new Stripe(stripeKey, { httpClient: Stripe.createFetchHttpClient() })
   : null;
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
+const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+const raceDayToken = async (registrationId: string, startsAt: string) => {
+  if (!raceDaySigningSecret) return null;
+  const payload = encode(new TextEncoder().encode(JSON.stringify({
+    registrationId, expiresAt: new Date(startsAt).getTime() + 7 * 86400000,
+  })));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(raceDaySigningSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = encode(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
+  return `${payload}.${signature}`;
+};
 
 const escapeHtml = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -35,6 +47,8 @@ const sendConfirmationEmail = async (
 
   const race = registration.os_events as unknown as Record<string, unknown>;
   const tier = registration.os_event_tiers as unknown as Record<string, unknown>;
+  const token = await raceDayToken(registration.id, String(race?.starts_at));
+  const qrData = token ? await QRCode.toDataURL(token, { width: 320, margin: 1 }) : null;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -54,8 +68,14 @@ const sendConfirmationEmail = async (
         <p>${escapeHtml(tier?.name)} · ${escapeHtml(tier?.distance_label)}</p>
         <p>${escapeHtml(race?.location_name)} · ${escapeHtml(new Date(String(race?.starts_at)).toLocaleDateString("en-US", { dateStyle: "long" }))}</p>
         <p><strong>Registration ID:</strong> ${escapeHtml(registration.id)}</p>
+        ${qrData ? '<p><strong>Your race-day pass</strong></p><img src="cid:openstart-pass" width="240" height="240" alt="OpenStart QR pass">' : ""}
         <p style="margin-top:32px">See you at the start,<br><strong>OpenStart</strong></p>
       </div>`,
+      attachments: qrData ? [{
+        filename: "openstart-race-day-pass.png",
+        content: qrData.split(",")[1],
+        content_id: "openstart-pass",
+      }] : undefined,
     }),
   });
   const result = await response.json().catch(() => ({}));

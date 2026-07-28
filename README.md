@@ -16,6 +16,8 @@ There is no frontend framework, bundler, or build step.
 - Runner-managed participant details, cancellation requests, transfers, and refunds
 - Registration activity history and automatic waitlist invitations
 - Multi-person orders, itemized Stripe Checkout, teams, clubs, and relay legs
+- Signed QR passes, camera scanning, bib assignment, packet pickup, and race-day check-in
+- Event staff roles, walk-up registration, and race-day audit history
 - Row-level security for organizer and participant data
 - A provider-neutral payment boundary that leaves paid entries pending
 - Installable PWA shell with an offline cache

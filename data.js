@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=13";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=13";
+import { configured, supabase } from "./core.js?v=14";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=14";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -239,6 +239,11 @@ export async function resendConfirmation(registrationId) {
 export async function registrationAction(action, payload) {
   if (!configured) throw new Error("Registration actions require Supabase");
   return functionResult("os-registration-action", { action, ...payload });
+}
+
+export async function raceDayAction(action, payload) {
+  if (!configured) throw new Error("Race-day tools require Supabase");
+  return functionResult("os-race-day", { action, ...payload });
 }
 
 export async function listRunnerRegistrations() {
