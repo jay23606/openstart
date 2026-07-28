@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=31";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=31";
+import { configured, supabase } from "./core.js?v=32";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=32";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -552,6 +552,43 @@ export async function getOrganizerProfile(userId) {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+export async function getMyAthleteProfile() {
+  if (!configured) return null;
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return null;
+  const { data, error } = await supabase.from("os_athlete_profiles")
+    .select("*").eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAthleteProfile(profile) {
+  if (!configured) throw new Error("Athlete profiles require Supabase");
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) throw new Error("Sign in to manage your athlete profile");
+  const { data, error } = await supabase.from("os_athlete_profiles")
+    .upsert({ ...profile, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: "user_id" })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getAthleteProfile(handle) {
+  if (!configured) return null;
+  const normalized = String(handle || "").toLowerCase();
+  const { data: profile, error } = await supabase.from("os_athlete_profiles")
+    .select("handle,display_name,location,bio,is_public,created_at")
+    .eq("handle", normalized).eq("is_public", true).maybeSingle();
+  if (error) throw error;
+  if (!profile) return null;
+  const { data: results, error: resultsError } = await supabase
+    .rpc("os_athlete_results", { p_handle: normalized });
+  if (resultsError) throw resultsError;
+  return { profile, results: results || [] };
 }
 
 export async function createEvent(event, tier) {

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'">
+  <title>Registration — OpenStart</title>
+  <style>
+    :root { --ink:#17211d; --muted:#66716b; --paper:#fffdf8; --green:#0f6b4f; --line:#d9ded8; --orange:#f47b45; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: Arial, Helvetica, sans-serif; display: grid; min-height: 100vh; place-items: center; padding: 24px; }
+    .card { background: white; border: 1px solid var(--line); max-width: 460px; padding: 40px; text-align: center; }
+    .mark { align-items: center; border-radius: 50%; display: inline-flex; font-size: 30px; height: 64px; justify-content: center; width: 64px; }
+    .mark.ok { background: #e6f3ee; color: var(--green); }
+    .mark.cancel { background: #fdece4; color: var(--orange); }
+    h1 { font-family: Georgia, serif; font-size: 28px; margin: 20px 0 10px; }
+    p { color: var(--muted); line-height: 1.6; margin: 0 0 8px; }
+    a.button { background: var(--green); color: white; display: inline-block; font-weight: 800; margin-top: 22px; padding: 12px 22px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card" id="card"><p>One moment…</p></div>
+  <script type="module">
+    import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+    const params = new URLSearchParams(location.search);
+    const cancelled = params.get("payment") === "cancelled";
+    const slug = params.get("event") || "";
+    const esc = (value = "") => String(value).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
+    const card = document.getElementById("card");
+
+    let eventName = "";
+    if (slug) {
+      try {
+        const rows = await fetch(`${SUPABASE_URL}/rest/v1/os_events?slug=eq.${encodeURIComponent(slug)}&status=eq.published&select=name`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        }).then((response) => response.json());
+        eventName = Array.isArray(rows) && rows[0] ? rows[0].name : "";
+      } catch { /* name is optional */ }
+    }
+    const eventLink = slug ? `<a class="button" href="./?event=${esc(slug)}">View ${esc(eventName || "the event")}</a>` : `<a class="button" href="./">Explore OpenStart</a>`;
+
+    card.innerHTML = cancelled
+      ? `<span class="mark cancel" aria-hidden="true">↺</span><h1>Checkout cancelled</h1><p>Your temporary spot has been released. You can start over whenever you're ready.</p>${eventLink}`
+      : `<span class="mark ok" aria-hidden="true">✓</span><h1>Payment received</h1><p>Thanks${eventName ? ` for registering for <b>${esc(eventName)}</b>` : ""}! OpenStart is confirming your entry and a receipt is on the way by email.</p>${eventLink}`;
+  </script>
+</body>
+</html>

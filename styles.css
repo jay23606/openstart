@@ -696,3 +696,46 @@ footer b { color: white; }
   .operations-list article { align-items: stretch; flex-direction: column; }
   .operations-list article > span { flex-wrap: wrap; text-align: left; }
 }
+
+/* Shared form helpers */
+.form-hint { color: var(--muted); font-size: 12px; margin: -6px 0 4px; }
+.form-hint code { background: var(--cream); font-weight: 700; padding: 1px 5px; }
+.checkbox-row { align-items: center; display: flex; font-size: 14px; gap: 9px; }
+.checkbox-row input { width: auto; }
+
+/* Athlete profile CTA on the runner dashboard */
+.athlete-cta-card { align-items: center; background: var(--cream); display: flex; gap: 20px; justify-content: space-between; margin-top: 24px; padding: 24px; }
+.athlete-cta-card h2 { font-family: Georgia,serif; margin: 0 0 6px; }
+.athlete-cta-card p { color: var(--muted); font-size: 12px; margin: 0; }
+.athlete-cta-card code { background: var(--paper); font-weight: 700; padding: 1px 5px; }
+.athlete-cta-card > span { display: flex; gap: 8px; }
+
+/* Public athlete page */
+.athlete-page { margin: auto; max-width: 1120px; padding: 48px clamp(22px,5vw,40px) 100px; }
+.athlete-header { border-bottom: 3px solid var(--ink); margin-bottom: 32px; padding-bottom: 30px; }
+.athlete-identity { align-items: center; display: flex; gap: 20px; margin-top: 14px; }
+.athlete-avatar { align-items: center; background: var(--green); border-radius: 50%; color: white; display: flex; flex: 0 0 72px; font-family: Georgia,serif; font-size: 34px; height: 72px; justify-content: center; }
+.athlete-identity h1 { font-family: Georgia,serif; font-size: clamp(38px,6vw,60px); letter-spacing: -2px; margin: 4px 0; }
+.athlete-meta { color: var(--muted); font-size: 14px; margin: 0; }
+.athlete-bio { color: var(--ink); line-height: 1.6; margin: 20px 0 0; max-width: 720px; }
+.athlete-pr-grid { display: grid; gap: 14px; grid-template-columns: repeat(3,1fr); }
+.athlete-pr-grid article { background: var(--cream); padding: 20px; }
+.athlete-pr-grid b { color: var(--green); display: block; font-family: Georgia,serif; font-size: 30px; }
+.athlete-pr-grid span { display: block; font-weight: 700; margin: 6px 0 3px; }
+.athlete-pr-grid small { color: var(--muted); font-size: 11px; }
+.athlete-results { border-top: 2px solid var(--ink); }
+.athlete-result { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 16px 4px; }
+.athlete-result-main p { color: var(--muted); font-size: 11px; margin: 0 0 4px; }
+.athlete-result-main h3 { font-size: 19px; margin: 0 0 3px; }
+.athlete-result-main small { color: var(--muted); }
+.athlete-result-time { text-align: right; white-space: nowrap; }
+.athlete-result-time b { color: var(--green); display: block; font-family: Georgia,serif; font-size: 22px; }
+.athlete-result-time span { color: var(--muted); font-size: 11px; }
+
+@media (max-width: 620px) {
+  .athlete-cta-card { align-items: stretch; flex-direction: column; }
+  .athlete-cta-card > span { flex-direction: column; }
+  .athlete-pr-grid { grid-template-columns: 1fr; }
+  .athlete-result { flex-direction: column; align-items: start; gap: 8px; }
+  .athlete-result-time { text-align: left; }
+}

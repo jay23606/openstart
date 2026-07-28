@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=31";
+} from "./core.js?v=32";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createEventTier, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
-  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
+  getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
-  platformAdminAction, reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=31";
+  platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=32";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -44,6 +44,7 @@ const state = {
   navigationId: 0,
   platformAdmin: null,
   platformData: null,
+  athleteProfile: null,
 };
 
 const helpArticles=[
@@ -232,6 +233,7 @@ const parseResultTime = (value) => {
   if(parts.some(Number.isNaN) || parts.length<2 || parts.length>3) throw new Error(`Invalid time: ${clean}`);
   return (parts.length===3 ? parts[0]*3600+parts[1]*60+parts[2] : parts[0]*60+parts[1])*1000;
 };
+const ordinal=(value)=>{const suffixes=["th","st","nd","rd"];const remainder=value%100;return `${value}${suffixes[(remainder-20)%10]||suffixes[remainder]||suffixes[0]}`;};
 const safeColor=(value)=>/^#[0-9a-f]{6}$/i.test(value || "") ? value : "#0f6b4f";
 const safeUrl=(value)=>{try{const url=new URL(value);return ["http:","https:"].includes(url.protocol) ? url.href : "";}catch{return "";}};
 const contentHtml=(value)=>escapeHtml(value || "").replace(/\n/g,"<br>");
@@ -553,15 +555,112 @@ function renderRunnerDashboard() {
       ${state.lotteryApplications.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My lottery applications</h2><p>Qualification review, draw results, waitlist position, and payment deadlines.</p></div></div>${state.lotteryApplications.map(lotteryRunnerCard).join("")}</div>` : ""}
       ${state.volunteerSignups.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My volunteer shifts</h2><p>Upcoming assignments and service history.</p></div></div>${state.volunteerSignups.map((signup)=>{const shift=signup.os_volunteer_shifts;const role=shift?.os_volunteer_roles;return `<article><h3>${escapeHtml(role?.name || "Volunteer")} <small>${escapeHtml(role?.os_events?.name || "")}</small></h3><p><span>${new Date(shift.starts_at).toLocaleString()} · ${escapeHtml(shift.location)}</span><b>${escapeHtml(signup.status)}</b></p>${signup.hours_worked!==null ? `<p><span>Recorded service</span><b>${signup.hours_worked} hours</b></p>` : ""}</article>`;}).join("")}</div>` : ""}
       ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
+      <div class="athlete-cta-card"><div><h2>Athlete profile</h2><p>${state.athleteProfile ? `Your public race history lives at <code>?athlete=${escapeHtml(state.athleteProfile.handle)}</code>${state.athleteProfile.is_public ? "" : " — currently private"}.` : "Create a shareable page that gathers your published results and personal bests across every OpenStart event."}</p></div><span>${state.athleteProfile && state.athleteProfile.is_public ? `<button class="subtle-button" data-view-athlete="${escapeHtml(state.athleteProfile.handle)}" type="button">View public page</button>` : ""}<button class="primary-button" data-edit-athlete type="button">${state.athleteProfile ? "Edit profile" : "Create profile"}</button></span></div>
       <div class="privacy-card"><div><h2>Your data</h2><p>Download a portable copy of your OpenStart information or permanently delete a runner-only account.</p></div><span><button class="subtle-button" data-export-account type="button">Export my data</button><button class="danger-button" data-delete-account type="button">Delete account</button></span></div>
     </section>`;
+}
+
+function athletePrs(results){
+  const best=new Map();
+  for(const row of results){
+    if(row.status!=="finisher") continue;
+    const milliseconds=row.chip_time_ms ?? row.gun_time_ms;
+    if(milliseconds==null) continue;
+    const key=row.distance_label || row.tier_name || "Result";
+    const current=best.get(key);
+    if(!current || milliseconds<current.milliseconds) best.set(key,{milliseconds,event:row.event_name,when:row.starts_at});
+  }
+  return [...best.entries()].map(([label,info])=>({label,...info}));
+}
+
+function renderAthlete(data){
+  state.view="athlete";
+  state.selectedEvent=null;
+  const {profile,results}=data;
+  const finishes=results.filter((row)=>row.status==="finisher");
+  const prs=athletePrs(results);
+  const name=profile.display_name || `@${profile.handle}`;
+  setPageMetadata(`${name} · OpenStart athlete`,`Race history and personal bests for ${name} on OpenStart.`);
+  page.innerHTML=`
+    <section class="athlete-page">
+      <div class="athlete-header">
+        <button class="text-button" data-back type="button">← OpenStart</button>
+        <div class="athlete-identity">
+          <span class="athlete-avatar" aria-hidden="true">${escapeHtml((profile.display_name || profile.handle).slice(0,1).toUpperCase())}</span>
+          <div>
+            <p class="eyebrow">Athlete</p>
+            <h1>${escapeHtml(name)}</h1>
+            <p class="athlete-meta">@${escapeHtml(profile.handle)}${profile.location ? ` · ${escapeHtml(profile.location)}` : ""}</p>
+          </div>
+        </div>
+        ${profile.bio ? `<p class="athlete-bio">${contentHtml(profile.bio)}</p>` : ""}
+      </div>
+      <div class="metric-grid">
+        <div><p>Races</p><strong>${results.length}</strong><span>Published results</span></div>
+        <div><p>Finishes</p><strong>${finishes.length}</strong><span>Official finisher results</span></div>
+        <div><p>Distances</p><strong>${prs.length}</strong><span>Personal bests below</span></div>
+      </div>
+      ${prs.length ? `<div class="dashboard-card"><div class="card-heading"><div><h2>Personal bests</h2><p>Fastest published finish per distance.</p></div></div>
+        <div class="athlete-pr-grid">${prs.map((pr)=>`<article><b>${resultTime(pr.milliseconds)}</b><span>${escapeHtml(pr.label)}</span><small>${escapeHtml(pr.event)} · ${displayDate(pr.when)}</small></article>`).join("")}</div></div>` : ""}
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Race history</h2><p>Every published result, newest first.</p></div></div>
+        <div class="athlete-results">
+          ${results.length ? results.map((row)=>{
+            const milliseconds=row.chip_time_ms ?? row.gun_time_ms;
+            const place=row.status==="finisher" && row.overall_place ? `${row.overall_place} / ${row.tier_finishers}` : "—";
+            const division=row.status==="finisher" && row.division_place && row.division ? `${ordinal(row.division_place)} ${escapeHtml(row.division)}` : "";
+            return `<article class="athlete-result">
+              <div class="athlete-result-main">
+                <p>${displayDate(row.starts_at)} · ${escapeHtml(row.location_name || "")}</p>
+                <h3>${escapeHtml(row.event_name)}</h3>
+                <small>${escapeHtml(row.tier_name)}${row.distance_label ? ` · ${escapeHtml(row.distance_label)}` : ""}</small>
+              </div>
+              <div class="athlete-result-time">
+                <b>${row.status==="finisher" ? resultTime(milliseconds) : row.status.toUpperCase()}</b>
+                <span>${place}${division ? ` · ${division}` : ""}</span>
+              </div>
+            </article>`;
+          }).join("") : '<div class="empty-state">No published results yet.</div>'}
+        </div>
+      </div>
+    </section>`;
+  syncNavigation();
+  page.focus({preventScroll:true});
+}
+
+function athleteProfileForm(profile){
+  const current=profile || {};
+  return `<section class="modal"><div class="form-heading"><div><p>Runner profile</p><h2>${profile ? "Edit" : "Create"} your athlete page</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="athlete-profile-form">
+      <label>Public handle<input name="handle" value="${escapeHtml(current.handle || "")}" pattern="[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])" minlength="3" maxlength="32" placeholder="jane-runner" required ${profile ? "readonly" : ""}></label>
+      <p class="form-hint">Lowercase letters, numbers, and hyphens. Your page lives at <code>?athlete=your-handle</code>.${profile ? " Handles can't be changed once set." : ""}</p>
+      <label>Display name<input name="display_name" value="${escapeHtml(current.display_name || "")}" maxlength="80" placeholder="Jane Runner"></label>
+      <label>Location<input name="location" value="${escapeHtml(current.location || "")}" maxlength="80" placeholder="Boulder, CO"></label>
+      <label>Short bio<textarea name="bio" maxlength="400" placeholder="Trail runner chasing a half-marathon PR.">${escapeHtml(current.bio || "")}</textarea></label>
+      <label class="checkbox-row"><input type="checkbox" name="is_public" ${current.is_public===false ? "" : "checked"}> Make my profile and results public</label>
+      <p class="form-message"></p>
+      <button class="primary-button" type="submit">${profile ? "Save profile" : "Create profile"}</button>
+    </form></section>`;
+}
+
+function embedSnippetForm(event){
+  const scriptSrc=new URL("embed.js",document.baseURI).href;
+  const snippet=`<div data-openstart-embed="${event.slug}"></div>\n<script src="${scriptSrc}"></script>`;
+  const preview=new URL("embed.html",document.baseURI);
+  preview.searchParams.set("event",event.slug);
+  return `<section class="modal"><div class="form-heading"><div><p>Embed registration</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <p class="form-hint">Paste this where you want a registration widget to appear on your own website. Checkout runs securely on OpenStart — no extra configuration required.</p>
+    <label>Embed code<textarea id="embed-snippet" rows="3" readonly>${escapeHtml(snippet)}</textarea></label>
+    <div class="card-actions"><button class="primary-button" data-copy-embed type="button">Copy code</button><a class="subtle-button" href="${escapeHtml(preview.href)}" target="_blank" rel="noopener">Preview widget</a></div>
+    <p class="form-hint">Optional: add <code>data-openstart-accent="#0f6b4f"</code> to the div to match your brand colour.</p>
+  </section>`;
 }
 
 function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-open-setup="${event.id}" type="button">Setup guide</button><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-open-setup="${event.id}" type="button">Setup guide</button><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-embed-code="${event.id}" type="button">Embed</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -1149,11 +1248,12 @@ async function loadDashboard() {
 }
 
 async function loadRunnerDashboard() {
-  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups, state.lotteryApplications] = await Promise.all([
+  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups, state.lotteryApplications, state.athleteProfile] = await Promise.all([
     listRunnerRegistrations(),
     listCaptainTeams(state.session.user.id),
     listMyVolunteerSignups(),
     listMyLotteryApplications(),
+    getMyAthleteProfile(),
   ]);
 }
 
@@ -1440,6 +1540,14 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.exportVolunteers) exportVolunteers(eventById(target.dataset.exportVolunteers));
   if (target.dataset.viewResults) renderResults(eventById(target.dataset.viewResults));
   if (target.dataset.resultsManager) openDialog(resultsManagerForm(eventById(target.dataset.resultsManager)));
+  if (target.dataset.embedCode) openDialog(embedSnippetForm(eventById(target.dataset.embedCode)));
+  if (target.matches("[data-copy-embed]")) {
+    const textarea = document.querySelector("#embed-snippet");
+    if (textarea) {
+      textarea.select();
+      navigator.clipboard?.writeText(textarea.value).then(() => showNotice("Embed code copied.")).catch(() => {});
+    }
+  }
   if (target.dataset.importResults) {
     const race=eventById(target.dataset.importResults);
     const rows=parseResultsCsv(document.querySelector("#results-csv").value,race);
@@ -1526,6 +1634,14 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.manageRunner) {
     const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.manageRunner);
     openDialog(runnerRegistrationForm(item));
+  }
+  if (target.matches("[data-edit-athlete]")) openDialog(athleteProfileForm(state.athleteProfile));
+  if (target.dataset.viewAthlete) {
+    const athlete = await getAthleteProfile(target.dataset.viewAthlete);
+    if (!athlete) { showNotice("That athlete page isn't public yet."); return; }
+    history.replaceState({}, "", `${location.pathname}?athlete=${target.dataset.viewAthlete}`);
+    renderAthlete(athlete);
+    scrollTo(0, 0);
   }
   if (target.dataset.viewPass) {
     const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.viewPass);
@@ -1653,6 +1769,27 @@ document.addEventListener("submit", async (event) => {
       } else {
         await go(state.pendingView || "runner");
       }
+    }
+
+    if(form.id==="athlete-profile-form"){
+      const payload={
+        handle:String(data.get("handle")||"").trim().toLowerCase(),
+        display_name:String(data.get("display_name")||"").trim(),
+        location:String(data.get("location")||"").trim(),
+        bio:String(data.get("bio")||"").trim(),
+        is_public:data.get("is_public")==="on",
+      };
+      try{
+        state.athleteProfile=await saveAthleteProfile(payload);
+        dialog.close();
+        renderRunnerDashboard();
+        showNotice("Athlete profile saved.");
+      }catch(error){
+        form.querySelector(".form-message").textContent=/duplicate|unique/i.test(error.message||"")
+          ? "That handle is already taken. Try another."
+          : (error.message || "The profile could not be saved.");
+      }
+      return;
     }
 
     if(form.id==="platform-search-form"){
@@ -2418,7 +2555,11 @@ async function boot() {
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
   await go(state.pendingTransfer ? "runner" : "discover");
-  if (params.get("series")) {
+  if (params.get("athlete")) {
+    const athlete=await getAthleteProfile(params.get("athlete"));
+    if(athlete) renderAthlete(athlete);
+    else showNotice("That athlete page isn't public yet.");
+  } else if (params.get("series")) {
     const series=state.series.find((item)=>item.id===params.get("series"));
     if(series) await renderSeries(series);
   } else if (params.get("results")) {

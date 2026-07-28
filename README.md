@@ -52,7 +52,44 @@ There is no frontend framework, bundler, or build step.
 - Configurable race lotteries with application windows, distance selection,
   qualifying-result evidence, organizer review, bonus tickets, and runner
   status tracking
+- Opt-in public athlete profiles that gather a runner's published results across
+  every event, with personal bests per distance and per-race placement
+- An embeddable registration widget that drops OpenStart checkout onto any
+  external website with a single script tag
 - Device-local demo mode when Supabase has not been configured
+
+## Athlete profiles
+
+Signed-in runners can open **My races → Athlete profile** to claim a public
+handle. Their page — `?athlete=<handle>` — aggregates every published result
+they earned across OpenStart events, computes a personal best per distance, and
+shows overall and division placement for each race. Profiles are opt-in and can
+be made private at any time. Cross-event linkage runs through a security-definer
+function, so a public page never exposes private registration rows; only
+published results for opted-in athletes are returned.
+
+Placement is derived from recorded finish times. Age-graded ranking is
+intentionally not offered yet: the schema does not capture runner age or gender,
+so any age grade would be guesswork.
+
+## Embedding registration
+
+Organizers can place OpenStart registration on their own website. Open an event
+roster and choose **Embed** to copy a snippet:
+
+```html
+<div data-openstart-embed="your-event-slug"></div>
+<script src="https://your-openstart-host/embed.js"></script>
+```
+
+`embed.js` injects an `<iframe>` served from the OpenStart host, so the entire
+registration and Stripe Checkout flow runs inside OpenStart's own origin. No
+CORS rules, allowed-origin entries, or API keys need to be configured on the
+host site. Add `data-openstart-accent="#0f6b4f"` to match a brand colour. The
+widget auto-resizes its height via a same-origin `postMessage` handshake, and
+paid entries break out to Stripe Checkout and return to a hosted confirmation
+page. Because return URLs stay on the OpenStart origin, the server-side
+allowed-origin check on `os-create-checkout` remains fully enforced.
 
 ## Help and sandbox use
 

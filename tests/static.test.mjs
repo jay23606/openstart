@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=31"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=31"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=32"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=32"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -167,6 +167,47 @@ test("platform operations stay behind a server-authoritative owner boundary", as
   assert.match(operator,/reconciliationAlerts/);
   assert.match(operator,/platform_suspend/);
   assert.match(webhook,/os_provider_events/);
+});
+
+test("public athlete profiles aggregate published results behind a security-definer boundary", async () => {
+  const [app, data, migration] = await Promise.all([
+    read("app.js"),
+    read("data.js"),
+    read("supabase/migrations/20260729170000_athlete_profiles.sql"),
+  ]);
+  assert.match(app, /function renderAthlete/);
+  assert.match(app, /athleteProfileForm/);
+  assert.match(app, /params\.get\("athlete"\)/);
+  assert.match(data, /getAthleteProfile/);
+  assert.match(data, /saveAthleteProfile/);
+  assert.match(data, /os_athlete_results/);
+  assert.match(migration, /create table if not exists public\.os_athlete_profiles/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /"public athlete profiles are readable"/);
+  // Placement is computed only over published finishers, never leaking private registrations.
+  assert.match(migration, /where r\.published/);
+  assert.match(migration, /grant execute on function public\.os_athlete_results\(text\) to anon, authenticated/);
+});
+
+test("the embeddable registration widget stays within the OpenStart origin and payment boundary", async () => {
+  const [loader, frame, ret, app] = await Promise.all([
+    read("embed.js"),
+    read("embed.html"),
+    read("embed-return.html"),
+    read("app.js"),
+  ]);
+  // The frame calls the same server-authoritative checkout function, with a UUID idempotency key.
+  assert.match(frame, /functions\/v1\/os-create-checkout/);
+  assert.match(frame, /crypto\.randomUUID\(\)/);
+  // Return URLs resolve against the OpenStart origin so the allowed-origin check passes.
+  assert.match(frame, /new URL\("embed-return\.html", location\.href\)/);
+  assert.match(ret, /os_events\?slug=eq/);
+  // The loader only injects an iframe and verifies the message origin before resizing.
+  assert.match(loader, /createElement\("iframe"\)/);
+  assert.match(loader, /event\.origin !== origin/);
+  // Organizers can copy the snippet from the roster.
+  assert.match(app, /embedSnippetForm/);
+  assert.match(app, /data-openstart-embed/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

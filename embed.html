@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Register — OpenStart</title>
+  <style>
+    :root { --ink:#17211d; --muted:#66716b; --cream:#f5f2e9; --paper:#fffdf8; --green:#0f6b4f; --line:#d9ded8; --accent:#0f6b4f; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: transparent; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+    .widget { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .widget-head { border-bottom: 1px solid var(--line); padding: 18px 20px; }
+    .widget-head .eyebrow { color: var(--accent); font-size: 10px; font-weight: 900; letter-spacing: 1px; margin: 0 0 6px; text-transform: uppercase; }
+    .widget-head h1 { font-size: 20px; margin: 0; }
+    .widget-head p { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+    .widget-body { padding: 16px 20px 20px; }
+    .tier { align-items: center; border: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; margin-bottom: 10px; padding: 13px 15px; }
+    .tier b { display: block; font-size: 15px; }
+    .tier small { color: var(--muted); font-size: 11px; }
+    .tier .price { font-family: Georgia, serif; font-size: 18px; }
+    .tier button, .primary { background: var(--accent); border: 0; color: white; cursor: pointer; font-weight: 800; padding: 10px 16px; }
+    .tier button:disabled { background: #aeb8b3; cursor: not-allowed; }
+    label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    label input, label select { border: 1px solid var(--line); display: block; margin-top: 5px; padding: 10px; width: 100%; }
+    .primary { margin-top: 6px; width: 100%; }
+    .primary:disabled { background: #aeb8b3; cursor: not-allowed; }
+    .msg { font-size: 13px; margin: 8px 0 0; }
+    .msg.error { color: #a33; }
+    .msg.ok { color: var(--green); }
+    .back { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 700; padding: 0 0 12px; }
+    .foot { color: var(--muted); font-size: 10px; margin: 14px 0 0; text-align: center; }
+    .foot a { color: var(--muted); }
+    .closed { color: var(--muted); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="widget" id="widget"><div class="widget-body"><p class="msg" id="boot">Loading…</p></div></div>
+  <script type="module">
+    import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+
+    const params = new URLSearchParams(location.search);
+    const slug = params.get("event") || "";
+    const accent = /^#[0-9a-f]{6}$/i.test(params.get("accent") || "") ? params.get("accent") : null;
+    if (accent) document.documentElement.style.setProperty("--accent", accent);
+    const widget = document.getElementById("widget");
+
+    const esc = (value = "") => String(value).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
+    const money = (cents) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format((cents || 0) / 100);
+    const dateLabel = (value) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+
+    const rest = (path) => fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+    }).then((response) => response.json());
+
+    function reportHeight() {
+      const height = document.getElementById("widget").offsetHeight + 4;
+      parent.postMessage({ type: "openstart:height", slug, value: height }, "*");
+    }
+    const observer = new ResizeObserver(reportHeight);
+
+    function tierOpen(tier) {
+      const now = Date.now();
+      if (tier.registration_opens_at && new Date(tier.registration_opens_at).getTime() > now) return false;
+      if (tier.registration_closes_at && new Date(tier.registration_closes_at).getTime() < now) return false;
+      return true;
+    }
+
+    function renderEvent(event) {
+      const tiers = event.os_event_tiers || [];
+      widget.innerHTML = `
+        <div class="widget-head">
+          <p class="eyebrow">Register · OpenStart</p>
+          <h1>${esc(event.name)}</h1>
+          <p>${esc(event.location_name || "")} · ${dateLabel(event.starts_at)}</p>
+        </div>
+        <div class="widget-body">
+          ${tiers.length ? tiers.map((tier) => {
+            const open = tierOpen(tier);
+            return `<div class="tier">
+              <div><b>${esc(tier.name)}</b><small>${esc(tier.distance_label || "")}</small></div>
+              <div style="text-align:right"><span class="price">${tier.price_cents ? money(tier.price_cents) : "Free"}</span></div>
+              ${open ? `<button data-tier="${esc(tier.id)}" type="button">Register</button>` : `<span class="closed">Closed</span>`}
+            </div>`;
+          }).join("") : `<p class="msg">Registration isn't open yet.</p>`}
+          <p class="foot">Secure checkout by OpenStart${event.slug ? ` · <a href="./?event=${esc(event.slug)}" target="_blank" rel="noopener">View event</a>` : ""}</p>
+        </div>`;
+      widget.querySelectorAll("[data-tier]").forEach((button) =>
+        button.addEventListener("click", () => renderForm(event, tiers.find((tier) => tier.id === button.dataset.tier))));
+      reportHeight();
+    }
+
+    function renderForm(event, tier) {
+      widget.innerHTML = `
+        <div class="widget-head">
+          <button class="back" type="button" id="back">← All entries</button>
+          <h1>${esc(tier.name)}</h1>
+          <p>${esc(event.name)} · ${tier.price_cents ? money(tier.price_cents) : "Free"}</p>
+        </div>
+        <div class="widget-body">
+          <form id="reg">
+            <label>First name<input name="firstName" required maxlength="60"></label>
+            <label>Last name<input name="lastName" required maxlength="60"></label>
+            <label>Email<input name="email" type="email" required maxlength="120"></label>
+            <label>Emergency contact<input name="emergencyContact" required maxlength="120" placeholder="Name · phone"></label>
+            <button class="primary" type="submit">${tier.price_cents ? "Continue to payment" : "Complete registration"}</button>
+            <p class="msg" id="formMsg"></p>
+          </form>
+        </div>`;
+      widget.querySelector("#back").addEventListener("click", () => renderEvent(event));
+      widget.querySelector("#reg").addEventListener("submit", (submitEvent) => submitRegistration(submitEvent, event, tier));
+      reportHeight();
+    }
+
+    async function submitRegistration(submitEvent, event, tier) {
+      submitEvent.preventDefault();
+      const form = submitEvent.target;
+      const button = form.querySelector("button");
+      const message = form.querySelector("#formMsg");
+      const fields = new FormData(form);
+      button.disabled = true;
+      message.className = "msg";
+      message.textContent = "Reserving your spot…";
+      const returnBase = new URL("embed-return.html", location.href);
+      const successUrl = new URL(returnBase); successUrl.search = `?payment=success&event=${encodeURIComponent(slug)}`;
+      const cancelUrl = new URL(returnBase); cancelUrl.search = `?payment=cancelled&event=${encodeURIComponent(slug)}`;
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/os-create-checkout`, {
+          method: "POST",
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: event.id,
+            tierId: tier.id,
+            firstName: fields.get("firstName"),
+            lastName: fields.get("lastName"),
+            email: fields.get("email"),
+            emergencyContact: fields.get("emergencyContact"),
+            idempotencyKey: crypto.randomUUID(),
+            successUrl: successUrl.toString(),
+            cancelUrl: cancelUrl.toString(),
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || `Registration failed (${response.status})`);
+        if (result.status === "checkout" && result.checkoutUrl) {
+          message.textContent = "Redirecting to secure payment…";
+          try { window.top.location.href = result.checkoutUrl; } catch { window.open(result.checkoutUrl, "_blank", "noopener"); }
+          return;
+        }
+        if (result.status === "confirmed") {
+          message.className = "msg ok";
+          message.textContent = "You're registered! A confirmation email is on the way.";
+        } else if (result.status === "waitlisted") {
+          message.className = "msg ok";
+          message.textContent = "This entry is full — you've been added to the waitlist.";
+        } else {
+          message.className = "msg ok";
+          message.textContent = "Registration received.";
+        }
+        button.remove();
+      } catch (error) {
+        message.className = "msg error";
+        message.textContent = error.message || "Something went wrong. Please try again.";
+        button.disabled = false;
+      }
+      reportHeight();
+    }
+
+    async function boot() {
+      if (!slug) { widget.innerHTML = `<div class="widget-body"><p class="msg error">No event specified.</p></div>`; return reportHeight(); }
+      try {
+        const rows = await rest(`os_events?slug=eq.${encodeURIComponent(slug)}&status=eq.published&select=id,name,slug,starts_at,location_name,os_event_tiers(id,name,distance_label,price_cents,registration_opens_at,registration_closes_at)`);
+        const event = Array.isArray(rows) ? rows[0] : null;
+        if (!event) { widget.innerHTML = `<div class="widget-body"><p class="msg error">This event isn't open for registration.</p></div>`; return reportHeight(); }
+        (event.os_event_tiers || []).sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
+        renderEvent(event);
+        observer.observe(document.getElementById("widget"));
+      } catch (error) {
+        widget.innerHTML = `<div class="widget-body"><p class="msg error">Could not load this event.</p></div>`;
+        reportHeight();
+      }
+    }
+    boot();
+  </script>
+</body>
+</html>
