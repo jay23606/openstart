@@ -266,6 +266,11 @@ footer b { color: white; }
 .team-list > div { border-top: 1px solid var(--line); display: grid; font-size: 11px; gap: 18px; grid-template-columns: .8fr 1.6fr; padding: 12px 0; }
 .team-list b, .team-list small { display: block; }
 .team-list small { color: var(--muted); margin-top: 4px; }
+.captain-dashboard { background: var(--paper); border: 1px solid var(--line); margin-top: 24px; padding: 24px; }
+.captain-dashboard article { border-top: 1px solid var(--line); padding: 16px 0; }
+.captain-dashboard h3 small { color: var(--muted); font-size: 10px; font-weight: 400; }
+.captain-dashboard article p { align-items: center; border-top: 1px solid var(--line); display: flex; font-size: 11px; justify-content: space-between; margin: 0; padding: 8px 0; }
+.captain-dashboard article p b { color: var(--green); text-transform: capitalize; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }

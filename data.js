@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=12";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=12";
+import { configured, supabase } from "./core.js?v=13";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=13";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -249,6 +249,15 @@ export async function listRunnerRegistrations() {
     .from("os_registrations")
     .select("*, os_events(name, starts_at, location_name, participant_edits_close_at, transfers_close_at, refunds_close_at, allow_transfers, allow_refund_requests), os_event_tiers(name, distance_label), os_registration_answers(*, os_event_questions(label)), os_registration_activity(*), os_teams(name,category)")
     .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function listCaptainTeams(userId) {
+  if (!configured) return [];
+  const { data, error } = await supabase.from("os_teams")
+    .select("id,name,category,max_members,os_events(name),os_registrations(id,first_name,last_name,email,status,relay_leg,team_role)")
+    .eq("captain_user_id", userId).order("created_at", { ascending: false });
   if (error) throw error;
   return data;
 }

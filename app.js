@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=12";
+} from "./core.js?v=13";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   createManualRegistration, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
+  getOrganizerProfile, listCaptainTeams, listOrganizerEvents, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
   updateRegistration, updateWaitlist,
-} from "./data.js?v=12";
+} from "./data.js?v=13";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -26,6 +26,7 @@ const state = {
   session: null,
   profile: null,
   runnerRegistrations: [],
+  captainTeams: [],
   pendingView: "dashboard",
   pendingTransfer: null,
 };
@@ -202,6 +203,7 @@ function renderRunnerDashboard() {
             <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
       </div>
+      ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
     </section>`;
 }
 
@@ -440,7 +442,10 @@ async function loadDashboard() {
 }
 
 async function loadRunnerDashboard() {
-  state.runnerRegistrations = await listRunnerRegistrations();
+  [state.runnerRegistrations, state.captainTeams] = await Promise.all([
+    listRunnerRegistrations(),
+    listCaptainTeams(state.session.user.id),
+  ]);
 }
 
 async function go(view) {
