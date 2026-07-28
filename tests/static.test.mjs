@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=6"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=6"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=7"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=7"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
 });
