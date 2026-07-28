@@ -2,9 +2,11 @@ import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
 } from "./core.js";
 import {
-  beginRegistration, beginStripeOnboarding, createEvent, DEMO_ORGANIZER_ID,
+  beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
+  createManualRegistration, deleteEventQuestion, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
-  listRunnerRegistrations, resetDemo,
+  listRunnerRegistrations, resendConfirmation, resetDemo, updateEventSettings,
+  updateRegistration,
 } from "./data.js";
 
 const page = document.querySelector("#page-content");
@@ -183,12 +185,20 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} roster</h2><p>Participant contact and entry details.</p></div><button class="subtle-button" data-close-roster type="button">Close</button></div>
-      ${registrations.length ? `<div class="roster">${registrations.map((item) => `
-        <div><span class="avatar">${escapeHtml(item.first_name[0])}${escapeHtml(item.last_name[0])}</span>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, race-day details, questions, and waiver.</p></div><button class="subtle-button" data-close-roster type="button">Close</button></div>
+      <div class="roster-toolbar">
+        <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
+        <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
+        <button class="subtle-button" data-add-participant="${event.id}" type="button">+ Manual entry</button>
+        <button class="subtle-button" data-export-roster="${event.id}" type="button">Export CSV</button>
+        <button class="subtle-button" data-registration-settings="${event.id}" type="button">Form settings</button>
+      </div>
+      ${registrations.length ? `<div class="roster roster-manage">${registrations.map((item) => `
+        <button data-edit-registration="${item.id}" data-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.email} ${item.bib_number || ""}`.toLowerCase())}" data-status="${item.status}" type="button"><span class="avatar">${escapeHtml(item.first_name[0])}${escapeHtml(item.last_name[0])}</span>
         <span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)}</small></span>
-        <span>${escapeHtml(tierById(event, item.tier_id)?.name || "Entry")}</span><span>${item.status}</span></div>`).join("")}</div>`
+        <span>${escapeHtml(tierById(event, item.tier_id)?.name || "Entry")}<small>${item.bib_number ? `Bib ${escapeHtml(item.bib_number)}` : "No bib assigned"}</small></span><span>${item.status}</span></button>`).join("")}</div>`
         : '<div class="empty-state">No registrations yet. Share the published event to get the first runner on the list.</div>'}
+      <div class="form-summary"><strong>${event.os_event_questions?.length || 0} custom questions</strong><span>${event.waiver_text ? "Waiver enabled" : "No waiver configured"}</span></div>
     </div>`;
   document.querySelector("#roster-slot").scrollIntoView({ behavior: "smooth" });
 }
@@ -208,6 +218,7 @@ function authForm() {
 }
 
 function registrationForm(event) {
+  const questions = [...(event.os_event_questions || [])].sort((a, b) => a.sort_order - b.sort_order);
   return `
     <section class="modal">
       <div class="form-heading"><div><p>Registration</p><h2>Your details</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
@@ -215,10 +226,49 @@ function registrationForm(event) {
         <label>Event<select name="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(tier.price_cents)}</option>`).join("")}</select></label>
         <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
         <label>Email<input name="email" type="email" required></label>
+        ${questions.map((question) => question.field_type === "select"
+          ? `<label>${escapeHtml(question.label)}<select name="question_${question.id}" ${question.required ? "required" : ""}><option value="">Choose one</option>${(question.options || []).map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`
+          : question.field_type === "checkbox"
+            ? `<label class="check-label"><input name="question_${question.id}" type="checkbox" value="Yes" ${question.required ? "required" : ""}> ${escapeHtml(question.label)}</label>`
+            : `<label>${escapeHtml(question.label)}<input name="question_${question.id}" ${question.required ? "required" : ""}></label>`).join("")}
         <label>Emergency contact<input name="emergency_contact" placeholder="Name · phone" required></label>
+        ${event.waiver_text ? `<div class="waiver-box"><strong>Participant waiver</strong><p>${escapeHtml(event.waiver_text)}</p></div><label class="check-label"><input name="waiver" type="checkbox" required> I have read and accept this waiver.</label>` : ""}
         <button class="primary-button" type="submit">Complete registration</button>
       </form>
     </section>`;
+}
+
+function manualRegistrationForm(event) {
+  return `<section class="modal"><div class="form-heading"><div><p>Organizer entry</p><h2>Add participant</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="manual-registration-form" data-event-id="${event.id}">
+      <label>Registration option<select name="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label>
+      <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
+      <label>Email<input name="email" type="email" required></label><label>Emergency contact<input name="emergency_contact" required></label>
+      <label>Bib number<input name="bib_number"></label><label>Organizer notes<textarea name="organizer_notes" rows="3"></textarea></label>
+      <button class="primary-button" type="submit">Add confirmed entry</button>
+    </form></section>`;
+}
+
+function editRegistrationForm(item) {
+  return `<section class="modal"><div class="form-heading"><div><p>Registration</p><h2>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="edit-registration-form" data-registration-id="${item.id}">
+      <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
+      <label>Email<input name="email" type="email" value="${escapeHtml(item.email)}" required></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
+      <div class="split-fields"><label>Bib number<input name="bib_number" value="${escapeHtml(item.bib_number || "")}"></label><label>Status<select name="status">${["confirmed", "pending", "cancelled", "expired"].map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div>
+      <label>Organizer notes<textarea name="organizer_notes" rows="3">${escapeHtml(item.organizer_notes || "")}</textarea></label>
+      ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Registration answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
+      <div class="dialog-actions"><button class="primary-button" type="submit">Save changes</button><button class="subtle-button" data-resend-confirmation="${item.id}" type="button">Resend confirmation</button></div>
+    </form></section>`;
+}
+
+function registrationSettingsForm(event) {
+  const questions = event.os_event_questions || [];
+  return `<section class="modal"><div class="form-heading"><div><p>Registration form</p><h2>Questions & waiver</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="registration-settings-form" data-event-id="${event.id}"><label>Waiver text<textarea name="waiver_text" rows="6" placeholder="Leave blank to disable the waiver">${escapeHtml(event.waiver_text || "")}</textarea></label><button class="subtle-button" type="submit">Save waiver</button></form>
+    <h3>Custom questions</h3>
+    <div class="question-list">${questions.map((question) => `<div><span><b>${escapeHtml(question.label)}</b><small>${question.field_type}${question.required ? " · required" : ""}</small></span><button data-delete-question="${question.id}" data-event-id="${event.id}" type="button">Remove</button></div>`).join("") || "<p>No custom questions yet.</p>"}</div>
+    <form id="question-form" data-event-id="${event.id}"><label>Question<input name="label" placeholder="Shirt size" required></label><div class="split-fields"><label>Answer type<select name="field_type"><option value="text">Text</option><option value="select">Dropdown</option><option value="checkbox">Checkbox</option></select></label><label>Dropdown choices<input name="options" placeholder="XS, S, M, L, XL"></label></div><label class="check-label"><input name="required" type="checkbox"> Required</label><button class="primary-button" type="submit">Add question</button></form>
+  </section>`;
 }
 
 function eventForm() {
@@ -241,6 +291,31 @@ function eventForm() {
 function openDialog(content) {
   dialogContent.innerHTML = content;
   dialog.showModal();
+}
+
+function exportRoster(event) {
+  const registrations = eventRegistrations(event.id);
+  const headers = ["First name", "Last name", "Email", "Emergency contact", "Event", "Entry", "Bib", "Status", "Payment", "Amount", "Source", "Created"];
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const rows = registrations.map((item) => [
+    item.first_name, item.last_name, item.email, item.emergency_contact, event.name,
+    tierById(event, item.tier_id)?.name || "", item.bib_number || "", item.status,
+    item.payment_status, (item.amount_cents / 100).toFixed(2), item.registration_source || "online", item.created_at,
+  ]);
+  const blob = new Blob([[headers, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${event.slug}-registrations.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function filterRoster(eventId) {
+  const search = document.querySelector(`[data-roster-search="${eventId}"]`)?.value.toLowerCase() || "";
+  const status = document.querySelector(`[data-roster-status="${eventId}"]`)?.value || "";
+  document.querySelectorAll(".roster-manage [data-edit-registration]").forEach((row) => {
+    row.classList.toggle("hidden", !row.dataset.search.includes(search) || (status && row.dataset.status !== status));
+  });
 }
 
 async function loadPublic() {
@@ -309,6 +384,30 @@ document.addEventListener("click", async (event) => {
     }
   }
   if (target.dataset.roster) renderRoster(eventById(target.dataset.roster));
+  if (target.dataset.addParticipant) openDialog(manualRegistrationForm(eventById(target.dataset.addParticipant)));
+  if (target.dataset.registrationSettings) openDialog(registrationSettingsForm(eventById(target.dataset.registrationSettings)));
+  if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
+  if (target.dataset.editRegistration) {
+    const item = state.registrations.find((registration) => registration.id === target.dataset.editRegistration);
+    openDialog(editRegistrationForm(item));
+  }
+  if (target.dataset.resendConfirmation) {
+    target.disabled = true;
+    try {
+      await resendConfirmation(target.dataset.resendConfirmation);
+      showNotice("Confirmation email sent.");
+    } catch (error) {
+      showNotice(error.message || "Confirmation email could not be sent.");
+    } finally {
+      target.disabled = false;
+    }
+  }
+  if (target.dataset.deleteQuestion) {
+    await deleteEventQuestion(target.dataset.deleteQuestion);
+    await loadDashboard();
+    openDialog(registrationSettingsForm(eventById(target.dataset.eventId)));
+    showNotice("Question removed.");
+  }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-close-dialog]")) dialog.close();
   if (target.matches("[data-reset-demo]")) {
@@ -316,6 +415,13 @@ document.addEventListener("click", async (event) => {
     await go("dashboard");
     showNotice("Demo data restored.");
   }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.dataset.rosterSearch) filterRoster(event.target.dataset.rosterSearch);
+});
+document.addEventListener("change", (event) => {
+  if (event.target.dataset.rosterStatus) filterRoster(event.target.dataset.rosterStatus);
 });
 
 document.addEventListener("submit", async (event) => {
@@ -342,6 +448,10 @@ document.addEventListener("submit", async (event) => {
     if (form.id === "registration-form") {
       const race = eventById(form.dataset.eventId);
       const tier = tierById(race, data.get("tier_id"));
+      const answers = (race.os_event_questions || []).map((question) => ({
+        questionId: question.id,
+        answer: data.get(`question_${question.id}`) || "",
+      }));
       const result = await beginRegistration({
         eventId: race.id,
         tierId: tier.id,
@@ -349,6 +459,9 @@ document.addEventListener("submit", async (event) => {
         lastName: data.get("last_name"),
         email: data.get("email"),
         emergencyContact: data.get("emergency_contact"),
+        answers,
+        waiverAccepted: data.get("waiver") === "on",
+        waiverVersion: race.waiver_text ? String(race.updated_at || race.id) : null,
         idempotencyKey: crypto.randomUUID(),
         successUrl: `${location.origin}${location.pathname}`,
         cancelUrl: `${location.origin}${location.pathname}`,
@@ -362,6 +475,65 @@ document.addEventListener("submit", async (event) => {
       state.selectedEvent = eventById(race.id);
       renderEvent(state.selectedEvent);
       showNotice(result.status === "confirmed" ? "Registration confirmed." : "Registration saved.");
+    }
+
+    if (form.id === "manual-registration-form") {
+      const race = eventById(form.dataset.eventId);
+      await createManualRegistration({
+        event_id: race.id,
+        tier_id: data.get("tier_id"),
+        first_name: data.get("first_name"),
+        last_name: data.get("last_name"),
+        email: data.get("email"),
+        emergency_contact: data.get("emergency_contact"),
+        bib_number: data.get("bib_number") || null,
+        organizer_notes: data.get("organizer_notes") || "",
+      });
+      dialog.close();
+      await loadDashboard();
+      renderDashboard();
+      renderRoster(eventById(race.id));
+      showNotice("Manual registration added.");
+    }
+
+    if (form.id === "edit-registration-form") {
+      const item = state.registrations.find((registration) => registration.id === form.dataset.registrationId);
+      await updateRegistration(item.id, {
+        first_name: data.get("first_name"),
+        last_name: data.get("last_name"),
+        email: data.get("email"),
+        emergency_contact: data.get("emergency_contact"),
+        bib_number: data.get("bib_number"),
+        organizer_notes: data.get("organizer_notes"),
+        status: data.get("status"),
+      });
+      dialog.close();
+      await loadDashboard();
+      renderDashboard();
+      renderRoster(eventById(item.event_id));
+      showNotice("Registration updated.");
+    }
+
+    if (form.id === "registration-settings-form") {
+      await updateEventSettings(form.dataset.eventId, { waiver_text: data.get("waiver_text") || "" });
+      await loadDashboard();
+      openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Waiver settings saved.");
+    }
+
+    if (form.id === "question-form") {
+      const options = String(data.get("options") || "").split(",").map((item) => item.trim()).filter(Boolean);
+      await createEventQuestion({
+        event_id: form.dataset.eventId,
+        label: data.get("label"),
+        field_type: data.get("field_type"),
+        options,
+        required: data.get("required") === "on",
+        sort_order: eventById(form.dataset.eventId).os_event_questions?.length || 0,
+      });
+      await loadDashboard();
+      openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Registration question added.");
     }
 
     if (form.id === "event-form") {

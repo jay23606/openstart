@@ -45,6 +45,14 @@ Deno.serve(async (request) => {
     if (!reservation) throw new Error("Registration could not be reserved");
     registrationId = reservation.registration_id;
 
+    const { error: answersError } = await admin.rpc("os_save_registration_answers", {
+      p_registration_id: registrationId,
+      p_answers: Array.isArray(body.answers) ? body.answers : [],
+      p_waiver_accepted: body.waiverAccepted === true,
+      p_waiver_version: body.waiverVersion || null,
+    });
+    if (answersError) throw answersError;
+
     if (reservation.amount_cents === 0) {
       return json(request, { status: "confirmed", registrationId });
     }
@@ -103,4 +111,3 @@ Deno.serve(async (request) => {
     return json(request, { error: error instanceof Error ? error.message : "Checkout failed" }, 400);
   }
 });
-

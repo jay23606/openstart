@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*)")
+    .select("*, os_event_tiers(*), os_event_questions(*)")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*)")
+    .select("*, os_event_tiers(*), os_event_questions(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -134,11 +134,84 @@ export async function listRegistrations(eventIds) {
   if (!configured) return demoState().registrations.filter((registration) => eventIds.includes(registration.event_id));
   const { data, error } = await supabase
     .from("os_registrations")
-    .select("*")
+    .select("*, os_registration_answers(*, os_event_questions(label))")
     .in("event_id", eventIds)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
+}
+
+export async function updateRegistration(id, changes) {
+  if (!configured) {
+    const state = demoState();
+    const item = state.registrations.find((registration) => registration.id === id);
+    if (!item) throw new Error("Registration was not found");
+    Object.assign(item, changes);
+    saveDemo(state);
+    return item;
+  }
+  const allowed = {
+    first_name: changes.first_name,
+    last_name: changes.last_name,
+    email: changes.email,
+    emergency_contact: changes.emergency_contact,
+    bib_number: changes.bib_number || null,
+    organizer_notes: changes.organizer_notes || "",
+    status: changes.status,
+  };
+  const { data, error } = await supabase.from("os_registrations")
+    .update(allowed).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createManualRegistration(payload) {
+  if (!configured) {
+    return createDemoRegistration({
+      ...payload,
+      idempotency_key: crypto.randomUUID(),
+      status: "confirmed",
+      payment_status: "not_required",
+      registration_source: "manual",
+      amount_cents: 0,
+    });
+  }
+  const { data, error } = await supabase.from("os_registrations").insert({
+    ...payload,
+    participant_user_id: null,
+    idempotency_key: crypto.randomUUID(),
+    status: "confirmed",
+    payment_status: "not_required",
+    registration_source: "manual",
+    amount_cents: 0,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createEventQuestion(question) {
+  if (!configured) throw new Error("Questions require Supabase");
+  const { data, error } = await supabase.from("os_event_questions")
+    .insert(question).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteEventQuestion(id) {
+  if (!configured) throw new Error("Questions require Supabase");
+  const { error } = await supabase.from("os_event_questions").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateEventSettings(eventId, changes) {
+  if (!configured) throw new Error("Event settings require Supabase");
+  const { error } = await supabase.from("os_events").update(changes).eq("id", eventId);
+  if (error) throw error;
+}
+
+export async function resendConfirmation(registrationId) {
+  if (!configured) throw new Error("Email requires Supabase");
+  return functionResult("os-registration-email", { registrationId });
 }
 
 export async function listRunnerRegistrations() {
