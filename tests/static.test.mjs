@@ -6,19 +6,20 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=5"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=5"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=6"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=6"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, data, checkout, connect, webhook] = await Promise.all([
+  const [app, data, checkout, connect, webhook, runnerMigration] = await Promise.all([
     read("app.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
     read("supabase/functions/os-stripe-webhook/index.ts"),
+    read("supabase/migrations/20260728190000_runner_accounts_and_email.sql"),
   ]);
   assert.match(app, /createEvent\(/);
   assert.match(app, /beginRegistration\(/);
@@ -34,6 +35,9 @@ test("all persisted features use the repository and server-side payment boundari
   assert.doesNotMatch(connect, /type: "express"/);
   assert.match(webhook, /constructEventAsync/);
   assert.match(webhook, /payment_status: "paid"/);
+  assert.match(webhook, /api\.resend\.com\/emails/);
+  assert.match(runnerMigration, /os_claim_my_registrations/);
+  assert.match(app, /renderRunnerDashboard/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

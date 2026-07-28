@@ -184,7 +184,7 @@ footer b { color: white; }
 
 @media (max-width: 900px) {
   .site-header { grid-template-columns: 1fr auto; }
-  nav { bottom: 0; box-shadow: 0 -2px 14px #17211d15; background: var(--paper); display: grid; grid-template-columns: 1fr 1fr; left: 0; padding: 0 20px; position: fixed; right: 0; z-index: 30; }
+  nav { bottom: 0; box-shadow: 0 -2px 14px #17211d15; background: var(--paper); display: grid; grid-template-columns: repeat(3, 1fr); left: 0; padding: 0 20px; position: fixed; right: 0; z-index: 30; }
   nav button { padding: 16px; }
   nav button.nav-active::after { bottom: auto; top: 0; }
   .account-actions { display: flex; }
@@ -197,6 +197,18 @@ footer b { color: white; }
   .detail-layout { gap: 35px; }
   .metric-grid { grid-template-columns: 1fr; }
   footer { margin-bottom: 48px; }
+}
+
+.runner-list { display: grid; gap: 14px; }
+.runner-entry { align-items: center; background: var(--paper); border: 1px solid var(--line); display: grid; gap: 18px; grid-template-columns: 1fr auto; padding: 22px; }
+.runner-entry h2 { font-family: Georgia, "Times New Roman", serif; margin-bottom: 7px; }
+.runner-entry p, .runner-entry small { color: var(--muted); margin: 0; }
+.runner-entry-meta { text-align: right; }
+.runner-entry-meta strong { display: block; margin-bottom: 6px; text-transform: capitalize; }
+
+@media (max-width: 620px) {
+  .runner-entry { align-items: start; grid-template-columns: 1fr; }
+  .runner-entry-meta { text-align: left; }
 }
 
 @media (max-width: 620px) {

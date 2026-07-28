@@ -3,7 +3,8 @@ import {
 } from "./core.js";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations, resetDemo,
+  getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
+  listRunnerRegistrations, resetDemo,
 } from "./data.js";
 
 const page = document.querySelector("#page-content");
@@ -21,6 +22,8 @@ const state = {
   selectedEvent: null,
   session: null,
   profile: null,
+  runnerRegistrations: [],
+  pendingView: "dashboard",
 };
 
 const eventById = (id) => state.events.find((event) => event.id === id);
@@ -115,7 +118,8 @@ function renderEvent(event) {
 
 function renderDashboard() {
   const published = state.events.filter((event) => event.status === "published");
-  const gross = state.registrations.reduce((sum, registration) => sum + registration.amount_cents, 0);
+  const confirmed = state.registrations.filter((registration) => registration.status === "confirmed");
+  const gross = confirmed.reduce((sum, registration) => sum + registration.amount_cents, 0);
   const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
   const stripeStarted = Boolean(state.profile?.stripe_account_id);
   page.innerHTML = `
@@ -128,9 +132,9 @@ function renderDashboard() {
         </div>
       </div>
       <div class="metric-grid">
-        <div><p>Total registrations</p><strong>${state.registrations.length}</strong><span>Across all events</span></div>
+        <div><p>Confirmed registrations</p><strong>${confirmed.length}</strong><span>Across all events</span></div>
         <div><p>Published events</p><strong>${published.length}</strong><span>${state.events.length - published.length} draft</span></div>
-        <div><p>Gross registration value</p><strong>${money(gross)}</strong><span>Payments not yet collected</span></div>
+        <div><p>Confirmed registration value</p><strong>${money(gross)}</strong><span>Paid and free confirmed entries</span></div>
       </div>
       <div class="dashboard-card">
         <div class="card-heading"><div><h2>Your events</h2><p>Manage details and monitor signups.</p></div>${configured ? "" : '<button class="subtle-button" data-reset-demo type="button">Reset demo</button>'}</div>
@@ -140,12 +144,38 @@ function renderDashboard() {
             <button class="table-row" data-roster="${event.id}" type="button">
               <span><b>${escapeHtml(event.name)}</b><small>${escapeHtml(event.location_name)}</small></span>
               <span><i class="status-dot ${event.status}"></i>${event.status}</span>
-              <span>${eventRegistrations(event.id).length}</span>
+              <span>${eventRegistrations(event.id).filter((registration) => registration.status === "confirmed").length}</span>
               <span>${displayDate(event.starts_at)} <b>›</b></span>
             </button>`).join("")}
         </div>
       </div>
       <div id="roster-slot"></div>
+    </section>`;
+}
+
+function renderRunnerDashboard() {
+  const confirmed = state.runnerRegistrations.filter((registration) => registration.status === "confirmed");
+  page.innerHTML = `
+    <section class="dashboard">
+      <div class="dashboard-header">
+        <div><p class="eyebrow">Runner account</p><h1>My races</h1><p>Entries connected to ${escapeHtml(state.session?.user?.email || "your account")}.</p></div>
+      </div>
+      <div class="metric-grid">
+        <div><p>Confirmed races</p><strong>${confirmed.length}</strong><span>Your paid and free entries</span></div>
+        <div><p>All attempts</p><strong>${state.runnerRegistrations.length}</strong><span>Includes cancelled checkouts</span></div>
+        <div><p>Confirmed value</p><strong>${money(confirmed.reduce((sum, item) => sum + item.amount_cents, 0))}</strong><span>Registration total</span></div>
+      </div>
+      <div class="runner-list">
+        ${state.runnerRegistrations.length ? state.runnerRegistrations.map((item) => `
+          <article class="runner-entry">
+            <div>
+              <p>${escapeHtml(item.os_events?.location_name || "")} · ${displayDate(item.os_events?.starts_at)}</p>
+              <h2>${escapeHtml(item.os_events?.name || "Race registration")}</h2>
+              <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}</small>
+            </div>
+            <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span></div>
+          </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
+      </div>
     </section>`;
 }
 
@@ -166,7 +196,7 @@ function renderRoster(event) {
 function authForm() {
   return `
     <section class="modal auth-modal">
-      <div class="form-heading"><div><p>Organizer account</p><h2>Sign in to OpenStart</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+      <div class="form-heading"><div><p>OpenStart account</p><h2>Sign in to OpenStart</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
       <form id="auth-form">
         <label>Email<input name="email" type="email" autocomplete="email" required></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" minlength="8" required></label>
@@ -227,8 +257,13 @@ async function loadDashboard() {
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
 }
 
+async function loadRunnerDashboard() {
+  state.runnerRegistrations = await listRunnerRegistrations();
+}
+
 async function go(view) {
-  if (view === "dashboard" && configured && !state.session) {
+  if (["dashboard", "runner"].includes(view) && configured && !state.session) {
+    state.pendingView = view;
     openDialog(authForm());
     return;
   }
@@ -237,6 +272,9 @@ async function go(view) {
   if (view === "dashboard") {
     await loadDashboard();
     renderDashboard();
+  } else if (view === "runner") {
+    await loadRunnerDashboard();
+    renderRunnerDashboard();
   } else {
     await loadPublic();
     renderDiscover();
@@ -298,7 +336,7 @@ document.addEventListener("submit", async (event) => {
       }
       state.session = result.data.session;
       dialog.close();
-      await go("dashboard");
+      await go(state.pendingView || "dashboard");
     }
 
     if (form.id === "registration-form") {

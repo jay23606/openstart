@@ -77,6 +77,9 @@ sandbox checkout:
    `account.updated`.
 5. Store the endpoint signing secret in Supabase:
    `supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...`
+6. To send paid-registration confirmations, verify a sending domain with
+   [Resend](https://resend.com), then store:
+   `supabase secrets set RESEND_API_KEY=re_... RESEND_FROM_EMAIL="OpenStart <registrations@your-domain.com>"`
 
 The secrets take effect without a redeploy. They must never be committed to
 GitHub or placed in `config.js`.

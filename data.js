@@ -141,6 +141,20 @@ export async function listRegistrations(eventIds) {
   return data;
 }
 
+export async function listRunnerRegistrations() {
+  if (!configured) return [];
+  const { error: claimError } = await supabase.rpc("os_claim_my_registrations");
+  if (claimError) throw claimError;
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("os_registrations")
+    .select("*, os_events(name, starts_at, location_name), os_event_tiers(name, distance_label)")
+    .eq("participant_user_id", userData.user?.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function getOrganizerProfile(userId) {
   if (!configured) {
     return {
