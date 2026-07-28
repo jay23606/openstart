@@ -1,4 +1,4 @@
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, assertAllowedUrl, corsHeaders, json, requiredUser } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripeApiVersion = "2026-06-24.dahlia";
@@ -34,13 +34,7 @@ const stripeV2 = async (
   return data;
 };
 
-const allowedReturnUrl = (value: unknown) => {
-  const url = new URL(String(value));
-  if (!["https://jay23606.github.io", "http://localhost:4173", "http://127.0.0.1:4173"].includes(url.origin)) {
-    throw new Error("Return URL is not allowed");
-  }
-  return url.toString();
-};
+const allowedReturnUrl = assertAllowedUrl;
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });

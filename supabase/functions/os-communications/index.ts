@@ -3,7 +3,7 @@ import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "
 const resendKey = Deno.env.get("RESEND_API_KEY");
 const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
 const cronSecret = Deno.env.get("CAMPAIGN_CRON_SECRET");
-const siteUrl = "https://jay23606.github.io/openstart/";
+const siteUrl = Deno.env.get("SITE_URL") || "https://jay23606.github.io/openstart/";
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
 const signEmail = async (email: string) => {
   const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(cronSecret!),{name:"HMAC",hash:"SHA-256"},false,["sign"]);

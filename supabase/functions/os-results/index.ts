@@ -2,7 +2,7 @@ import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "
 
 const resendKey=Deno.env.get("RESEND_API_KEY");
 const fromEmail=Deno.env.get("RESEND_FROM_EMAIL");
-const siteUrl="https://jay23606.github.io/openstart/";
+const siteUrl=Deno.env.get("SITE_URL") || "https://jay23606.github.io/openstart/";
 const escapeHtml=(value: unknown)=>String(value ?? "").replace(/[&<>"']/g,(character)=>({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;",
 })[character] || character);

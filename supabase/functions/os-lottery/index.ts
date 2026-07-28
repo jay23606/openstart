@@ -7,7 +7,7 @@ const resendKey=Deno.env.get("RESEND_API_KEY");
 const emailFrom=Deno.env.get("RESEND_FROM_EMAIL");
 const cronSecret=Deno.env.get("CAMPAIGN_CRON_SECRET");
 const stripe=stripeKey ? new Stripe(stripeKey,{httpClient:Stripe.createFetchHttpClient()}) : null;
-const siteUrl="https://jay23606.github.io/openstart/";
+const siteUrl=Deno.env.get("SITE_URL") || "https://jay23606.github.io/openstart/";
 const escapeHtml=(value:unknown)=>String(value??"").replace(/[&<>"']/g,(character)=>({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;",
 }[character] || character));

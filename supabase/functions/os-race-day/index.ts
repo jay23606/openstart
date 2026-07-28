@@ -11,13 +11,23 @@ const sign = async (payload: string) => {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(signingSecret!), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return encode(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
 };
+// Constant-time compare so signature verification does not leak, byte by byte,
+// how much of a forged signature is correct via response timing.
+const signaturesMatch = (expected: string, provided: string) => {
+  const expectedBytes = new TextEncoder().encode(expected);
+  const providedBytes = new TextEncoder().encode(provided);
+  if (expectedBytes.length !== providedBytes.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expectedBytes.length; index += 1) difference |= expectedBytes[index] ^ providedBytes[index];
+  return difference === 0;
+};
 const createToken = async (registrationId: string, expiresAt: number) => {
   const payload = encode(new TextEncoder().encode(JSON.stringify({ registrationId, expiresAt })));
   return `${payload}.${await sign(payload)}`;
 };
 const verifyToken = async (token: string) => {
   const [payload, signature] = token.split(".");
-  if (!payload || !signature || await sign(payload) !== signature) throw new Error("Pass is invalid");
+  if (!payload || !signature || !signaturesMatch(await sign(payload), signature)) throw new Error("Pass is invalid");
   const parsed = JSON.parse(new TextDecoder().decode(decode(payload)));
   if (parsed.expiresAt < Date.now()) throw new Error("Pass has expired");
   return parsed as { registrationId: string; expiresAt: number };
@@ -36,10 +46,13 @@ Deno.serve(async (request) => {
     const admin = adminClient();
 
     const authorizeEvent = async (eventId: string, roles: string[] = []) => {
-      const { data: event } = await admin.from("os_events").select("organizer_id,name").eq("id", eventId).single();
+      const { data: event } = await admin.from("os_events").select("organizer_id,name").eq("id", eventId).maybeSingle();
+      if (!event) throw new Error("Event was not found");
       if (event.organizer_id === user.id) return { event, role: "organizer" };
+      // Staff emails are stored lower-cased (see add_staff / walkup); match exactly
+      // rather than via ilike, whose % / _ would be treated as LIKE wildcards.
       const { data: staff } = await admin.from("os_event_staff").select("role")
-        .eq("event_id", eventId).ilike("email", user.email || "").maybeSingle();
+        .eq("event_id", eventId).eq("email", (user.email || "").toLowerCase()).maybeSingle();
       if (!staff || (roles.length && !roles.includes(staff.role))) throw new Error("You do not have race-day access");
       return { event, role: staff.role };
     };

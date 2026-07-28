@@ -1,18 +1,12 @@
 import Stripe from "npm:stripe@18.5.0";
-import { adminClient, corsHeaders, enforceRateLimit, json, optionalUserId } from "../_shared/common.ts";
+import { adminClient, assertAllowedUrl, corsHeaders, enforceRateLimit, json, optionalUserId } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripe = stripeKey
   ? new Stripe(stripeKey, { httpClient: Stripe.createFetchHttpClient() })
   : null;
 
-const cleanUrl = (value: unknown) => {
-  const url = new URL(String(value));
-  if (!["https://jay23606.github.io", "http://localhost:4173", "http://127.0.0.1:4173"].includes(url.origin)) {
-    throw new Error("Return URL is not allowed");
-  }
-  return url.toString();
-};
+const cleanUrl = assertAllowedUrl;
 const sha256 = async (value: string) => Array.from(
   new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
 ).map((byte) => byte.toString(16).padStart(2, "0")).join("");

@@ -89,6 +89,25 @@ const sendConfirmationEmail = async (
   if (updateError) throw updateError;
 };
 
+// A failed confirmation email must not fail the webhook: the payment is already
+// recorded, and returning non-2xx would make Stripe retry the whole delivery.
+// sendConfirmationEmail is idempotent (guarded by confirmation_email_sent_at),
+// so a later successful delivery still fills the gap.
+const emailQuietly = async (
+  admin: ReturnType<typeof adminClient>,
+  registrationId: string,
+) => {
+  try {
+    await sendConfirmationEmail(admin, registrationId);
+  } catch (emailError) {
+    console.error(
+      "Confirmation email failed",
+      registrationId,
+      emailError instanceof Error ? emailError.message : emailError,
+    );
+  }
+};
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
   if (!stripe || !webhookSecret) return json(request, { error: "Stripe webhook is not configured" }, 503);
@@ -105,6 +124,9 @@ Deno.serve(async (request) => {
     );
     providerEventId=event.id;
     providerEventType=event.type;
+    const { data: priorEvent } = await admin.from("os_provider_events")
+      .select("status").eq("provider","stripe").eq("provider_event_id",event.id).maybeSingle();
+    if (priorEvent?.status === "processed") return json(request, { received: true });
     await admin.from("os_provider_events").upsert({
       provider:"stripe",provider_event_id:event.id,event_type:event.type,status:"processing",
       received_at:new Date().toISOString(),
@@ -120,11 +142,16 @@ Deno.serve(async (request) => {
         await admin.from("os_orders").update({
           status: "paid", stripe_payment_intent_id: String(session.payment_intent || ""), paid_at: new Date().toISOString(),
         }).eq("id", orderId).neq("status", "paid");
-        const { data: orderRegistrations } = await admin.from("os_registrations").update({
+        await admin.from("os_registrations").update({
           status: "confirmed", payment_status: "paid",
           stripe_payment_intent_id: String(session.payment_intent || ""), reservation_expires_at: null,
-        }).eq("order_id", orderId).neq("payment_status", "paid").select("id");
-        for (const registration of orderRegistrations || []) await sendConfirmationEmail(admin, registration.id);
+        }).eq("order_id", orderId).neq("payment_status", "paid");
+        // Email every confirmed registration in the order, not just the rows the
+        // update touched — on a Stripe retry those are already paid (0 rows), so
+        // scoping to them would permanently drop any email the first pass missed.
+        const { data: orderRegistrations } = await admin.from("os_registrations")
+          .select("id").eq("order_id", orderId).eq("status", "confirmed");
+        for (const registration of orderRegistrations || []) await emailQuietly(admin, registration.id);
       }
       if (registrationId && session.payment_status === "paid") {
         await admin.from("os_registrations").update({
@@ -136,7 +163,7 @@ Deno.serve(async (request) => {
         if(session.metadata?.openstart_lottery_application_id){
           await admin.rpc("os_confirm_lottery_registration",{p_registration_id:registrationId});
         }
-        await sendConfirmationEmail(admin, registrationId);
+        await emailQuietly(admin, registrationId);
       }
     }
 
