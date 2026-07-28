@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=16";
+} from "./core.js?v=17";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   communicationsAction, createEmailTemplate, createManualRegistration, createProduct, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
-  listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
+  listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   updateOrderItem, updateRegistration, updateWaitlist,
-} from "./data.js?v=16";
+} from "./data.js?v=17";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -44,6 +44,22 @@ const effectivePrice = (tier) => {
   return active[0]?.price_cents ?? tier.price_cents;
 };
 const localDateTime = (value) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+const resultTime = (milliseconds) => {
+  if (milliseconds === null || milliseconds === undefined) return "—";
+  const total=Math.floor(Number(milliseconds)/1000);
+  const hours=Math.floor(total/3600);
+  const minutes=Math.floor((total%3600)/60);
+  const seconds=total%60;
+  return `${hours ? `${hours}:` : ""}${String(minutes).padStart(hours ? 2 : 1,"0")}:${String(seconds).padStart(2,"0")}`;
+};
+const parseResultTime = (value) => {
+  const clean=String(value || "").trim();
+  if(!clean) return null;
+  if(/^\d+$/.test(clean)) return Number(clean)*1000;
+  const parts=clean.split(":").map(Number);
+  if(parts.some(Number.isNaN) || parts.length<2 || parts.length>3) throw new Error(`Invalid time: ${clean}`);
+  return (parts.length===3 ? parts[0]*3600+parts[1]*60+parts[2] : parts[0]*60+parts[1])*1000;
+};
 
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
@@ -120,6 +136,7 @@ function renderEvent(event) {
               return `<div class="tier-row"><div><h3>${escapeHtml(tier.name)}</h3><p>${escapeHtml(tier.distance_label)} · capacity ${tier.capacity}${used ? ` · ${used} registered` : ""}</p></div><strong>${money(effectivePrice(tier))}</strong></div>`;
             }).join("")}
           </div>
+          ${event.results_published_at ? `<button class="subtle-button results-link" data-view-results="${event.id}" type="button">View official results</button>` : ""}
           <div class="detail-note"><b>Simple for now, extensible later.</b><p>Registration is connected. Paid entries remain pending until a payment provider confirms them server-side.</p></div>
         </div>
         <aside class="registration-panel">
@@ -211,6 +228,7 @@ function renderRunnerDashboard() {
               <p>${escapeHtml(item.os_events?.location_name || "")} · ${displayDate(item.os_events?.starts_at)}</p>
               <h2>${escapeHtml(item.os_events?.name || "Race registration")}</h2>
               <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}${item.os_teams?.name ? ` · Team ${escapeHtml(item.os_teams.name)}` : ""}</small>
+              ${item.os_results ? `<div class="runner-result"><b>${item.os_results.status === "finisher" ? resultTime(item.os_results.chip_time_ms ?? item.os_results.gun_time_ms) : item.os_results.status.toUpperCase()}</b><span>Official result${item.os_results.division ? ` · ${escapeHtml(item.os_results.division)}` : ""}</span></div>` : ""}
             </div>
             <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
@@ -223,7 +241,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, race-day details, questions, and waiver.</p></div><button class="subtle-button" data-close-roster type="button">Close</button></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -385,6 +403,71 @@ function productSettingsForm(event) {
     <h3>Add product</h3><form id="product-form" data-event-id="${event.id}"><label>Product name<input name="name" placeholder="Race shirt" required></label><label>Description<input name="description"></label><div class="split-fields"><label>First variant<input name="variant_name" placeholder="Medium" required></label><label>Price<input name="price" type="number" min="0" step=".01" required></label></div><div class="split-fields"><label>Inventory<input name="inventory" type="number" min="0" placeholder="Blank for unlimited"></label><label>Fulfillment<select name="fulfillment_type"><option value="packet_pickup">Packet pickup</option><option value="digital">Digital</option><option value="none">No fulfillment</option></select></label></div><button class="primary-button" type="submit">Create product</button></form>
     <h3>Donations</h3><form id="donation-settings-form" data-event-id="${event.id}"><label class="check-label"><input name="donations_enabled" type="checkbox" ${event.donations_enabled ? "checked" : ""}> Accept donations during registration</label><div class="split-fields"><label>Beneficiary<input name="beneficiary_name" value="${escapeHtml(event.beneficiary_name || "")}"></label><label>Fundraising goal<input name="fundraising_goal" type="number" min="0" step=".01" value="${event.fundraising_goal_cents ? event.fundraising_goal_cents / 100 : ""}"></label></div><button class="subtle-button" type="submit">Save fundraising settings</button></form>
   </section>`;
+}
+
+function rankedResults(event) {
+  const tierPlaces=new Map();
+  const divisionPlaces=new Map();
+  return (event.os_results || []).filter((item)=>item.published).sort((a,b)=>{
+    if(a.status==="finisher" && b.status!=="finisher") return -1;
+    if(a.status!=="finisher" && b.status==="finisher") return 1;
+    return (a.chip_time_ms ?? a.gun_time_ms ?? Infinity)-(b.chip_time_ms ?? b.gun_time_ms ?? Infinity);
+  }).map((item)=>{
+    if(item.status!=="finisher") return {...item,overallPlace:null,tierPlace:null,divisionPlace:null};
+    const tierPlace=(tierPlaces.get(item.tier_id) || 0)+1;
+    tierPlaces.set(item.tier_id,tierPlace);
+    const divisionKey=`${item.tier_id}:${item.division || ""}`;
+    const divisionPlace=(divisionPlaces.get(divisionKey) || 0)+1;
+    divisionPlaces.set(divisionKey,divisionPlace);
+    return {...item,overallPlace:tierPlace,tierPlace,divisionPlace:item.division ? divisionPlace : null};
+  });
+}
+
+function renderResults(event) {
+  const rows=rankedResults(event);
+  page.innerHTML=`<section class="results-page">
+    <button class="back-button" data-event-id="${event.id}" type="button">← Event details</button>
+    <div class="results-hero"><div><p class="eyebrow">Official results</p><h1>${escapeHtml(event.name)}</h1><p>${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p></div><strong>${rows.filter((item)=>item.status==="finisher").length}<span>finishers</span></strong></div>
+    <div class="results-toolbar"><input data-results-search type="search" placeholder="Search name or bib"><select data-results-tier><option value="">All distances</option>${event.os_event_tiers.map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></div>
+    <div class="results-table"><div class="results-header"><span>Place</span><span>Runner</span><span>Division</span><span>Chip time</span><span>Gun time</span></div>
+      ${rows.map((item)=>`<div class="result-row" data-result-tier="${item.tier_id}" data-result-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.bib_number || ""}`.toLowerCase())}"><span>${item.overallPlace || "—"}</span><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>Bib ${escapeHtml(item.bib_number || "—")} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}</small></span><span>${escapeHtml(item.division || "Open")}${item.divisionPlace ? `<small>${item.divisionPlace} in division</small>` : ""}</span><span><b>${item.status==="finisher" ? resultTime(item.chip_time_ms ?? item.gun_time_ms) : item.status.toUpperCase()}</b></span><span>${item.status==="finisher" ? resultTime(item.gun_time_ms) : "—"}</span></div>`).join("") || '<div class="empty-state">No published results yet.</div>'}
+    </div>
+  </section>`;
+}
+
+function resultsManagerForm(event) {
+  const current=new Map((event.os_results || []).map((item)=>[item.registration_id,item]));
+  const participants=eventRegistrations(event.id).filter((item)=>item.status==="confirmed");
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Timing & scoring</p><h2>${escapeHtml(event.name)} results</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="result-publish-state"><b>${event.results_published_at ? "Results are public" : "Results are not published"}</b><span>${(event.os_results || []).length} saved results</span></div>
+    <details class="csv-import"><summary>Import timing CSV</summary><p>Columns: <code>bib,chip_time,gun_time,status,division</code>. Times accept <code>MM:SS</code> or <code>HH:MM:SS</code>.</p><input id="results-csv-file" type="file" accept=".csv,text/csv"><textarea id="results-csv" rows="6" placeholder="bib,chip_time,gun_time,status,division&#10;101,24:31,25:02,finisher,M30-39"></textarea><button class="subtle-button" data-import-results="${event.id}" type="button">Import CSV</button></details>
+    <form id="results-form" data-event-id="${event.id}">
+      <div class="result-entry-list">${participants.map((registration)=>{
+        const result=current.get(registration.id);
+        return `<div class="result-entry" data-registration-id="${registration.id}"><span><b>${escapeHtml(registration.first_name)} ${escapeHtml(registration.last_name)}</b><small>Bib ${escapeHtml(registration.bib_number || "—")} · ${escapeHtml(tierById(event,registration.tier_id)?.name || "")}</small></span><label>Chip time<input name="chip_time" value="${resultTime(result?.chip_time_ms).replace("—","")}" placeholder="24:31"></label><label>Gun time<input name="gun_time" value="${resultTime(result?.gun_time_ms).replace("—","")}" placeholder="25:02"></label><label>Status<select name="result_status">${["finisher","dnf","dns","dq"].map((status)=>`<option ${result?.status===status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Division<input name="division" value="${escapeHtml(result?.division || "")}" placeholder="M30-39"></label></div>`;
+      }).join("") || '<div class="empty-state">There are no confirmed participants.</div>'}</div>
+      <button class="primary-button" type="submit">Save corrections</button>
+    </form>
+    <div class="dialog-actions"><button class="subtle-button" data-unpublish-results="${event.id}" type="button">Unpublish</button><button class="subtle-button" data-notify-results="${event.id}" type="button">Email unnotified runners</button><button class="primary-button" data-publish-results="${event.id}" type="button">Publish results</button></div>
+  </section>`;
+}
+
+function parseResultsCsv(text,event) {
+  const lines=String(text).trim().split(/\r?\n/).filter(Boolean);
+  if(lines.length<2) throw new Error("The CSV has no result rows");
+  const parseLine=(line)=>{
+    const cells=[]; let value=""; let quoted=false;
+    for(let index=0;index<line.length;index++){const character=line[index];if(character==='"'){if(quoted && line[index+1]==='"'){value+='"';index++;}else quoted=!quoted;}else if(character==="," && !quoted){cells.push(value.trim());value="";}else value+=character;}
+    cells.push(value.trim()); return cells;
+  };
+  const headers=parseLine(lines[0]).map((item)=>item.toLowerCase());
+  if(!headers.includes("bib") || !headers.includes("chip_time")) throw new Error("CSV must include bib and chip_time columns");
+  return lines.slice(1).map((line)=>{
+    const values=parseLine(line); const row=Object.fromEntries(headers.map((header,index)=>[header,values[index] || ""]));
+    const registration=eventRegistrations(event.id).find((item)=>String(item.bib_number)===row.bib);
+    if(!registration) throw new Error(`Bib ${row.bib} was not found`);
+    return {registrationId:registration.id,chipTimeMs:parseResultTime(row.chip_time),gunTimeMs:parseResultTime(row.gun_time),status:(row.status || "finisher").toLowerCase(),division:row.division || null};
+  });
 }
 
 function campaignForm() {
@@ -607,6 +690,34 @@ document.addEventListener("click", async (event) => {
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
   if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
+  if (target.dataset.viewResults) renderResults(eventById(target.dataset.viewResults));
+  if (target.dataset.resultsManager) openDialog(resultsManagerForm(eventById(target.dataset.resultsManager)));
+  if (target.dataset.importResults) {
+    const race=eventById(target.dataset.importResults);
+    const rows=parseResultsCsv(document.querySelector("#results-csv").value,race);
+    await resultsAction("save_many",{eventId:race.id,results:rows});
+    await loadDashboard();
+    openDialog(resultsManagerForm(eventById(race.id)));
+    showNotice(`${rows.length} results imported.`);
+  }
+  if (target.dataset.publishResults) {
+    const eventId=target.dataset.publishResults;
+    await resultsAction("publish",{eventId,sendEmail:false});
+    await loadDashboard();
+    openDialog(resultsManagerForm(eventById(eventId)));
+    showNotice("Official results are now public.");
+  }
+  if (target.dataset.unpublishResults) {
+    const eventId=target.dataset.unpublishResults;
+    await resultsAction("unpublish",{eventId});
+    await loadDashboard();
+    openDialog(resultsManagerForm(eventById(eventId)));
+    showNotice("Results unpublished.");
+  }
+  if (target.dataset.notifyResults) {
+    const result=await resultsAction("notify",{eventId:target.dataset.notifyResults});
+    showNotice(`${result.email?.sent || 0} result emails sent${result.email?.failed ? ` · ${result.email.failed} failed` : ""}.`);
+  }
   if (target.matches("[data-connect-stripe]")) {
     target.disabled = true;
     target.textContent = "Opening Stripe…";
@@ -1026,6 +1137,21 @@ document.addEventListener("submit", async (event) => {
       showNotice(intent==="send" ? "Campaign sending started." : data.get("scheduled_at") ? "Campaign scheduled." : "Campaign saved as a draft.");
     }
 
+    if (form.id === "results-form") {
+      const results=[...form.querySelectorAll(".result-entry")].map((row)=>({
+        registrationId:row.dataset.registrationId,
+        chipTimeMs:parseResultTime(row.querySelector('[name="chip_time"]').value),
+        gunTimeMs:parseResultTime(row.querySelector('[name="gun_time"]').value),
+        status:row.querySelector('[name="result_status"]').value,
+        division:row.querySelector('[name="division"]').value || null,
+      })).filter((item)=>item.status!=="finisher" || item.chipTimeMs!==null || item.gunTimeMs!==null);
+      if(!results.length) throw new Error("Enter at least one finish time or non-finisher status");
+      await resultsAction("save_many",{eventId:form.dataset.eventId,results});
+      await loadDashboard();
+      openDialog(resultsManagerForm(eventById(form.dataset.eventId)));
+      showNotice(`${results.length} results saved.`);
+    }
+
     if (form.id === "event-form") {
       const name = data.get("name");
       await createEvent({
@@ -1053,12 +1179,27 @@ document.addEventListener("submit", async (event) => {
 
 notice.querySelector("button").addEventListener("click", () => notice.classList.add("hidden"));
 document.addEventListener("change", (event) => {
+  if (event.target.id === "results-csv-file" && event.target.files?.[0]) {
+    event.target.files[0].text().then((text)=>{
+      const textarea=document.querySelector("#results-csv");
+      if(textarea) textarea.value=text;
+    });
+    return;
+  }
   if (event.target.name !== "template_id") return;
   const template=state.emailTemplates.find((item)=>item.id===event.target.value);
   if (!template) return;
   const form=event.target.closest("form");
   form.elements.subject.value=template.subject;
   form.elements.html_body.value=template.html_body;
+});
+document.addEventListener("input", (event) => {
+  if(!event.target.matches("[data-results-search],[data-results-tier]")) return;
+  const search=(document.querySelector("[data-results-search]")?.value || "").trim().toLowerCase();
+  const tier=document.querySelector("[data-results-tier]")?.value || "";
+  document.querySelectorAll(".result-row").forEach((row)=>{
+    row.classList.toggle("hidden",Boolean(search && !row.dataset.resultSearch.includes(search)) || Boolean(tier && row.dataset.resultTier!==tier));
+  });
 });
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
@@ -1091,7 +1232,10 @@ async function boot() {
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
   await go(state.pendingTransfer ? "runner" : "discover");
-  if (params.get("unsubscribe") && params.get("token")) {
+  if (params.get("results")) {
+    const race=eventById(params.get("results"));
+    if(race?.results_published_at) renderResults(race);
+  } else if (params.get("unsubscribe") && params.get("token")) {
     await communicationsAction("unsubscribe",{email:params.get("unsubscribe"),token:params.get("token")});
     showNotice("You have been unsubscribed from OpenStart marketing emails.");
     history.replaceState({}, "", location.pathname);

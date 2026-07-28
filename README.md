@@ -24,6 +24,8 @@ There is no frontend framework, bundler, or build step.
 - Installable PWA shell with an offline cache
 - Organizer email campaigns with audience previews, reusable templates,
   scheduled delivery, delivery reporting, and marketing unsubscribe handling
+- Official race results with CSV timing imports, manual corrections, searchable
+  public leaderboards, division places, runner result views, and email notices
 - Device-local demo mode when Supabase has not been configured
 
 ## Files

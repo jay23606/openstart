@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.os-communications]
 verify_jwt = false
+
+[functions.os-results]
+verify_jwt = false

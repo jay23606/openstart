@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=16";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=16";
+import { configured, supabase } from "./core.js?v=17";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=17";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*))")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*)")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*))")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -271,6 +271,10 @@ export async function communicationsAction(action, payload) {
   return functionResult("os-communications", { action, ...payload });
 }
 
+export async function resultsAction(action, payload) {
+  return functionResult("os-results", { action, ...payload });
+}
+
 export async function listOrganizerCampaigns(eventIds) {
   if (!configured || !eventIds.length) return [];
   const { data, error } = await supabase.from("os_campaigns")
@@ -299,7 +303,7 @@ export async function listRunnerRegistrations() {
   if (claimError) throw claimError;
   const { data, error } = await supabase
     .from("os_registrations")
-    .select("*, os_events(name, starts_at, location_name, participant_edits_close_at, transfers_close_at, refunds_close_at, allow_transfers, allow_refund_requests), os_event_tiers(name, distance_label), os_registration_answers(*, os_event_questions(label)), os_registration_activity(*), os_teams(name,category)")
+    .select("*, os_events(name, starts_at, location_name, participant_edits_close_at, transfers_close_at, refunds_close_at, allow_transfers, allow_refund_requests), os_event_tiers(name, distance_label), os_registration_answers(*, os_event_questions(label)), os_registration_activity(*), os_teams(name,category), os_results(*)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
