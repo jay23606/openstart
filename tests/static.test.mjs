@@ -6,14 +6,16 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=27"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=27"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=28"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=28"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.match(app, /function renderHelp\(\)/);
   assert.match(html, /data-view="help"/);
+  assert.match(html, /data-view="demo"/);
+  assert.match(app, /function renderDemo\(\)/);
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
@@ -91,6 +93,23 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(integrityMigration, /revoke update on table public\.os_profiles/);
   assert.match(integrityMigration, /os_protect_event_financial_settings/);
   assert.match(registrationAction, /registration\.status !== "confirmed"/);
+});
+
+test("the private showcase is isolated, disposable, and server-created", async () => {
+  const [app, data, migration] = await Promise.all([
+    read("app.js"),
+    read("data.js"),
+    read("supabase/migrations/20260729120000_showcase_demo.sql"),
+  ]);
+  assert.match(app, /const realEvents = state\.events\.filter\(\(event\) => !event\.is_showcase\)/);
+  assert.match(app, /No real payments/);
+  assert.match(app, /No participant emails/);
+  assert.match(data, /os_create_showcase_event/);
+  assert.match(data, /os_delete_showcase_event/);
+  assert.match(migration, /is_showcase boolean not null default false/);
+  assert.match(migration, /where organizer_id=v_user and is_showcase/);
+  assert.match(migration, /organizer_id=auth\.uid\(\) and is_showcase/);
+  assert.match(migration, /status.*'draft'/s);
 });
 
 test("no framework runtime is referenced by the application", async () => {

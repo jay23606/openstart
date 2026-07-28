@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=27";
+} from "./core.js?v=28";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
-  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
-  deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
+  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
+  deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=27";
+} from "./data.js?v=28";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -97,6 +97,42 @@ function renderHelp() {
           <p>Include the page you were on and the exact error message. Never include passwords, Stripe secret keys, or other credentials.</p>
           <a class="primary-button" href="https://github.com/jay23606/openstart/issues/new" target="_blank" rel="noreferrer">Open a GitHub issue</a>
         </aside>
+      </div>
+    </section>`;
+}
+
+const showcaseFeatures = [
+  ["roster","Roster & participants","Search, filter, edit, add manual entries, assign bibs, and export a realistic sample roster."],
+  ["registration","Registration form","Inspect custom questions, waiver text, pricing, promo codes, and participant settings."],
+  ["website","Event website","Edit branded sections, schedules, course details, FAQs, sponsors, and publishing controls."],
+  ["pricing","Pricing & promotions","Explore scheduled price changes, promo codes, capacity, and waitlist controls."],
+  ["products","Merchandise","See products, size variants, inventory, fulfillment, donations, and fundraising settings."],
+  ["waves","Waves & corrals","Configure start groups, pace ranges, capacity, bib ranges, and wave start times."],
+  ["volunteers","Volunteers","Create roles and shifts, manage capacity, and review volunteer assignments."],
+  ["race-day","Race-day operations","Try participant lookup, bib assignment, packet pickup, check-in, and staff access."],
+  ["results","Results & timing","Enter or import finish times, inspect rankings, and preview publishing controls."],
+  ["lottery","Lottery & qualifiers","Configure lottery windows, available spots, qualification rules, and application review."],
+  ["checklist","Readiness checklist","Track permits, course planning, communications, race-day tasks, and deadlines."],
+  ["communications","Communications","Preview campaigns, audience tools, templates, scheduling, and delivery reporting without sending."],
+];
+
+function renderDemo() {
+  const showcase = state.events.find((event) => event.is_showcase);
+  setPageMetadata("OpenStart Demo — Explore every race-management feature","Tour OpenStart features or create a private sample event with realistic demonstration data.");
+  page.innerHTML = `
+    <section class="demo-page">
+      <div class="demo-hero">
+        <div><p class="eyebrow">OPENSTART DEMO</p><h1>See the whole platform without building a race first.</h1><p>Explore what each tool does, then create one private showcase event to open the working organizer screens with sample data.</p></div>
+        <aside><b>Safe by design</b><span>Private draft</span><span>No real payments</span><span>No participant emails</span><span>Excluded from reports</span></aside>
+      </div>
+      <div class="demo-setup">
+        ${!state.session ? `<div><h2>Want to try the working tools?</h2><p>Sign in or create an account, then OpenStart will build a disposable private showcase for you.</p></div><button class="primary-button" data-demo-sign-in type="button">Sign in to create showcase</button>` :
+          showcase ? `<div><p class="eyebrow">YOUR PRIVATE SHOWCASE</p><h2>${escapeHtml(showcase.name)}</h2><p>Sample data is ready. Use any “Open tool” button below, or remove the showcase when you are finished.</p></div><span><button class="subtle-button" data-demo-roster="${showcase.id}" type="button">Open full workspace</button><button class="danger-button" data-delete-showcase="${showcase.id}" type="button">Remove showcase</button></span>` :
+          `<div><h2>Create your private feature showcase</h2><p>This adds one clearly labeled draft event to your account with sample runners, results, products, waves, volunteers, and website content.</p></div><button class="primary-button" data-create-showcase type="button">Create showcase</button>`}
+      </div>
+      <div class="demo-heading"><div><p class="eyebrow">FEATURE EXPLORER</p><h2>Everything in one place</h2></div><p>Each card explains what the feature unlocks. Working launchers appear after your showcase is created.</p></div>
+      <div class="demo-grid">
+        ${showcaseFeatures.map(([key,title,description],index) => `<article><span>${String(index+1).padStart(2,"0")}</span><h3>${title}</h3><p>${description}</p>${showcase && key !== "communications" ? `<button class="text-button" data-demo-feature="${key}" data-event-id-demo="${showcase.id}" type="button">Open tool →</button>` : key === "communications" ? `<small>Guided preview only — sending is disabled in the showcase.</small>` : `<small>${state.session ? "Create the showcase to open this tool." : "Sign in to unlock the working demo."}</small>`}</article>`).join("")}
       </div>
     </section>`;
 }
@@ -276,8 +312,10 @@ function exportSeriesStandings(series) {
 }
 
 function renderDashboard() {
-  const published = state.events.filter((event) => event.status === "published");
-  const confirmed = state.registrations.filter((registration) => registration.status === "confirmed");
+  const realEvents = state.events.filter((event) => !event.is_showcase);
+  const realEventIds = new Set(realEvents.map((event) => event.id));
+  const published = realEvents.filter((event) => event.status === "published");
+  const confirmed = state.registrations.filter((registration) => registration.status === "confirmed" && realEventIds.has(registration.event_id));
   const gross = confirmed.reduce((sum, registration) => sum + registration.amount_cents, 0);
   const discounts = confirmed.reduce((sum, registration) => sum + (registration.discount_cents || 0), 0);
   const platformFees = confirmed.reduce((sum, registration) => {
@@ -303,7 +341,7 @@ function renderDashboard() {
       </div>
       <div class="metric-grid">
         <div><p>Confirmed registrations</p><strong>${confirmed.length}</strong><span>Across all events</span></div>
-        <div><p>Published events</p><strong>${published.length}</strong><span>${state.events.length - published.length} draft</span></div>
+        <div><p>Published events</p><strong>${published.length}</strong><span>${realEvents.length - published.length} draft</span></div>
         <div><p>Confirmed registration value</p><strong>${money(gross)}</strong><span>Paid and free confirmed entries</span></div>
         <div><p>Estimated organizer net</p><strong>${money(gross - platformFees)}</strong><span>${money(discounts)} discounts · before Stripe fees</span></div>
       </div>
@@ -311,7 +349,7 @@ function renderDashboard() {
         <div class="card-heading"><div><h2>Your events</h2><p>Manage details and monitor signups.</p></div>${configured ? "" : '<button class="subtle-button" data-reset-demo type="button">Reset demo</button>'}</div>
         <div class="event-table">
           <div class="table-header"><span>Event</span><span>Status</span><span>Registrations</span><span>Date</span></div>
-          ${state.events.map((event) => `
+          ${realEvents.map((event) => `
             <button class="table-row" data-roster="${event.id}" type="button">
               <span><b>${escapeHtml(event.name)}</b><small>${escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
               <span><i class="status-dot ${event.status}"></i>${event.status}</span>
@@ -323,7 +361,7 @@ function renderDashboard() {
       <div class="dashboard-card">
         <div class="card-heading"><div><h2>Financial overview</h2><p>Confirmed registration revenue and OpenStart application fees.</p></div><button class="subtle-button" data-export-finance type="button">Export financial CSV</button></div>
         <div class="revenue-categories"><span><b>${money(gross)}</b>Registrations</span><span><b>${money(merchandiseRevenue)}</b>Merchandise</span><span><b>${money(donationRevenue)}</b>Donations</span></div>
-        <div class="finance-grid">${state.events.map((event) => {
+        <div class="finance-grid">${realEvents.map((event) => {
           const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
           const revenue = entries.reduce((sum, item) => sum + item.amount_cents, 0);
           const fees = entries.reduce((sum, item) => sum + Math.round(item.amount_cents * (event.platform_fee_bps || 500) / 10000), 0);
@@ -947,6 +985,10 @@ async function go(view) {
     if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
   } else if (view === "help") {
     renderHelp();
+  } else if (view === "demo") {
+    if (state.session) await loadDashboard();
+    else await loadPublic();
+    renderDemo();
   } else {
     await loadPublic();
     renderDiscover();
@@ -975,6 +1017,50 @@ document.addEventListener("click", async (event) => {
     await go("discover");
   }
   if (target.matches("[data-go-dashboard]")) await go("dashboard");
+  if (target.matches("[data-demo-sign-in]")) {
+    state.pendingView = "demo";
+    openDialog(authForm());
+  }
+  if (target.matches("[data-create-showcase]")) {
+    target.disabled = true;
+    try {
+      await createShowcaseEvent();
+      await loadDashboard();
+      renderDemo();
+      showNotice("Your private showcase is ready.");
+    } catch (error) {
+      showNotice(error.message || "The showcase could not be created.");
+    }
+  }
+  if (target.dataset.deleteShowcase) {
+    if (!confirm("Remove this private showcase and all of its sample data? Your real events will not be affected.")) return;
+    await deleteShowcaseEvent(target.dataset.deleteShowcase);
+    await loadDashboard();
+    renderDemo();
+    showNotice("Showcase removed. Your real events were not changed.");
+  }
+  if (target.dataset.demoRoster) {
+    renderDashboard();
+    renderRoster(eventById(target.dataset.demoRoster));
+    scrollTo(0,document.body.scrollHeight);
+  }
+  if (target.dataset.demoFeature) {
+    const race=eventById(target.dataset.eventIdDemo);
+    const launchers={
+      roster:()=>{renderDashboard();renderRoster(race);},
+      registration:()=>openDialog(registrationSettingsForm(race)),
+      website:()=>openDialog(siteEditorForm(race)),
+      pricing:()=>openDialog(pricingSettingsForm(race)),
+      products:()=>openDialog(productSettingsForm(race)),
+      waves:()=>openDialog(waveManagerForm(race)),
+      volunteers:()=>openDialog(volunteerManagerForm(race)),
+      "race-day":()=>openDialog(raceDayForm(race)),
+      results:()=>openDialog(resultsManagerForm(race)),
+      lottery:()=>openDialog(lotteryManagerForm(race)),
+      checklist:()=>openDialog(checklistForm(race)),
+    };
+    launchers[target.dataset.demoFeature]?.();
+  }
   if (target.dataset.eventId) {
     state.selectedEvent = eventById(target.dataset.eventId);
     renderEvent(state.selectedEvent);

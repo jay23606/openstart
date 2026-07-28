@@ -41,3 +41,14 @@ test("help guides can be searched and filtered", async ({ page }) => {
   await page.getByRole("button",{name:"Runners",exact:true}).click();
   await expect(page.locator("[data-help-article]:not(.hidden)")).toHaveCount(4);
 });
+
+test("the public demo explains every feature without requiring setup", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button",{name:"Demo"}).click();
+  await expect(page.getByRole("heading",{name:"See the whole platform without building a race first."})).toBeVisible();
+  await expect(page.locator(".demo-grid article")).toHaveCount(12);
+  await expect(page.getByText("No real payments",{exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Sign in to create showcase"})).toBeVisible();
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
+  expect(overflow).toBe(false);
+});

@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=27";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=27";
+import { configured, supabase } from "./core.js?v=28";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=28";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -172,6 +172,19 @@ export async function listOrganizerEvents(userId) {
     .order("starts_at");
   if (error) throw error;
   return data;
+}
+
+export async function createShowcaseEvent() {
+  if (!configured) throw new Error("The organizer showcase requires Supabase");
+  const { data, error } = await supabase.rpc("os_create_showcase_event");
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteShowcaseEvent(eventId) {
+  if (!configured) throw new Error("The organizer showcase requires Supabase");
+  const { error } = await supabase.rpc("os_delete_showcase_event", { p_event_id: eventId });
+  if (error) throw error;
 }
 
 export async function listRegistrations(eventIds) {

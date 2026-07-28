@@ -7,6 +7,8 @@ There is no frontend framework, bundler, or build step.
 
 ## Current capabilities
 
+- Public feature explorer plus a private, disposable organizer showcase with
+  realistic sample data that stays out of real event and financial totals
 - Public event discovery and event detail pages
 - Registration tiers, prices, capacity, and participant registration
 - Supabase email/password authentication for organizers
