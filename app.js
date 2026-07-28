@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=22";
+} from "./core.js?v=23";
 import {
-  accountAction, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
+  accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
-  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
+  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID, removeSeriesEvent,
+  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=22";
+  seriesAction, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=23";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -33,6 +33,8 @@ const state = {
   emailTemplates: [],
   volunteerSignups: [],
   auditLog: [],
+  series: [],
+  seriesStandings: null,
   pendingView: "runner",
   pendingTransfer: null,
 };
@@ -132,6 +134,7 @@ function renderDiscover() {
       <div class="section-heading"><div><p class="eyebrow">On the calendar</p><h2>Find your next starting line</h2></div><span>${published.length} open events</span></div>
       <div class="event-grid">${published.map(publicEventCard).join("")}</div>
     </section>
+    ${state.series.length ? `<section class="series-section"><div class="section-heading"><div><p class="eyebrow">Race more</p><h2>Series & championships</h2></div><span>${state.series.length} active series</span></div><div class="series-grid">${state.series.map((series)=>`<article style="--series-color:${safeColor(series.primary_color)}">${safeUrl(series.banner_url) ? `<img src="${escapeHtml(safeUrl(series.banner_url))}" alt="">` : ""}<div><p>${series.os_series_events?.length || 0} events</p><h3>${escapeHtml(series.name)}</h3><span>${escapeHtml(series.description)}</span><button data-view-series="${series.id}" type="button">View series standings →</button></div></article>`).join("")}</div></section>` : ""}
     <section class="open-promise">
       <div><p class="eyebrow">Built differently</p><h2>Your event platform should work for your community.</h2></div>
       <div class="promise-grid">
@@ -180,6 +183,27 @@ function renderEvent(event, preview=false) {
     </section>`;
 }
 
+async function renderSeries(series) {
+  const standings=await seriesAction("standings",{seriesId:series.id});
+  state.seriesStandings=standings;
+  setPageMetadata(`${series.name} — OpenStart`,series.description,series.banner_url || series.logo_url || "og.png");
+  const events=[...(series.os_series_events || [])].sort((a,b)=>a.sort_order-b.sort_order);
+  page.innerHTML=`<section class="series-page" style="--series-color:${safeColor(series.primary_color)}">
+    <button class="back-button" data-back type="button">← All events</button>
+    ${safeUrl(series.banner_url) ? `<div class="series-banner"><img src="${escapeHtml(safeUrl(series.banner_url))}" alt=""></div>` : ""}
+    <div class="series-hero">${safeUrl(series.logo_url) ? `<img src="${escapeHtml(safeUrl(series.logo_url))}" alt="${escapeHtml(series.name)} logo">` : ""}<p class="eyebrow">Race series</p><h1>${escapeHtml(series.name)}</h1><p>${escapeHtml(series.description)}</p><div><span><b>${events.length}</b>events</span><span><b>${series.minimum_events}</b>required</span><span><b>${escapeHtml(series.tie_breaker.replace("_"," "))}</b>tie-breaker</span></div></div>
+    <section class="series-calendar"><div class="section-heading"><div><p class="eyebrow">Series calendar</p><h2>Earn points at every finish</h2></div></div><div>${events.map((link)=>`<article><time>${displayDate(link.os_events?.starts_at)}</time><span><b>${escapeHtml(link.os_events?.name || "")}</b><small>${escapeHtml(link.os_events?.location_name || "")} · ${Number(link.points_multiplier)}× points</small></span>${link.os_events?.status==="published" ? `<button data-event-id="${link.event_id}" type="button">View race</button>` : ""}</article>`).join("") || '<div class="empty-state">Events are coming soon.</div>'}</div></section>
+    <section class="standings-section"><div class="section-heading"><div><p class="eyebrow">Championship</p><h2>Individual standings</h2></div><button class="subtle-button" data-export-series="${series.id}" type="button">Export standings</button></div><div class="standings-table"><div class="standings-header"><span>Rank</span><span>Athlete</span><span>Events</span><span>Wins</span><span>Points</span></div>${standings.individual.map((row)=>`<div><span>${row.rank}</span><span><b>${escapeHtml(row.firstName)} ${escapeHtml(row.lastName)}</b><small>${row.eligible ? "Championship eligible" : `${series.minimum_events-row.eventsCompleted} more required`}</small></span><span>${row.eventsCompleted}</span><span>${row.wins}</span><span><b>${row.points}</b></span></div>`).join("") || '<div class="empty-state">Standings appear after published results.</div>'}</div></section>
+    ${standings.teams.length ? `<section class="standings-section"><div class="section-heading"><div><p class="eyebrow">Clubs & teams</p><h2>Team standings</h2></div></div><div class="standings-table team-standings"><div class="standings-header"><span>Rank</span><span>Team</span><span>Members</span><span>Events</span><span>Points</span></div>${standings.teams.map((row)=>`<div><span>${row.rank}</span><span><b>${escapeHtml(row.name)}</b></span><span>${row.members}</span><span>${row.eventsCompleted}</span><span><b>${row.points}</b></span></div>`).join("")}</div></section>` : ""}
+  </section>`;
+}
+
+function exportSeriesStandings(series) {
+  const rows=[["rank","first_name","last_name","points","events_completed","wins","eligible"],...(state.seriesStandings?.individual || []).map((row)=>[row.rank,row.firstName,row.lastName,row.points,row.eventsCompleted,row.wins,row.eligible])];
+  const csv=rows.map((row)=>row.map((value)=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\n");
+  const link=document.createElement("a");link.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));link.download=`${series.slug}-standings.csv`;link.click();URL.revokeObjectURL(link.href);
+}
+
 function renderDashboard() {
   const published = state.events.filter((event) => event.status === "published");
   const confirmed = state.registrations.filter((registration) => registration.status === "confirmed");
@@ -201,6 +225,7 @@ function renderDashboard() {
         <div class="dashboard-actions">
           ${configured ? `<button class="stripe-button ${stripeReady ? "ready" : ""}" data-connect-stripe type="button">${stripeReady ? "✓ Stripe ready" : stripeStarted ? "Finish Stripe setup" : "Connect Stripe sandbox"}</button>` : ""}
           <button class="subtle-button" data-system-health type="button">System health</button>
+          <button class="subtle-button" data-series-manager type="button">Series</button>
           <button class="subtle-button" data-compose-campaign type="button">Communications</button>
           <button class="primary-button" data-create-event type="button">+ Create event</button>
         </div>
@@ -238,6 +263,7 @@ function renderDashboard() {
         <div class="card-heading"><div><h2>Communications</h2><p>Drafts, scheduled messages, and delivery status.</p></div><button class="subtle-button" data-compose-campaign type="button">+ New campaign</button></div>
         <div class="campaign-list">${state.campaigns.slice(0,8).map((campaign) => `<div><span><b>${escapeHtml(campaign.name)}</b><small>${escapeHtml(eventById(campaign.event_id)?.name || "")} · ${escapeHtml(campaign.message_type)}</small></span><span>${campaign.recipient_count} recipients</span><span><b class="campaign-status">${escapeHtml(campaign.status)}</b><small>${campaign.sent_count} sent · ${campaign.failed_count} failed</small></span></div>`).join("") || '<div class="empty-state">No campaigns yet.</div>'}</div>
       </div>
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Race series</h2><p>Championship calendars, points, and eligibility.</p></div><button class="subtle-button" data-series-manager type="button">Manage series</button></div><div class="campaign-list">${state.series.map((series)=>`<div><span><b>${escapeHtml(series.name)}</b><small>${series.os_series_events?.length || 0} events · minimum ${series.minimum_events}</small></span><span>${escapeHtml(series.status)}</span><span><button class="subtle-button" data-configure-series="${series.id}" type="button">Configure</button></span></div>`).join("") || '<div class="empty-state">No race series yet.</div>'}</div></div>
       <div class="dashboard-card"><div class="card-heading"><div><h2>Audit trail</h2><p>Recent sensitive changes across your events.</p></div></div><div class="audit-list">${state.auditLog.slice(0,15).map((entry)=>`<p><span><b>${escapeHtml(entry.action)} ${escapeHtml(entry.table_name.replace("os_","").replaceAll("_"," "))}</b><small>${escapeHtml(eventById(entry.event_id)?.name || "Event")} · ${new Date(entry.created_at).toLocaleString()}</small></span><code>${escapeHtml(entry.record_id?.slice(0,8) || "system")}</code></p>`).join("") || '<div class="empty-state">No audited changes yet.</div>'}</div></div>
       <div id="roster-slot"></div>
     </section>`;
@@ -456,6 +482,15 @@ function siteEditorForm(event) {
     <h3>Sponsors</h3><div class="site-sponsor-list">${sponsors.map((sponsor)=>`<span>${sponsor.logo_url ? `<img src="${escapeHtml(sponsor.logo_url)}" alt="">` : ""}<b>${escapeHtml(sponsor.name)}</b><small>${escapeHtml(sponsor.sponsor_level)}</small><button data-delete-sponsor="${sponsor.id}" data-event="${event.id}" type="button">×</button></span>`).join("") || "<p>No sponsors added.</p>"}</div>
     <form id="site-sponsor-form" data-event-id="${event.id}"><div class="split-fields"><label>Sponsor name<input name="name" required></label><label>Level<input name="sponsor_level" placeholder="Presenting sponsor"></label></div><div class="split-fields"><label>Website<input name="website_url" type="url"></label><label>Logo<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label></div><button class="subtle-button" type="submit">Add sponsor</button></form>
   </section>`;
+}
+
+function seriesManagerForm() {
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Championships</p><h2>Race series</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="series-admin-list">${state.series.map((series)=>`<button data-configure-series="${series.id}" type="button"><span><b>${escapeHtml(series.name)}</b><small>${series.os_series_events?.length || 0} events · ${escapeHtml(series.status)}</small></span><strong>Configure →</strong></button>`).join("") || '<div class="empty-state">Create your first multi-event series.</div>'}</div><h3>Create series</h3><form id="series-form"><label>Name<input name="name" placeholder="OpenStart Summer Series" required></label><label>Description<textarea name="description" rows="3" required></textarea></label><div class="split-fields"><label>Minimum events<input name="minimum_events" type="number" min="1" value="2" required></label><label>Tie breaker<select name="tie_breaker"><option value="most_wins">Most wins</option><option value="best_finish">Best finish</option><option value="most_events">Most events</option></select></label></div><button class="primary-button" type="submit">Create series</button></form></section>`;
+}
+
+function seriesSettingsForm(series) {
+  const linked=new Set((series.os_series_events || []).map((link)=>link.event_id));
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Series settings</p><h2>${escapeHtml(series.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><form id="series-settings-form" data-series-id="${series.id}"><label>Description<textarea name="description" rows="3">${escapeHtml(series.description)}</textarea></label><div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(series.primary_color)}"></label><label>Status<select name="status">${["draft","published","archived"].map((status)=>`<option ${series.status===status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><div class="split-fields"><label>Minimum completed events<input name="minimum_events" type="number" min="1" value="${series.minimum_events}" required></label><label>Tie breaker<select name="tie_breaker"><option value="most_wins" ${series.tie_breaker==="most_wins" ? "selected" : ""}>Most wins</option><option value="best_finish" ${series.tie_breaker==="best_finish" ? "selected" : ""}>Best finish</option><option value="most_events" ${series.tie_breaker==="most_events" ? "selected" : ""}>Most events</option></select></label></div><label>Placement points <span class="optional-label">Comma separated</span><input name="points_schedule" value="${escapeHtml((series.points_schedule || []).join(","))}"></label><label>Finisher points after listed places<input name="participation_points" type="number" min="0" value="${series.participation_points}"></label><div class="split-fields"><label>Logo URL<input name="logo_url" type="url" value="${escapeHtml(series.logo_url || "")}"></label><label>Banner URL<input name="banner_url" type="url" value="${escapeHtml(series.banner_url || "")}"></label></div><button class="primary-button" type="submit">Save series settings</button></form><h3>Series calendar</h3><div class="series-event-admin">${(series.os_series_events || []).sort((a,b)=>a.sort_order-b.sort_order).map((link)=>`<span><b>${escapeHtml(link.os_events?.name || "")}</b><small>${Number(link.points_multiplier)}× points</small><button data-remove-series-event="${link.id}" data-series="${series.id}" type="button">Remove</button></span>`).join("") || "<p>No events linked.</p>"}</div><form id="series-event-form" data-series-id="${series.id}"><div class="split-fields"><label>Add event<select name="event_id">${state.events.filter((event)=>!linked.has(event.id)).map((event)=>`<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("")}</select></label><label>Points multiplier<input name="points_multiplier" type="number" min=".1" step=".1" value="1"></label></div><button class="subtle-button" type="submit">Add event</button></form>${series.status==="published" ? `<button class="subtle-button" data-view-series="${series.id}" type="button">View public series</button>` : ""}</section>`;
 }
 
 function waveManagerForm(event) {
@@ -723,7 +758,7 @@ function filterRoster(eventId) {
 }
 
 async function loadPublic() {
-  state.events = await listPublishedEvents();
+  [state.events,state.series] = await Promise.all([listPublishedEvents(),listPublishedSeries()]);
   state.registrations = configured ? [] : await listRegistrations(state.events.map((event) => event.id));
 }
 
@@ -733,6 +768,7 @@ async function loadDashboard() {
     listOrganizerEvents(userId),
     getOrganizerProfile(userId),
   ]);
+  state.series=await listOrganizerSeries(userId);
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
   [state.orderItems,state.campaigns,state.emailTemplates,state.auditLog] = await Promise.all([
     listOrganizerOrderItems(state.events.map((event) => event.id)),
@@ -777,7 +813,10 @@ document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
   if (target.matches("[data-view]")) await go(target.dataset.view);
-  if (target.matches("[data-action='discover'], [data-back]")) await go("discover");
+  if (target.matches("[data-action='discover'], [data-back]")) {
+    history.replaceState({},"",location.pathname);
+    await go("discover");
+  }
   if (target.matches("[data-go-dashboard]")) await go("dashboard");
   if (target.dataset.eventId) {
     state.selectedEvent = eventById(target.dataset.eventId);
@@ -795,6 +834,21 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.matches("[data-series-manager]")) openDialog(seriesManagerForm());
+  if (target.dataset.configureSeries) openDialog(seriesSettingsForm(state.series.find((series)=>series.id===target.dataset.configureSeries)));
+  if (target.dataset.viewSeries) {
+    dialog.close();
+    history.replaceState({},"",`${location.pathname}?series=${target.dataset.viewSeries}`);
+    await renderSeries(state.series.find((series)=>series.id===target.dataset.viewSeries));
+    scrollTo(0,0);
+  }
+  if (target.dataset.exportSeries) exportSeriesStandings(state.series.find((series)=>series.id===target.dataset.exportSeries));
+  if (target.dataset.removeSeriesEvent) {
+    await removeSeriesEvent(target.dataset.removeSeriesEvent);
+    await loadDashboard();
+    openDialog(seriesSettingsForm(state.series.find((series)=>series.id===target.dataset.series)));
+    showNotice("Event removed from series.");
+  }
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
   if (target.matches("[data-export-account]")) {
     const accountExport=await accountAction("export");
@@ -1025,6 +1079,44 @@ document.addEventListener("submit", async (event) => {
       state.session = result.data.session;
       dialog.close();
       await go(state.pendingView || "runner");
+    }
+
+    if (form.id === "series-form") {
+      const name=data.get("name");
+      const series=await createSeries({
+        organizer_id:state.session.user.id,name,slug:`${slugify(name)}-${Date.now().toString().slice(-6)}`,
+        description:data.get("description"),minimum_events:Number(data.get("minimum_events")),
+        tie_breaker:data.get("tie_breaker"),
+      });
+      await loadDashboard();
+      openDialog(seriesSettingsForm(state.series.find((item)=>item.id===series.id)));
+      showNotice("Race series created.");
+    }
+
+    if (form.id === "series-settings-form") {
+      const points=String(data.get("points_schedule")).split(",").map((value)=>Number(value.trim())).filter((value)=>Number.isFinite(value) && value>=0);
+      if(!points.length) throw new Error("Enter at least one placement point value");
+      await updateSeries(form.dataset.seriesId,{
+        description:data.get("description"),primary_color:data.get("primary_color"),status:data.get("status"),
+        minimum_events:Number(data.get("minimum_events")),tie_breaker:data.get("tie_breaker"),
+        points_schedule:points,participation_points:Number(data.get("participation_points")),
+        logo_url:data.get("logo_url") || null,banner_url:data.get("banner_url") || null,updated_at:new Date().toISOString(),
+      });
+      await loadDashboard();
+      openDialog(seriesSettingsForm(state.series.find((series)=>series.id===form.dataset.seriesId)));
+      showNotice("Series settings saved.");
+    }
+
+    if (form.id === "series-event-form") {
+      if(!data.get("event_id")) throw new Error("Choose an event to add");
+      const series=state.series.find((item)=>item.id===form.dataset.seriesId);
+      await addSeriesEvent({
+        series_id:series.id,event_id:data.get("event_id"),points_multiplier:Number(data.get("points_multiplier")),
+        sort_order:(series.os_series_events || []).length,
+      });
+      await loadDashboard();
+      openDialog(seriesSettingsForm(state.series.find((item)=>item.id===series.id)));
+      showNotice("Event added to series.");
     }
 
     if (form.id === "registration-form") {
@@ -1554,7 +1646,10 @@ async function boot() {
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
   await go(state.pendingTransfer ? "runner" : "discover");
-  if (params.get("results")) {
+  if (params.get("series")) {
+    const series=state.series.find((item)=>item.id===params.get("series"));
+    if(series) await renderSeries(series);
+  } else if (params.get("results")) {
     const race=eventById(params.get("results"));
     if(race?.results_published_at) renderResults(race);
   } else if (params.get("unsubscribe") && params.get("token")) {

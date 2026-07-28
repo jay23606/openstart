@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=22";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=22";
+import { configured, supabase } from "./core.js?v=23";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=23";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -116,6 +116,51 @@ export async function listPublishedEvents() {
     .order("starts_at");
   if (error) throw error;
   return data;
+}
+
+export async function listPublishedSeries() {
+  if(!configured) return [];
+  const {data,error}=await supabase.from("os_series")
+    .select("*,os_series_events(*,os_events(id,name,slug,starts_at,location_name,status))")
+    .eq("status","published").order("created_at",{ascending:false});
+  if(error) throw error;
+  return data;
+}
+
+export async function listOrganizerSeries(userId) {
+  if(!configured) return [];
+  const {data,error}=await supabase.from("os_series")
+    .select("*,os_series_events(*,os_events(id,name,slug,starts_at,location_name,status))")
+    .eq("organizer_id",userId).order("created_at",{ascending:false});
+  if(error) throw error;
+  return data;
+}
+
+export async function createSeries(series) {
+  const {data,error}=await supabase.from("os_series").insert(series).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function updateSeries(id,changes) {
+  const {data,error}=await supabase.from("os_series").update(changes).eq("id",id).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function addSeriesEvent(link) {
+  const {data,error}=await supabase.from("os_series_events").insert(link).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function removeSeriesEvent(id) {
+  const {error}=await supabase.from("os_series_events").delete().eq("id",id);
+  if(error) throw error;
+}
+
+export async function seriesAction(action,payload) {
+  return functionResult("os-series",{action,...payload});
 }
 
 export async function listOrganizerEvents(userId) {

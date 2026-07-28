@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.os-account]
 verify_jwt = false
+
+[functions.os-series]
+verify_jwt = false

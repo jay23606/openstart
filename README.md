@@ -34,6 +34,8 @@ There is no frontend framework, bundler, or build step.
   guidance, bulk assignment, bib ranges, start controls, and targeted messaging
 - Production safeguards including immutable audit history, server-side rate
   limits, health checks, account export/deletion, CSP, and Playwright smoke tests
+- Branded race series with event calendars, configurable placement points,
+  eligibility rules, tie-breakers, individual/team standings, and CSV reporting
 - Device-local demo mode when Supabase has not been configured
 
 ## Files

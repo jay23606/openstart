@@ -1,4 +1,4 @@
-const CACHE = "openstart-v22";
+const CACHE = "openstart-v23";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./config.js", "./manifest.json", "./favicon.svg",
