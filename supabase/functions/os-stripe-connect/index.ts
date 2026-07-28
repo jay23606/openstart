@@ -1,10 +1,31 @@
-import Stripe from "npm:stripe@18.5.0";
 import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-const stripe = stripeKey
-  ? new Stripe(stripeKey, { httpClient: Stripe.createFetchHttpClient() })
-  : null;
+const stripeApiVersion = "2026-06-24.dahlia";
+
+const stripeV2 = async (
+  path: string,
+  body: Record<string, unknown>,
+  idempotencyKey?: string,
+) => {
+  if (!stripeKey) throw new Error("Stripe sandbox has not been configured");
+  const response = await fetch(`https://api.stripe.com/v2/${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${stripeKey}`,
+      "Content-Type": "application/json",
+      "Stripe-Version": stripeApiVersion,
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error || `Stripe returned ${response.status}`;
+    throw new Error(String(message));
+  }
+  return data;
+};
 
 const allowedReturnUrl = (value: unknown) => {
   const url = new URL(String(value));
@@ -17,7 +38,7 @@ const allowedReturnUrl = (value: unknown) => {
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
-  if (!stripe) return json(request, { error: "Stripe sandbox has not been configured" }, 503);
+  if (!stripeKey) return json(request, { error: "Stripe sandbox has not been configured" }, 503);
 
   try {
     const user = await requiredUser(request);
@@ -35,12 +56,25 @@ Deno.serve(async (request) => {
 
     let accountId = profile?.stripe_account_id;
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        email: user.email,
-        business_profile: { product_description: "Race registrations managed with OpenStart" },
+      const account = await stripeV2("core/accounts", {
+        contact_email: user.email,
+        display_name: user.user_metadata?.display_name || user.email?.split("@")[0] || "OpenStart organizer",
+        dashboard: "express",
+        configuration: {
+          merchant: {
+            capabilities: {
+              card_payments: { requested: true },
+            },
+          },
+        },
+        defaults: {
+          responsibilities: {
+            fees_collector: "application",
+            losses_collector: "application",
+          },
+        },
         metadata: { openstart_user_id: user.id },
-      }, { idempotencyKey: `openstart-account-${user.id}` });
+      }, `openstart-account-v2-${user.id}`);
       accountId = account.id;
       const { error } = await admin.from("os_profiles").upsert({
         id: user.id,
@@ -50,12 +84,20 @@ Deno.serve(async (request) => {
       if (error) throw error;
     }
 
-    const link = await stripe.accountLinks.create({
+    const link = await stripeV2("core/account_links", {
       account: accountId,
-      type: "account_onboarding",
-      refresh_url: returnUrl,
-      return_url: returnUrl,
-      collection_options: { fields: "eventually_due", future_requirements: "include" },
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          configurations: ["merchant"],
+          refresh_url: returnUrl,
+          return_url: returnUrl,
+          collection_options: {
+            fields: "eventually_due",
+            future_requirements: "include",
+          },
+        },
+      },
     });
     return json(request, { url: link.url });
   } catch (error) {
