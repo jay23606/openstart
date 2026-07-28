@@ -34,7 +34,7 @@ Deno.serve(async(request)=>{
       ]=await Promise.all([
         admin.from("os_events").select("id,name,status,starts_at,organizer_id,platform_fee_bps,platform_suspended_at,platform_suspension_reason,created_at")
           .order("created_at",{ascending:false}).limit(200),
-        admin.from("os_registrations").select("id,event_id,status,payment_status,amount_cents,stripe_checkout_session_id,stripe_payment_intent_id,created_at,paid_at")
+        admin.from("os_registrations").select("id,event_id,status,payment_status,amount_cents,stripe_checkout_session_id,stripe_payment_intent_id,created_at")
           .order("created_at",{ascending:false}).limit(1000),
         admin.from("os_profiles").select("id,display_name,stripe_account_id,stripe_charges_enabled,stripe_payouts_enabled,created_at")
           .order("created_at",{ascending:false}).limit(300),
@@ -125,7 +125,14 @@ Deno.serve(async(request)=>{
     }
     return json(request,{error:"Unknown platform action"},400);
   }catch(error){
-    return json(request,{error:error instanceof Error ? error.message : "Platform operation failed"},400);
+    // Supabase/PostgREST rejects with plain objects, not Error instances, so the
+    // real cause (e.g. an undefined column) was collapsing into the generic text.
+    // Surface the underlying message when there is one.
+    const message=error instanceof Error ? error.message
+      : (error && typeof error==="object" && "message" in error && (error as {message?:unknown}).message)
+        ? String((error as {message:unknown}).message)
+        : "Platform operation failed";
+    return json(request,{error:message},400);
   }
 });
 
