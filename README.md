@@ -5,7 +5,7 @@ platform. It follows the same architecture as BotGarden and Mayfly: static HTML,
 CSS, and browser-native JavaScript modules on GitHub Pages, backed by Supabase.
 There is no frontend framework, bundler, or build step.
 
-## Included in the first version
+## Current capabilities
 
 - Public event discovery and event detail pages
 - Registration tiers, prices, capacity, and participant registration
@@ -37,6 +37,17 @@ There is no frontend framework, bundler, or build step.
 - Branded race series with event calendars, configurable placement points,
   eligibility rules, tie-breakers, individual/team standings, and CSV reporting
 - Device-local demo mode when Supabase has not been configured
+
+## Help and sandbox use
+
+The live app includes a searchable **Help** screen for runners, organizers,
+volunteers, and race-day staff. It covers registration, payments, transfers,
+results, event setup, communications, and common troubleshooting.
+
+The **Sandbox** label in the header means Stripe is running in test mode and no
+real money is charged. Use Stripe's test card `4242 4242 4242 4242`, any future
+expiration date, any three-digit CVC, and a valid postal code. Do not enter real
+card details until OpenStart is deliberately switched to live Stripe keys.
 
 ## Files
 

@@ -1,6 +1,6 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=23";
+} from "./core.js?v=24";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
@@ -8,7 +8,7 @@ import {
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   seriesAction, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=23";
+} from "./data.js?v=24";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -39,9 +39,63 @@ const state = {
   pendingTransfer: null,
 };
 
+const helpArticles=[
+  {audience:"Start here",title:"Understanding OpenStart accounts",keywords:"account login runner organizer staff navigation",body:"One account can be a runner, organizer, team captain, volunteer, or race-day staff member. My races contains your registrations and volunteer shifts. Organizer contains events you own. Staff tools appear when an organizer assigns your verified account email."},
+  {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation",body:"Open an event, choose Register now, enter each participant, then continue to Stripe Checkout for paid entries. OpenStart confirms a paid registration only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
+  {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
+  {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},
+  {audience:"Organizers",title:"Create and publish an event",keywords:"organizer create event publish website branding sections sponsor",body:"Open Organizer → Create event. Configure registration options first, then open the event roster. Website controls branding, content sections, sponsors, preview, and publishing. Draft events and draft website content are visible only to you."},
+  {audience:"Organizers",title:"Stripe payments and payouts",keywords:"organizer stripe connect sandbox payment payout refund fee",body:"Select Connect Stripe sandbox and complete Stripe-hosted onboarding. The account must have charges and payouts enabled. Registration funds use destination charges; OpenStart retains the configured application fee. Use test card 4242 4242 4242 4242 in sandbox."},
+  {audience:"Organizers",title:"Registration, pricing, and merchandise",keywords:"organizer roster question waiver promo waitlist price product donation inventory",body:"From an event roster you can manage participants, questions, waivers, scheduled pricing, promo codes, waitlists, products, inventory, donations, and financial exports. Payment and capacity decisions remain server-authoritative."},
+  {audience:"Organizers",title:"Communications",keywords:"organizer email campaign resend template audience unsubscribe",body:"Open Communications to preview an audience, send yourself a test, save templates, schedule messages, and review deliveries. Participant delivery requires a verified Resend sending domain. Marketing campaigns respect unsubscribe records."},
+  {audience:"Organizers",title:"Volunteers and race-day operations",keywords:"organizer volunteer shift staff scanner checkin packet pickup walkup bib",body:"Create volunteer roles and capacity-limited shifts from Volunteers. Race-day tools support staff roles, participant lookup, QR scanning, bib assignment, packet pickup, check-in, walk-up entries, and merchandise fulfillment."},
+  {audience:"Organizers",title:"Results, waves, and race series",keywords:"organizer result csv timing wave corral series points standings",body:"Use Waves to configure corrals, start times, capacity, pace guidance, and bib ranges. Results accepts manual times or CSV imports. After publishing official results, Series automatically calculates individual and team championship standings."},
+  {audience:"Race-day staff",title:"Using assigned staff tools",keywords:"staff scanner lookup packet pickup registration desk admin permissions",body:"Sign in with the exact verified email assigned by the organizer. Scanner staff can verify QR passes; packet-pickup staff can locate participants and mark packets; registration staff can assist walk-ups; race-day admins receive all operational permissions."},
+  {audience:"Troubleshooting",title:"Common setup and browser issues",keywords:"help error cache refresh stripe resend email supabase camera",body:"If a recent release looks stale, perform one hard refresh so the service worker retrieves the newest assets. Camera scanning requires HTTPS and a current Chrome or Edge browser. Stripe Connect errors normally indicate incomplete onboarding or capabilities. Email errors commonly indicate an unverified Resend domain."},
+];
+
 const eventById = (id) => state.events.find((event) => event.id === id);
 const tierById = (event, id) => event?.os_event_tiers?.find((tier) => tier.id === id);
 const eventRegistrations = (id) => state.registrations.filter((registration) => registration.event_id === id);
+
+function renderHelp() {
+  setPageMetadata(
+    "OpenStart Help — Guides for runners and organizers",
+    "Learn how to register, manage races, accept test payments, communicate with participants, and run race day in OpenStart.",
+  );
+  const audiences = ["All", ...new Set(helpArticles.map((article) => article.audience))];
+  page.innerHTML = `
+    <section class="help-page">
+      <div class="help-hero">
+        <p class="eyebrow">OPENSTART HELP</p>
+        <h1>How can we help?</h1>
+        <p>Quick, plain-language guides for runners, organizers, volunteers, and race-day staff.</p>
+        <label class="help-search">
+          <span>Search help</span>
+          <input data-help-search type="search" placeholder="Try “Stripe”, “transfer”, or “results”" autocomplete="off">
+        </label>
+      </div>
+      <div class="help-content">
+        <div class="help-filters" aria-label="Filter help topics">
+          ${audiences.map((audience, index) => `<button class="${index === 0 ? "active" : ""}" data-help-filter="${escapeHtml(audience)}" type="button">${escapeHtml(audience)}</button>`).join("")}
+        </div>
+        <p class="help-count" aria-live="polite">${helpArticles.length} guides</p>
+        <div class="help-grid">
+          ${helpArticles.map((article) => `
+            <details data-help-article data-help-audience="${escapeHtml(article.audience)}" data-help-searchable="${escapeHtml(`${article.audience} ${article.title} ${article.keywords} ${article.body}`.toLowerCase())}">
+              <summary><span>${escapeHtml(article.audience)}</span>${escapeHtml(article.title)}</summary>
+              <p>${escapeHtml(article.body)}</p>
+            </details>
+          `).join("")}
+        </div>
+        <aside class="help-support">
+          <div><p class="eyebrow">STILL STUCK?</p><h2>Tell us what happened.</h2></div>
+          <p>Include the page you were on and the exact error message. Never include passwords, Stripe secret keys, or other credentials.</p>
+          <a class="primary-button" href="https://github.com/jay23606/openstart/issues/new" target="_blank" rel="noreferrer">Open a GitHub issue</a>
+        </aside>
+      </div>
+    </section>`;
+}
 const effectivePrice = (tier) => {
   const now = Date.now();
   const active = (tier.os_tier_prices || []).filter((price) => new Date(price.starts_at).getTime() <= now)
@@ -801,6 +855,8 @@ async function go(view) {
     await loadRunnerDashboard();
     renderRunnerDashboard();
     if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
+  } else if (view === "help") {
+    renderHelp();
   } else {
     await loadPublic();
     renderDiscover();
@@ -813,6 +869,17 @@ document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
   if (target.matches("[data-view]")) await go(target.dataset.view);
+  if (target.matches("[data-help-filter]")) {
+    const searchInput = document.querySelector("[data-help-search]");
+    if (searchInput) searchInput.value = "";
+    document.querySelectorAll("[data-help-filter]").forEach((button) => button.classList.toggle("active", button === target));
+    const audience = target.dataset.helpFilter;
+    document.querySelectorAll("[data-help-article]").forEach((article) => {
+      article.classList.toggle("hidden", audience !== "All" && article.dataset.helpAudience !== audience);
+    });
+    const visible = document.querySelectorAll("[data-help-article]:not(.hidden)").length;
+    document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
+  }
   if (target.matches("[data-action='discover'], [data-back]")) {
     history.replaceState({},"",location.pathname);
     await go("discover");
@@ -1575,6 +1642,16 @@ document.addEventListener("change", (event) => {
   form.elements.html_body.value=template.html_body;
 });
 document.addEventListener("input", (event) => {
+  if (event.target.matches("[data-help-search]")) {
+    const search = event.target.value.trim().toLowerCase();
+    document.querySelectorAll("[data-help-filter]").forEach((button) => button.classList.toggle("active", button.dataset.helpFilter === "All"));
+    document.querySelectorAll("[data-help-article]").forEach((article) => {
+      article.classList.toggle("hidden", Boolean(search && !article.dataset.helpSearchable.includes(search)));
+    });
+    const visible = document.querySelectorAll("[data-help-article]:not(.hidden)").length;
+    document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
+    return;
+  }
   if(!event.target.matches("[data-results-search],[data-results-tier]")) return;
   const search=(document.querySelector("[data-results-search]")?.value || "").trim().toLowerCase();
   const tier=document.querySelector("[data-results-tier]")?.value || "";

@@ -25,6 +25,7 @@ button { color: inherit; }
 .setup-banner { background: var(--lime); color: var(--ink); font-size: 12px; padding: 9px 20px; text-align: center; }
 .setup-banner code { font-weight: 800; }
 .account-actions { align-items: center; display: flex; justify-self: end; }
+.sandbox-badge { background: #fff0c7; border: 1px solid #e5bd51; border-radius: 999px; color: #765500; font-size: 9px; font-weight: 900; letter-spacing: .8px; margin-right: 12px; padding: 5px 8px; text-transform: uppercase; }
 
 .site-header {
   align-items: center;
@@ -45,6 +46,28 @@ nav button { background: none; border: 0; color: var(--muted); cursor: pointer; 
 nav button.nav-active { color: var(--ink); }
 nav button.nav-active::after { background: var(--orange); bottom: -19px; content: ""; height: 3px; left: 0; position: absolute; right: 0; }
 .github-link { background: none; border: 0; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 700; justify-self: end; text-decoration: none; }
+
+.help-page { min-height: 75vh; }
+.help-hero { background: var(--green-dark); color: white; padding: 76px clamp(24px, 10vw, 150px) 66px; }
+.help-hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 6vw, 76px); font-weight: 500; letter-spacing: -3px; margin-bottom: 18px; }
+.help-hero > p:not(.eyebrow) { color: #c7d6cf; font-size: 17px; line-height: 1.6; }
+.help-search { display: block; margin-top: 32px; max-width: 720px; }
+.help-search span { display: block; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase; }
+.help-search input { background: white; border: 0; border-radius: 7px; color: var(--ink); font-size: 16px; padding: 18px 20px; width: 100%; }
+.help-content { margin: 0 auto; max-width: 1120px; padding: 42px 24px 80px; }
+.help-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-filters button { background: var(--cream); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-size: 12px; font-weight: 800; padding: 9px 13px; }
+.help-filters button.active { background: var(--green); border-color: var(--green); color: white; }
+.help-count { color: var(--muted); font-size: 12px; margin: 18px 0; }
+.help-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.help-grid details { border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+.help-grid summary { cursor: pointer; font-size: 17px; font-weight: 800; line-height: 1.35; list-style-position: outside; margin-left: 18px; }
+.help-grid summary span { color: var(--green); display: block; font-size: 9px; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
+.help-grid details p { color: var(--muted); font-size: 14px; line-height: 1.65; margin: 16px 0 0; }
+.help-support { align-items: center; background: var(--cream); display: grid; gap: 30px; grid-template-columns: 1fr 1.2fr auto; margin-top: 44px; padding: 30px; }
+.help-support h2 { font-family: Georgia, serif; font-size: 28px; font-weight: 500; margin: 0; }
+.help-support p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+.help-support .eyebrow { color: var(--green); margin-bottom: 8px; }
 
 .notice { align-items: center; background: var(--green-dark); border-radius: 10px; color: white; display: flex; gap: 24px; justify-content: space-between; left: 50%; max-width: calc(100% - 32px); padding: 14px 18px; position: fixed; top: 86px; transform: translateX(-50%); width: 620px; z-index: 50; box-shadow: 0 12px 40px #17211d33; }
 .notice button { background: none; border: 0; color: white; cursor: pointer; font-size: 22px; }
@@ -456,6 +479,9 @@ footer b { color: white; }
 .series-event-admin button { background: none; border: 0; color: #a33; cursor: pointer; font-weight: 800; }
 
 @media (max-width: 620px) {
+  .sandbox-badge { display: none; }
+  .help-grid { grid-template-columns: 1fr; }
+  .help-support { align-items: stretch; grid-template-columns: 1fr; }
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
   .runner-entry-meta { text-align: left; }
 }
