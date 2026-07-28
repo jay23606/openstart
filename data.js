@@ -87,6 +87,23 @@ function saveDemo(state) {
   localStorage.setItem(DEMO_KEY, JSON.stringify(state));
 }
 
+async function functionResult(name, body) {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    try {
+      const details = await error.context?.json();
+      throw new Error(details?.error || error.message);
+    } catch (contextError) {
+      if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") {
+        throw contextError;
+      }
+      throw error;
+    }
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
@@ -200,18 +217,11 @@ export async function beginRegistration(payload) {
     });
     return { status: registration.status, registrationId: registration.id };
   }
-  const { data, error } = await supabase.functions.invoke("os-create-checkout", { body: payload });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+  return functionResult("os-create-checkout", payload);
 }
 
 export async function beginStripeOnboarding(returnUrl) {
   if (!configured) throw new Error("Supabase must be configured first");
-  const { data, error } = await supabase.functions.invoke("os-stripe-connect", {
-    body: { returnUrl },
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  const data = await functionResult("os-stripe-connect", { returnUrl });
   return data.url;
 }

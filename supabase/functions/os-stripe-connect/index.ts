@@ -59,7 +59,7 @@ Deno.serve(async (request) => {
     });
     return json(request, { url: link.url });
   } catch (error) {
+    console.error("Stripe onboarding failed", error);
     return json(request, { error: error instanceof Error ? error.message : "Stripe onboarding failed" }, 400);
   }
 });
-
