@@ -13,6 +13,9 @@ There is no frontend framework, bundler, or build step.
   preview, server-authoritative readiness checks, and protected publishing
 - Auditable weighted lottery draws with immutable ranks, selected-runner Stripe
   checkout, expiring invitations, waitlist promotion, and runner deadlines
+- Private platform-operations console with owner/finance/support roles, payment
+  reconciliation alerts, provider and email failure monitoring, organizer search,
+  fee controls, event suspension, support notes, and immutable intervention history
 - Public event discovery and event detail pages
 - Registration tiers, prices, capacity, and participant registration
 - Supabase email/password authentication for organizers
@@ -167,6 +170,22 @@ domain and set `RESEND_FROM_EMAIL` before sending campaigns to participants.
 
 New events default to a 5% OpenStart application fee. The value is stored as
 `platform_fee_bps` on each event and can be changed before registrations open.
+
+## Platform operations
+
+The private **Platform** navigation item is returned only to active members of
+`os_platform_admins`. Bootstrap the first owner from the Supabase SQL editor,
+then manage future access deliberately:
+
+```sql
+insert into public.os_platform_admins(user_id, role)
+select id, 'owner' from auth.users where email = 'owner@example.com';
+```
+
+Roles are `owner`, `finance`, and `support`. Only owners can suspend or restore
+events. Owner and finance roles can change platform fees. The Edge Function
+rechecks the role for every request; hiding the navigation item is not the
+security boundary.
 
 ## Tests
 

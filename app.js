@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=30";
+} from "./core.js?v=31";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createEventTier, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
-  reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=30";
+  platformAdminAction, reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=31";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -17,6 +17,7 @@ const notice = document.querySelector("#notice");
 const authButton = document.querySelector("#auth-button");
 const signOutButton = document.querySelector("#sign-out");
 const setupBanner = document.querySelector("#setup-banner");
+const platformNav = document.querySelector("#platform-nav");
 let draggedSectionId=null;
 
 const state = {
@@ -41,6 +42,8 @@ const state = {
   pendingLotteryEvent: null,
   setupEventId: null,
   navigationId: 0,
+  platformAdmin: null,
+  platformData: null,
 };
 
 const helpArticles=[
@@ -57,6 +60,7 @@ const helpArticles=[
   {audience:"Organizers",title:"Volunteers and race-day operations",keywords:"organizer volunteer shift staff scanner checkin packet pickup walkup bib",body:"Create volunteer roles and capacity-limited shifts from Volunteers. Race-day tools support staff roles, participant lookup, QR scanning, bib assignment, packet pickup, check-in, walk-up entries, and merchandise fulfillment."},
   {audience:"Organizers",title:"Results, waves, and race series",keywords:"organizer result csv timing wave corral series points standings",body:"Use Waves to configure corrals, start times, capacity, pace guidance, and bib ranges. Results accepts manual times or CSV imports. After publishing official results, Series automatically calculates individual and team championship standings."},
   {audience:"Race-day staff",title:"Using assigned staff tools",keywords:"staff scanner lookup packet pickup registration desk admin permissions",body:"Sign in with the exact verified email assigned by the organizer. Scanner staff can verify QR passes; packet-pickup staff can locate participants and mark packets; registration staff can assist walk-ups; race-day admins receive all operational permissions."},
+  {audience:"Platform operators",title:"Monitoring and intervention",keywords:"platform admin operator reconciliation webhook email failure suspend fee support note",body:"Authorized operators see a private Platform tab. Use reconciliation alerts to investigate payment mismatches, review Stripe webhook and email failures, inspect organizer readiness, record private support notes, and manage platform fees. Event suspension immediately removes public discovery and blocks new registrations without deleting financial history."},
   {audience:"Troubleshooting",title:"Common setup and browser issues",keywords:"help error cache refresh stripe resend email supabase camera",body:"If a recent release looks stale, perform one hard refresh so the service worker retrieves the newest assets. Camera scanning requires HTTPS and a current Chrome or Edge browser. Stripe Connect errors normally indicate incomplete onboarding or capabilities. Email errors commonly indicate an unverified Resend domain."},
 ];
 
@@ -260,6 +264,67 @@ function syncNavigation() {
   });
   authButton.classList.toggle("hidden", Boolean(state.session));
   signOutButton.classList.toggle("hidden", !state.session);
+  platformNav.classList.toggle("hidden", !state.platformAdmin?.allowed);
+}
+
+async function loadPlatformAccess(){
+  state.platformAdmin=state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
+  syncNavigation();
+}
+
+async function loadPlatformOverview(query=""){
+  state.platformData=await platformAdminAction("overview",{query});
+}
+
+function platformSuspensionForm(event){
+  return `<section class="modal"><div class="form-heading"><div><p>Platform safety control</p><h2>Suspend ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <p>Suspension removes the event from public discovery and blocks new registrations. Existing financial records remain intact.</p>
+    <form id="platform-suspend-form" data-event-id="${event.id}"><label>Internal reason<textarea name="reason" minlength="4" maxlength="500" required></textarea></label><button class="danger-button" type="submit">Suspend event</button></form></section>`;
+}
+
+function platformFeeForm(event){
+  return `<section class="modal"><div class="form-heading"><div><p>Financial control</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="platform-event-fee-form" data-event-id="${event.id}"><label>Platform fee percentage<input name="fee_percent" type="number" min="0" max="25" step=".01" value="${event.platform_fee_bps/100}" required></label><button class="primary-button" type="submit">Save event fee</button></form></section>`;
+}
+
+function platformNoteForm({eventId="",organizerId="",label=""}){
+  return `<section class="modal"><div class="form-heading"><div><p>Private support history</p><h2>Add note</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><p>${escapeHtml(label)}</p>
+    <form id="platform-note-form"><input type="hidden" name="event_id" value="${eventId}"><input type="hidden" name="organizer_id" value="${organizerId}"><label>Internal note<textarea name="note" minlength="2" maxlength="2000" required></textarea></label><button class="primary-button" type="submit">Save note</button></form></section>`;
+}
+
+function renderPlatformAdmin(){
+  const data=state.platformData;
+  if(!data) return;
+  const m=data.metrics;
+  const ownerById=(id)=>data.organizers.find((item)=>item.id===id);
+  setPageMetadata("OpenStart Platform Operations","Private operational controls for OpenStart.");
+  page.innerHTML=`<section class="platform-console">
+    <div class="dashboard-header"><div><p class="eyebrow">PRIVATE OPERATOR CONSOLE</p><h1>Platform operations</h1><p>Payments, organizers, delivery health, and safety controls in one place.</p></div><span class="operator-role">${escapeHtml(data.role)} access</span></div>
+    <div class="metric-grid platform-metrics">
+      <div><span>Gross processed</span><strong>${money(m.grossCents)}</strong><small>${money(m.feeCents)} platform fees</small></div>
+      <div><span>Organizers</span><strong>${m.organizers}</strong><small>${m.activeEvents} active events</small></div>
+      <div><span>Reconciliation</span><strong class="${m.reconciliationAlerts ? "health-bad" : "health-ok"}">${m.reconciliationAlerts}</strong><small>records needing review</small></div>
+      <div><span>Operational failures</span><strong class="${m.failedDeliveries+m.failedProviderEvents ? "health-bad" : "health-ok"}">${m.failedDeliveries+m.failedProviderEvents}</strong><small>email + provider events</small></div>
+    </div>
+    <div class="platform-toolbar">
+      <form id="platform-search-form"><label>Search organizers and events<input name="query" type="search" placeholder="Name or account email"></label><button class="subtle-button" type="submit">Search</button></form>
+      <form id="platform-default-fee-form"><label>Default fee (%)<input name="fee_percent" type="number" min="0" max="25" step=".01" value="${data.settings.default_platform_fee_bps/100}" required></label><button class="subtle-button" type="submit">Update default</button></form>
+    </div>
+    <div class="dashboard-card"><div class="card-heading"><div><h2>Reconciliation alerts</h2><p>Paid records without provider references, confirmed unpaid entries, and stale pending checkouts.</p></div></div>
+      <div class="operations-list">${data.reconciliation.map((item)=>`<article><div><b>${escapeHtml(item.event_name)}</b><small>${escapeHtml(item.payment_status)} · ${escapeHtml(item.status)} · ${new Date(item.created_at).toLocaleString()}</small></div><span>${money(item.amount_cents)}<code>${escapeHtml(item.id.slice(0,8))}</code></span></article>`).join("") || '<div class="empty-state">No payment mismatches detected.</div>'}</div>
+    </div>
+    <div class="dashboard-card"><div class="card-heading"><div><h2>Events</h2><p>Cross-platform status, fees, and emergency controls.</p></div></div>
+      <div class="operations-list">${data.events.map((event)=>{const owner=ownerById(event.organizer_id);return `<article class="${event.platform_suspended_at ? "operation-suspended" : ""}"><div><b>${escapeHtml(event.name)}</b><small>${escapeHtml(owner?.email || "Unknown organizer")} · ${escapeHtml(event.status)} · ${(event.platform_fee_bps/100).toFixed(2)}% fee</small>${event.platform_suspension_reason ? `<em>${escapeHtml(event.platform_suspension_reason)}</em>` : ""}</div><span><button class="text-button" data-platform-event-fee="${event.id}" type="button">Fee</button><button class="text-button" data-platform-event-note="${event.id}" type="button">Note</button>${event.platform_suspended_at ? `<button class="subtle-button" data-platform-restore="${event.id}" type="button">Restore</button>` : `<button class="danger-button" data-platform-suspend="${event.id}" type="button">Suspend</button>`}</span></article>`;}).join("") || '<div class="empty-state">No matching events.</div>'}</div>
+    </div>
+    <div class="dashboard-card"><div class="card-heading"><div><h2>Organizers</h2><p>Stripe readiness and account activity.</p></div></div>
+      <div class="operations-list">${data.organizers.map((item)=>`<article><div><b>${escapeHtml(item.display_name || item.email)}</b><small>${escapeHtml(item.email)} · ${item.event_count} event${item.event_count===1?"":"s"} · Last sign-in ${item.last_sign_in_at ? new Date(item.last_sign_in_at).toLocaleDateString() : "never"}</small></div><span><b class="${item.stripe_charges_enabled && item.stripe_payouts_enabled ? "health-ok" : "health-bad"}">${item.stripe_charges_enabled && item.stripe_payouts_enabled ? "Stripe ready" : "Stripe incomplete"}</b><button class="text-button" data-platform-organizer-note="${item.id}" type="button">Note</button></span></article>`).join("") || '<div class="empty-state">No matching organizers.</div>'}</div>
+    </div>
+    <div class="platform-columns">
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Provider events</h2><p>Latest Stripe webhook processing.</p></div></div><div class="operations-list compact">${data.providerEvents.slice(0,25).map((item)=>`<article><div><b>${escapeHtml(item.event_type)}</b><small>${new Date(item.received_at).toLocaleString()}</small></div><span class="${item.status==="failed"?"health-bad":"health-ok"}">${escapeHtml(item.status)}</span></article>`).join("") || '<div class="empty-state">No provider events recorded yet.</div>'}</div></div>
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Email failures</h2><p>Bounces, complaints, and failed sends.</p></div></div><div class="operations-list compact">${data.failedDeliveries.slice(0,25).map((item)=>`<article><div><b>${escapeHtml(item.email)}</b><small>${escapeHtml(item.error_message || "No provider detail")}</small></div><span class="health-bad">${escapeHtml(item.status)}</span></article>`).join("") || '<div class="empty-state">No email failures recorded.</div>'}</div></div>
+    </div>
+    <div class="dashboard-card"><div class="card-heading"><div><h2>Support notes</h2><p>Private operator context and intervention history.</p></div></div><div class="audit-list">${data.notes.slice(0,30).map((item)=>`<p><span><b>${escapeHtml(item.body)}</b><small>${new Date(item.created_at).toLocaleString()}</small></span><code>${item.event_id ? "event" : "organizer"}</code></p>`).join("") || '<div class="empty-state">No support notes yet.</div>'}</div></div>
+  </section>`;
 }
 
 function publicEventCard(event, index) {
@@ -1093,7 +1158,7 @@ async function loadRunnerDashboard() {
 }
 
 async function go(view) {
-  if (["dashboard", "runner"].includes(view) && configured && !state.session) {
+  if (["dashboard", "runner", "platform"].includes(view) && configured && !state.session) {
     state.pendingView = view;
     openDialog(authForm());
     return;
@@ -1110,6 +1175,16 @@ async function go(view) {
     if(navigationId!==state.navigationId) return;
     renderRunnerDashboard();
     if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
+  } else if(view==="platform"){
+    if(!state.platformAdmin?.allowed) await loadPlatformAccess();
+    if(!state.platformAdmin?.allowed){
+      showNotice("Platform operator access is required.");
+      await go("discover");
+      return;
+    }
+    await loadPlatformOverview();
+    if(navigationId!==state.navigationId) return;
+    renderPlatformAdmin();
   } else if (view === "help") {
     renderHelp();
   } else if (view === "demo") {
@@ -1283,6 +1358,29 @@ document.addEventListener("click", async (event) => {
     showNotice("Event removed from series.");
   }
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
+  if(target.dataset.platformSuspend){
+    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformSuspend);
+    if(item) openDialog(platformSuspensionForm(item));
+  }
+  if(target.dataset.platformRestore){
+    if(!confirm("Restore this event to its previous public availability?")) return;
+    await platformAdminAction("restore_event",{eventId:target.dataset.platformRestore});
+    await loadPlatformOverview();
+    renderPlatformAdmin();
+    showNotice("Event restored.");
+  }
+  if(target.dataset.platformEventFee){
+    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformEventFee);
+    if(item) openDialog(platformFeeForm(item));
+  }
+  if(target.dataset.platformEventNote){
+    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformEventNote);
+    if(item) openDialog(platformNoteForm({eventId:item.id,label:item.name}));
+  }
+  if(target.dataset.platformOrganizerNote){
+    const item=state.platformData.organizers.find((entry)=>entry.id===target.dataset.platformOrganizerNote);
+    if(item) openDialog(platformNoteForm({organizerId:item.id,label:item.display_name || item.email}));
+  }
   if (target.matches("[data-export-account]")) {
     const accountExport=await accountAction("export");
     downloadJson(`openstart-data-${new Date().toISOString().slice(0,10)}.json`,accountExport);
@@ -1542,6 +1640,7 @@ document.addEventListener("submit", async (event) => {
         return;
       }
       state.session = result.data.session;
+      await loadPlatformAccess();
       dialog.close();
       if (state.pendingLotteryEvent) {
         const lotteryEventId = state.pendingLotteryEvent;
@@ -1554,6 +1653,43 @@ document.addEventListener("submit", async (event) => {
       } else {
         await go(state.pendingView || "runner");
       }
+    }
+
+    if(form.id==="platform-search-form"){
+      await loadPlatformOverview(String(data.get("query") || ""));
+      renderPlatformAdmin();
+      return;
+    }
+    if(form.id==="platform-default-fee-form"){
+      await platformAdminAction("update_fees",{feeBps:Math.round(Number(data.get("fee_percent"))*100)});
+      await loadPlatformOverview();
+      renderPlatformAdmin();
+      showNotice("Default platform fee updated.");
+      return;
+    }
+    if(form.id==="platform-event-fee-form"){
+      await platformAdminAction("update_fees",{eventId:form.dataset.eventId,feeBps:Math.round(Number(data.get("fee_percent"))*100)});
+      dialog.close();
+      await loadPlatformOverview();
+      renderPlatformAdmin();
+      showNotice("Event fee updated.");
+      return;
+    }
+    if(form.id==="platform-suspend-form"){
+      await platformAdminAction("suspend_event",{eventId:form.dataset.eventId,reason:data.get("reason")});
+      dialog.close();
+      await loadPlatformOverview();
+      renderPlatformAdmin();
+      showNotice("Event suspended and new registrations blocked.");
+      return;
+    }
+    if(form.id==="platform-note-form"){
+      await platformAdminAction("add_note",{eventId:data.get("event_id") || null,organizerId:data.get("organizer_id") || null,note:data.get("note")});
+      dialog.close();
+      await loadPlatformOverview();
+      renderPlatformAdmin();
+      showNotice("Private support note saved.");
+      return;
     }
 
     if (form.id === "setup-basics-form") {
@@ -2256,6 +2392,7 @@ authButton.addEventListener("click", () => {
 signOutButton.addEventListener("click", async () => {
   await supabase.auth.signOut();
   state.session = null;
+  state.platformAdmin=null;
   await go("discover");
 });
 dialog.addEventListener("click", (event) => {
@@ -2270,9 +2407,11 @@ async function boot() {
   if (configured) {
     const { data } = await supabase.auth.getSession();
     state.session = data.session;
+    await loadPlatformAccess();
     supabase.auth.onAuthStateChange((_event, session) => {
       state.session = session;
       syncNavigation();
+      setTimeout(()=>loadPlatformAccess(),0);
     });
   }
   const params = new URLSearchParams(location.search);

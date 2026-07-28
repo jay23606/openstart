@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=30"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=30"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=31"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=31"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -149,6 +149,24 @@ test("the lottery lifecycle is immutable, auditable, and payment verified", asyn
   assert.match(lottery,/os_reserve_lottery_registration/);
   assert.match(webhook,/os_confirm_lottery_registration/);
   assert.match(workflow,/expired lottery invitations/);
+});
+
+test("platform operations stay behind a server-authoritative owner boundary", async () => {
+  const [app,data,migration,operator,webhook] = await Promise.all([
+    read("app.js"),read("data.js"),
+    read("supabase/migrations/20260729160000_platform_operations.sql"),
+    read("supabase/functions/os-platform-admin/index.ts"),
+    read("supabase/functions/os-stripe-webhook/index.ts"),
+  ]);
+  assert.match(app,/PRIVATE OPERATOR CONSOLE/);
+  assert.match(app,/data-platform-suspend/);
+  assert.match(data,/os-platform-admin/);
+  assert.match(migration,/os_platform_admins/);
+  assert.match(migration,/os_block_suspended_event_registration/);
+  assert.match(operator,/Platform operator access is required/);
+  assert.match(operator,/reconciliationAlerts/);
+  assert.match(operator,/platform_suspend/);
+  assert.match(webhook,/os_provider_events/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

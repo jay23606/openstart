@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=30";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=30";
+import { configured, supabase } from "./core.js?v=31";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=31";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -161,6 +161,11 @@ export async function removeSeriesEvent(id) {
 
 export async function seriesAction(action,payload) {
   return functionResult("os-series",{action,...payload});
+}
+
+export async function platformAdminAction(action,payload={}) {
+  if(!configured) return action==="access" ? {allowed:false} : null;
+  return functionResult("os-platform-admin",{action,...payload});
 }
 
 export async function listOrganizerEvents(userId) {

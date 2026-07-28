@@ -93,6 +93,9 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
   if (!stripe || !webhookSecret) return json(request, { error: "Stripe webhook is not configured" }, 503);
 
+  const admin = adminClient();
+  let providerEventId: string | null = null;
+  let providerEventType = "signature_verification";
   try {
     const signature = request.headers.get("Stripe-Signature");
     if (!signature) return json(request, { error: "Missing Stripe signature" }, 400);
@@ -100,9 +103,16 @@ Deno.serve(async (request) => {
     const event = await stripe.webhooks.constructEventAsync(
       payload, signature, webhookSecret, undefined, cryptoProvider,
     );
-    const admin = adminClient();
+    providerEventId=event.id;
+    providerEventType=event.type;
+    await admin.from("os_provider_events").upsert({
+      provider:"stripe",provider_event_id:event.id,event_type:event.type,status:"processing",
+      received_at:new Date().toISOString(),
+    },{onConflict:"provider,provider_event_id"});
+    let handled=false;
 
     if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
+      handled=true;
       const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.openstart_registration_id;
       const orderId = session.metadata?.openstart_order_id;
@@ -131,6 +141,7 @@ Deno.serve(async (request) => {
     }
 
     if (["checkout.session.expired", "checkout.session.async_payment_failed"].includes(event.type)) {
+      handled=true;
       const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.openstart_registration_id;
       const orderId = session.metadata?.openstart_order_id;
@@ -148,6 +159,7 @@ Deno.serve(async (request) => {
     }
 
     if (event.type === "account.updated") {
+      handled=true;
       const account = event.data.object as Stripe.Account;
       await admin.from("os_profiles").update({
         stripe_details_submitted: account.details_submitted,
@@ -156,8 +168,16 @@ Deno.serve(async (request) => {
       }).eq("stripe_account_id", account.id);
     }
 
+    await admin.from("os_provider_events").update({
+      status:handled ? "processed" : "ignored",processed_at:new Date().toISOString(),error_message:null,
+    }).eq("provider","stripe").eq("provider_event_id",event.id);
     return json(request, { received: true });
   } catch (error) {
+    await admin.from("os_provider_events").upsert({
+      provider:"stripe",provider_event_id:providerEventId,event_type:providerEventType,status:"failed",
+      error_message:error instanceof Error ? error.message.slice(0,500) : "Webhook failed",
+      processed_at:new Date().toISOString(),
+    },providerEventId ? {onConflict:"provider,provider_event_id"} : undefined).catch(()=>null);
     return json(request, { error: error instanceof Error ? error.message : "Webhook failed" }, 400);
   }
 });
