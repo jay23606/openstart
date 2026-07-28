@@ -1,6 +1,6 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js";
+} from "./core.js?v=9";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   createManualRegistration, createPromoCode, createScheduledPrice,
@@ -8,7 +8,7 @@ import {
   getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, resendConfirmation, resetDemo, updateEventSettings,
   updateRegistration, updateWaitlist,
-} from "./data.js";
+} from "./data.js?v=9";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
