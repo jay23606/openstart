@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=25";
+} from "./core.js?v=26";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
-  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
+  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  seriesAction, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=25";
+  reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=26";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -32,21 +32,25 @@ const state = {
   campaigns: [],
   emailTemplates: [],
   volunteerSignups: [],
+  lotteryApplications: [],
   auditLog: [],
   series: [],
   seriesStandings: null,
   pendingView: "runner",
   pendingTransfer: null,
+  pendingLotteryEvent: null,
 };
 
 const helpArticles=[
   {audience:"Start here",title:"Understanding OpenStart accounts",keywords:"account login runner organizer staff navigation",body:"One account can be a runner, organizer, team captain, volunteer, or race-day staff member. My races contains your registrations and volunteer shifts. Organizer contains events you own. Staff tools appear when an organizer assigns your verified account email."},
   {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation",body:"Open an event, choose Register now, enter each participant, then continue to Stripe Checkout for paid entries. OpenStart confirms a paid registration only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
+  {audience:"Runners",title:"Applying to a race lottery",keywords:"runner lottery application qualifier result selected waitlist tickets",body:"Sign in and select Apply to lottery from an eligible event. Choose a distance and provide qualifying-race evidence when required. Applying does not charge you or guarantee entry. My races shows qualification and selection status, ticket count, and organizer review notes."},
   {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
   {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},
   {audience:"Organizers",title:"Create, duplicate, and prepare an event",keywords:"organizer create duplicate template checklist readiness event publish website branding sections sponsor",body:"Open Organizer → Create event, or open an existing event and select Duplicate to create a private draft for another year. The copy includes reusable configuration but never participants or payments. Use Checklist to track readiness, deadlines, and custom operational tasks before publishing."},
   {audience:"Organizers",title:"Stripe payments and payouts",keywords:"organizer stripe connect sandbox payment payout refund fee",body:"Select Connect Stripe sandbox and complete Stripe-hosted onboarding. The account must have charges and payouts enabled. Registration funds use destination charges; OpenStart retains the configured application fee. Use test card 4242 4242 4242 4242 in sandbox."},
   {audience:"Organizers",title:"Registration, pricing, and merchandise",keywords:"organizer roster question waiver promo waitlist price product donation inventory",body:"From an event roster you can manage participants, questions, waivers, scheduled pricing, promo codes, waitlists, products, inventory, donations, and financial exports. Payment and capacity decisions remain server-authoritative."},
+  {audience:"Organizers",title:"Configure a lottery and review qualifiers",keywords:"organizer lottery applications spots window qualifier review bonus tickets draw",body:"Open an event in Organizer and select Lottery. Set registration mode, application dates, available spots, and qualification instructions. Review submitted evidence, mark applicants qualified or disqualified, and assign justified bonus tickets. Selection and payment are handled in the next lottery release."},
   {audience:"Organizers",title:"Communications",keywords:"organizer email campaign resend template audience unsubscribe",body:"Open Communications to preview an audience, send yourself a test, save templates, schedule messages, and review deliveries. Participant delivery requires a verified Resend sending domain. Marketing campaigns respect unsubscribe records."},
   {audience:"Organizers",title:"Volunteers and race-day operations",keywords:"organizer volunteer shift staff scanner checkin packet pickup walkup bib",body:"Create volunteer roles and capacity-limited shifts from Volunteers. Race-day tools support staff roles, participant lookup, QR scanning, bib assignment, packet pickup, check-in, walk-up entries, and merchandise fulfillment."},
   {audience:"Organizers",title:"Results, waves, and race series",keywords:"organizer result csv timing wave corral series points standings",body:"Use Waves to configure corrals, start times, capacity, pace guidance, and bib ranges. Results accepts manual times or CSV imports. After publishing official results, Series automatically calculates individual and team championship standings."},
@@ -201,6 +205,10 @@ function renderDiscover() {
 
 function renderEvent(event, preview=false) {
   const registrations = eventRegistrations(event.id);
+  const lottery = event.registration_mode === "lottery";
+  const lotteryOpen = lottery &&
+    (!event.lottery_opens_at || new Date(event.lottery_opens_at) <= new Date()) &&
+    (!event.lottery_closes_at || new Date(event.lottery_closes_at) >= new Date());
   const customSite=event.website_published || preview;
   const sections=customSite ? [...(event.os_event_sections || [])].filter((section)=>preview || section.published).sort((a,b)=>a.sort_order-b.sort_order) : [];
   const sponsors=customSite ? [...(event.os_event_sponsors || [])].sort((a,b)=>a.sort_order-b.sort_order) : [];
@@ -215,7 +223,7 @@ function renderEvent(event, preview=false) {
       </div>
       <div class="detail-layout">
         <div>
-          <h2>Choose your event</h2>
+          <h2>${lottery ? "Lottery race options" : "Choose your event"}</h2>
           <div class="tier-list">
             ${event.os_event_tiers.map((tier) => {
               const used = registrations.filter((item) => item.tier_id === tier.id).length;
@@ -226,9 +234,18 @@ function renderEvent(event, preview=false) {
           <div class="detail-note"><b>Simple for now, extensible later.</b><p>Registration is connected. Paid entries remain pending until a payment provider confirms them server-side.</p></div>
         </div>
         <aside class="registration-panel">
-          <p>Registration is open</p><h2>Claim your spot</h2>
-          <span>Your entry is saved immediately. Paid registrations are marked pending while payments are disabled.</span>
-          <button class="primary-button" data-register="${event.id}" type="button">Register now</button>
+          ${lottery ? `
+            <p>${lotteryOpen ? "Lottery applications are open" : "Lottery application period"}</p>
+            <h2>${lotteryOpen ? "Enter the lottery" : "Applications are closed"}</h2>
+            <span>${event.lottery_spots ? `${event.lottery_spots} available spots. ` : ""}${event.qualifier_required ? "A qualifying result is required. " : ""}${event.lottery_closes_at ? `Applications close ${displayDate(event.lottery_closes_at)}.` : ""}</span>
+            ${lotteryOpen ? `<button class="primary-button" data-apply-lottery="${event.id}" type="button">Apply to lottery</button>` : ""}
+          ` : event.registration_mode === "closed" ? `
+            <p>Registration</p><h2>Registration is closed</h2><span>Check back for updates from the organizer.</span>
+          ` : `
+            <p>Registration is open</p><h2>Claim your spot</h2>
+            <span>Complete registration and use Stripe Checkout for paid entries.</span>
+            <button class="primary-button" data-register="${event.id}" type="button">Register now</button>
+          `}
         </aside>
       </div>
       ${event.os_waves?.length ? `<section class="public-start-list"><p class="eyebrow">Start plan</p><h2>Waves & corrals</h2><div>${[...event.os_waves].sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at)).map((wave)=>`<span><b>${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</b><strong>${escapeHtml(wave.name)}</strong><small>${escapeHtml(tierById(event,wave.tier_id)?.name || "")} · capacity ${wave.capacity}</small></span>`).join("")}</div></section>` : ""}
@@ -347,6 +364,7 @@ function renderRunnerDashboard() {
             <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
       </div>
+      ${state.lotteryApplications.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My lottery applications</h2><p>Qualification review and selection status.</p></div></div>${state.lotteryApplications.map((application) => `<article><h3>${escapeHtml(application.os_events?.name || "Race lottery")} <small>${escapeHtml(application.os_event_tiers?.name || "")}</small></h3><p><span>${displayDate(application.os_events?.starts_at)} · ${application.base_tickets + application.bonus_tickets} ticket${application.base_tickets + application.bonus_tickets === 1 ? "" : "s"}</span><b class="lottery-status ${application.status}">${escapeHtml(application.status)}</b></p>${application.review_notes ? `<p><span>Organizer note</span><b>${escapeHtml(application.review_notes)}</b></p>` : ""}${["submitted","qualified","disqualified"].includes(application.status) ? `<button class="subtle-button" data-withdraw-lottery="${application.id}" type="button">Withdraw application</button>` : ""}</article>`).join("")}</div>` : ""}
       ${state.volunteerSignups.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My volunteer shifts</h2><p>Upcoming assignments and service history.</p></div></div>${state.volunteerSignups.map((signup)=>{const shift=signup.os_volunteer_shifts;const role=shift?.os_volunteer_roles;return `<article><h3>${escapeHtml(role?.name || "Volunteer")} <small>${escapeHtml(role?.os_events?.name || "")}</small></h3><p><span>${new Date(shift.starts_at).toLocaleString()} · ${escapeHtml(shift.location)}</span><b>${escapeHtml(signup.status)}</b></p>${signup.hours_worked!==null ? `<p><span>Recorded service</span><b>${signup.hours_worked} hours</b></p>` : ""}</article>`;}).join("")}</div>` : ""}
       ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
       <div class="privacy-card"><div><h2>Your data</h2><p>Download a portable copy of your OpenStart information or permanently delete a runner-only account.</p></div><span><button class="subtle-button" data-export-account type="button">Export my data</button><button class="danger-button" data-delete-account type="button">Delete account</button></span></div>
@@ -357,7 +375,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -751,6 +769,39 @@ function eventForm() {
     </section>`;
 }
 
+function lotteryApplicationForm(event) {
+  return `<section class="modal"><div class="form-heading"><div><p>Race lottery</p><h2>Apply to ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <p class="modal-note">Applying does not charge your card or guarantee entry. Selection and payment happen after the application period closes.</p>
+    <form id="lottery-application-form" data-event-id="${event.id}">
+      <label>Race option<select name="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(effectivePrice(tier))} if selected</option>`).join("")}</select></label>
+      <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
+      ${event.qualifier_required ? `<div class="qualifier-fields"><h3>Qualifying result</h3><p>${escapeHtml(event.qualifier_instructions || "Provide a recent result that meets this event’s requirements.")}</p><label>Qualifying race<input name="qualifier_name" required></label><div class="split-fields"><label>Race date<input name="qualifier_date" type="date" required></label><label>Result or finish time<input name="qualifier_result" placeholder="12:34:56 or finisher" required></label></div><label>Public result URL<input name="qualifier_url" type="url" placeholder="https://…"></label><label>Notes<textarea name="qualifier_notes" rows="3"></textarea></label></div>` : ""}
+      <label class="check-label"><input type="checkbox" required> I certify that this application and any qualifying result are accurate.</label>
+      <button class="primary-button" type="submit">Submit application</button>
+    </form></section>`;
+}
+
+function lotteryManagerForm(event) {
+  const applications = [...(event.os_lottery_applications || [])].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  const toLocal = (value) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0,16) : "";
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Applications and qualification</p><h2>${escapeHtml(event.name)} lottery</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="lottery-settings-form" data-event-id="${event.id}">
+      <div class="split-fields"><label>Registration mode<select name="registration_mode"><option value="open" ${event.registration_mode !== "lottery" && event.registration_mode !== "closed" ? "selected" : ""}>Open registration</option><option value="lottery" ${event.registration_mode === "lottery" ? "selected" : ""}>Lottery</option><option value="closed" ${event.registration_mode === "closed" ? "selected" : ""}>Closed</option></select></label><label>Available lottery spots<input name="lottery_spots" type="number" min="1" value="${event.lottery_spots || ""}"></label></div>
+      <div class="split-fields"><label>Applications open<input name="lottery_opens_at" type="datetime-local" value="${toLocal(event.lottery_opens_at)}"></label><label>Applications close<input name="lottery_closes_at" type="datetime-local" value="${toLocal(event.lottery_closes_at)}"></label></div>
+      <label class="check-label"><input name="qualifier_required" type="checkbox" ${event.qualifier_required ? "checked" : ""}> Require a qualifying result</label>
+      <label>Qualifier instructions<textarea name="qualifier_instructions" rows="3" placeholder="Eligible distances, date range, and cutoff time">${escapeHtml(event.qualifier_instructions || "")}</textarea></label>
+      <button class="primary-button" type="submit">Save lottery settings</button>
+    </form>
+    <div class="lottery-summary"><span><b>${applications.length}</b> applications</span><span><b>${applications.filter((item) => item.status === "qualified").length}</b> qualified</span><span><b>${applications.reduce((sum,item) => sum + item.base_tickets + item.bonus_tickets,0)}</b> total tickets</span></div>
+    <h3>Qualifier review</h3>
+    <div class="lottery-review-list">${applications.map((application) => `<form class="lottery-review-form" data-application-id="${application.id}" data-event-id="${event.id}">
+      <div><b>${escapeHtml(application.first_name)} ${escapeHtml(application.last_name)}</b><small>${escapeHtml(application.email)} · ${escapeHtml(tierById(event,application.tier_id)?.name || "")}</small></div>
+      <div class="qualifier-evidence">${application.qualifier_name ? `<b>${escapeHtml(application.qualifier_name)}</b><small>${application.qualifier_date ? displayDate(application.qualifier_date) : ""} · ${escapeHtml(application.qualifier_result || "")}</small>${application.qualifier_url ? `<a href="${escapeHtml(safeUrl(application.qualifier_url) || "#")}" target="_blank" rel="noopener">Verify result ↗</a>` : ""}` : "<small>No qualifier supplied</small>"}</div>
+      <div class="lottery-review-controls"><select name="status">${["submitted","qualified","disqualified"].map((status) => `<option ${application.status === status ? "selected" : ""}>${status}</option>`).join("")}</select><label>Bonus tickets<input name="bonus_tickets" type="number" min="0" value="${application.bonus_tickets}"></label><input name="review_notes" value="${escapeHtml(application.review_notes || "")}" placeholder="Private/applicant note"><button class="subtle-button" type="submit">Save review</button></div>
+    </form>`).join("") || '<div class="empty-state">No lottery applications yet.</div>'}</div>
+  </section>`;
+}
+
 function duplicateEventForm(event) {
   const suggestedDate = new Date(new Date(event.starts_at).setFullYear(new Date(event.starts_at).getFullYear() + 1)).toISOString().slice(0,10);
   return `<section class="modal"><div class="form-heading"><div><p>Reusable event</p><h2>Duplicate ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
@@ -871,10 +922,11 @@ async function loadDashboard() {
 }
 
 async function loadRunnerDashboard() {
-  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups] = await Promise.all([
+  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups, state.lotteryApplications] = await Promise.all([
     listRunnerRegistrations(),
     listCaptainTeams(state.session.user.id),
     listMyVolunteerSignups(),
+    listMyLotteryApplications(),
   ]);
 }
 
@@ -929,6 +981,16 @@ document.addEventListener("click", async (event) => {
     scrollTo(0, 0);
   }
   if (target.dataset.register) openDialog(registrationForm(eventById(target.dataset.register)));
+  if (target.dataset.applyLottery) {
+    const race = eventById(target.dataset.applyLottery);
+    if (!state.session) {
+      state.pendingLotteryEvent = race.id;
+      state.pendingView = "discover";
+      openDialog(authForm());
+    } else {
+      openDialog(lotteryApplicationForm(race));
+    }
+  }
   if (target.matches("[data-add-participant-field]")) {
     const form = target.closest("form");
     const race = eventById(form.dataset.eventId);
@@ -939,6 +1001,13 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.dataset.lotteryManager) openDialog(lotteryManagerForm(eventById(target.dataset.lotteryManager)));
+  if (target.dataset.withdrawLottery) {
+    if (!confirm("Withdraw this lottery application? You can reapply only while applications remain open.")) return;
+    await withdrawLotteryApplication(target.dataset.withdrawLottery);
+    await go("runner");
+    showNotice("Lottery application withdrawn.");
+  }
   if (target.dataset.duplicateEvent) openDialog(duplicateEventForm(eventById(target.dataset.duplicateEvent)));
   if (target.dataset.checklist) openDialog(checklistForm(eventById(target.dataset.checklist)));
   if (target.dataset.toggleChecklist) {
@@ -1199,7 +1268,17 @@ document.addEventListener("submit", async (event) => {
       }
       state.session = result.data.session;
       dialog.close();
-      await go(state.pendingView || "runner");
+      if (state.pendingLotteryEvent) {
+        const lotteryEventId = state.pendingLotteryEvent;
+        state.pendingLotteryEvent = null;
+        await loadPublic();
+        state.selectedEvent = eventById(lotteryEventId);
+        renderEvent(state.selectedEvent);
+        syncNavigation();
+        openDialog(lotteryApplicationForm(state.selectedEvent));
+      } else {
+        await go(state.pendingView || "runner");
+      }
     }
 
     if (form.id === "series-form") {
@@ -1298,6 +1377,54 @@ document.addEventListener("submit", async (event) => {
       state.selectedEvent = eventById(race.id);
       renderEvent(state.selectedEvent);
       showNotice(result.status === "confirmed" ? "Registration confirmed." : "Registration saved.");
+    }
+
+    if (form.id === "lottery-application-form") {
+      const race = eventById(form.dataset.eventId);
+      await submitLotteryApplication({
+        p_event_id: race.id,
+        p_tier_id: data.get("tier_id"),
+        p_first_name: data.get("first_name"),
+        p_last_name: data.get("last_name"),
+        p_qualifier_name: data.get("qualifier_name") || null,
+        p_qualifier_date: data.get("qualifier_date") || null,
+        p_qualifier_result: data.get("qualifier_result") || null,
+        p_qualifier_url: data.get("qualifier_url") || null,
+        p_qualifier_notes: data.get("qualifier_notes") || "",
+      });
+      dialog.close();
+      await go("runner");
+      showNotice("Lottery application submitted. You will not be charged unless selected.");
+    }
+
+    if (form.id === "lottery-settings-form") {
+      const opens = data.get("lottery_opens_at");
+      const closes = data.get("lottery_closes_at");
+      if (opens && closes && new Date(opens) >= new Date(closes)) throw new Error("Lottery closing time must be after opening time.");
+      if (data.get("registration_mode") === "lottery" && !data.get("lottery_spots")) throw new Error("Enter the number of available lottery spots.");
+      await updateEventSettings(form.dataset.eventId, {
+        registration_mode: data.get("registration_mode"),
+        lottery_spots: data.get("lottery_spots") ? Number(data.get("lottery_spots")) : null,
+        lottery_opens_at: opens ? new Date(opens).toISOString() : null,
+        lottery_closes_at: closes ? new Date(closes).toISOString() : null,
+        qualifier_required: data.get("qualifier_required") === "on",
+        qualifier_instructions: data.get("qualifier_instructions").trim(),
+      });
+      await loadDashboard();
+      openDialog(lotteryManagerForm(eventById(form.dataset.eventId)));
+      showNotice("Lottery settings saved.");
+    }
+
+    if (form.matches(".lottery-review-form")) {
+      await reviewLotteryApplication(form.dataset.applicationId, {
+        status: data.get("status"),
+        bonus_tickets: Number(data.get("bonus_tickets")) || 0,
+        review_notes: data.get("review_notes").trim(),
+        reviewed_by: state.session.user.id,
+      });
+      await loadDashboard();
+      openDialog(lotteryManagerForm(eventById(form.dataset.eventId)));
+      showNotice("Application review saved.");
     }
 
     if (form.id === "manual-registration-form") {

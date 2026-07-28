@@ -40,6 +40,9 @@ There is no frontend framework, bundler, or build step.
   sponsor, merchandise, and deadline configuration into a new race date
 - Operational readiness checklists with due dates, completion tracking,
   starter tasks, custom tasks, and organizer audit history
+- Configurable race lotteries with application windows, distance selection,
+  qualifying-result evidence, organizer review, bonus tickets, and runner
+  status tracking
 - Device-local demo mode when Supabase has not been configured
 
 ## Help and sandbox use

@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=25"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=25"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=26"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=26"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -76,6 +76,10 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /checklistForm/);
   assert.match(data, /os_duplicate_event/);
   assert.match(data, /os_event_checklist_items/);
+  assert.match(app, /lotteryApplicationForm/);
+  assert.match(app, /lotteryManagerForm/);
+  assert.match(data, /os_submit_lottery_application/);
+  assert.match(data, /os_lottery_applications/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

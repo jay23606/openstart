@@ -39,5 +39,5 @@ test("help guides can be searched and filtered", async ({ page }) => {
   await expect(page.locator("summary",{hasText:"Stripe payments and payouts"})).toBeVisible();
   await expect(page.locator("summary",{hasText:"QR passes and official results"})).not.toBeVisible();
   await page.getByRole("button",{name:"Runners",exact:true}).click();
-  await expect(page.locator("[data-help-article]:not(.hidden)")).toHaveCount(3);
+  await expect(page.locator("[data-help-article]:not(.hidden)")).toHaveCount(4);
 });

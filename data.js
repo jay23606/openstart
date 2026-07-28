@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=25";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=25";
+import { configured, supabase } from "./core.js?v=26";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=26";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -167,7 +167,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*))), os_event_sections(*), os_event_sponsors(*), os_waves(*), os_event_checklist_items(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*))), os_event_sections(*), os_event_sponsors(*), os_waves(*), os_event_checklist_items(*), os_lottery_applications(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -446,6 +446,35 @@ export async function listRunnerRegistrations() {
     .from("os_registrations")
     .select("*, os_events(name, starts_at, location_name, participant_edits_close_at, transfers_close_at, refunds_close_at, allow_transfers, allow_refund_requests,os_waves(*)), os_event_tiers(name, distance_label), os_registration_answers(*, os_event_questions(label)), os_registration_activity(*), os_teams(name,category), os_results(*), os_waves(name,starts_at,self_select,selection_closes_at)")
     .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function listMyLotteryApplications() {
+  if (!configured) return [];
+  const { data, error } = await supabase.from("os_lottery_applications")
+    .select("*,os_events(name,starts_at,location_name,lottery_closes_at,lottery_spots),os_event_tiers(name,distance_label,price_cents)")
+    .eq("applicant_user_id", (await supabase.auth.getUser()).data.user?.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function submitLotteryApplication(application) {
+  if (!configured) throw new Error("Lottery applications require Supabase");
+  const { data, error } = await supabase.rpc("os_submit_lottery_application", application);
+  if (error) throw error;
+  return data;
+}
+
+export async function withdrawLotteryApplication(applicationId) {
+  const { error } = await supabase.rpc("os_withdraw_lottery_application", { p_application_id: applicationId });
+  if (error) throw error;
+}
+
+export async function reviewLotteryApplication(id, changes) {
+  const { data, error } = await supabase.from("os_lottery_applications")
+    .update({ ...changes, reviewed_at: new Date().toISOString() }).eq("id", id).select().single();
   if (error) throw error;
   return data;
 }
