@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=18";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=18";
+import { configured, supabase } from "./core.js?v=19";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=19";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*))")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*)), os_event_sections(*), os_event_sponsors(*)")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*)))")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*))), os_event_sections(*), os_event_sponsors(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -320,6 +320,41 @@ export async function updateVolunteerSignup(id, changes) {
   const { data, error }=await supabase.from("os_volunteer_signups").update(changes).eq("id",id).select().single();
   if(error) throw error;
   return data;
+}
+
+export async function createEventSection(section) {
+  const { data, error }=await supabase.from("os_event_sections").insert(section).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function updateEventSections(sections) {
+  const { error }=await supabase.from("os_event_sections").upsert(sections);
+  if(error) throw error;
+}
+
+export async function deleteEventSection(id) {
+  const { error }=await supabase.from("os_event_sections").delete().eq("id",id);
+  if(error) throw error;
+}
+
+export async function createEventSponsor(sponsor) {
+  const { data, error }=await supabase.from("os_event_sponsors").insert(sponsor).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function deleteEventSponsor(id) {
+  const { error }=await supabase.from("os_event_sponsors").delete().eq("id",id);
+  if(error) throw error;
+}
+
+export async function uploadEventAsset(userId,eventId,file) {
+  const extension=file.name.split(".").pop()?.toLowerCase() || "bin";
+  const path=`${userId}/${eventId}/${crypto.randomUUID()}.${extension}`;
+  const { error }=await supabase.storage.from("os-event-assets").upload(path,file,{contentType:file.type,upsert:false});
+  if(error) throw error;
+  return supabase.storage.from("os-event-assets").getPublicUrl(path).data.publicUrl;
 }
 
 export async function listMyVolunteerSignups() {

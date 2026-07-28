@@ -356,6 +356,35 @@ footer b { color: white; }
 .volunteer-roster > div { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 9px; grid-template-columns: 1.8fr 1fr 1fr 90px; padding: 10px 0; }
 .volunteer-roster b, .volunteer-roster small { display: block; }
 .volunteer-roster small { color: var(--muted); margin-top: 4px; }
+.event-detail .eyebrow, .event-detail .text-button { color: var(--event-color,var(--green)); }
+.event-banner { height: min(42vw,430px); margin: 20px 0 0; overflow: hidden; }
+.event-banner img { height: 100%; object-fit: cover; width: 100%; }
+.event-logo { display: block; margin-bottom: 22px; max-height: 100px; max-width: 230px; object-fit: contain; }
+.event-content-sections { display: grid; gap: 1px; grid-template-columns: repeat(2,1fr); margin: 45px 0; }
+.event-content-sections article { background: var(--cream); min-height: 220px; padding: 34px; }
+.event-content-sections article h2, .event-sponsors h2 { font-family: Georgia,serif; font-size: 34px; margin: 8px 0 18px; }
+.event-content-sections article > div { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.event-content-sections article a { display: inline-block; margin-top: 20px; }
+.event-sponsors { border-top: 1px solid var(--line); padding: 45px 0; }
+.event-sponsors > div { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 25px; }
+.event-sponsors a { align-items: center; border: 1px solid var(--line); color: var(--ink); display: flex; flex-direction: column; gap: 8px; justify-content: center; min-height: 120px; min-width: 180px; padding: 20px; text-decoration: none; }
+.event-sponsors img { max-height: 55px; max-width: 130px; }
+.event-sponsors small { color: var(--muted); }
+.site-publish-state { align-items: center; background: var(--cream); display: flex; justify-content: space-between; margin-bottom: 18px; padding: 16px; }
+.site-publish-state b, .site-publish-state span { display: block; }
+.site-publish-state span { color: var(--muted); font-size: 11px; }
+.site-publish-state b { color: var(--green); font-size: 14px; margin-bottom: 4px; }
+.site-section-list { border-top: 1px solid var(--line); margin-bottom: 18px; }
+.site-section-list article { align-items: center; border-bottom: 1px solid var(--line); cursor: grab; display: grid; gap: 10px; grid-template-columns: 26px 1fr auto; padding: 11px 5px; }
+.site-section-list article.dragging { opacity: .35; }
+.site-section-list b, .site-section-list small { display: block; }
+.site-section-list small { color: var(--muted); margin-top: 3px; }
+.site-section-list button, .site-sponsor-list button { background: none; border: 0; color: #a33; cursor: pointer; font-weight: 800; }
+.drag-handle { color: var(--muted); font-size: 20px; }
+.site-sponsor-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.site-sponsor-list > span { align-items: center; background: var(--cream); display: grid; gap: 4px; grid-template-columns: 45px 1fr auto; min-width: 220px; padding: 10px; }
+.site-sponsor-list img { max-height: 32px; max-width: 42px; }
+.site-sponsor-list small { color: var(--muted); grid-column: 2; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
@@ -401,6 +430,8 @@ footer b { color: white; }
   .volunteer-summary { grid-template-columns: 1fr 1fr; }
   .volunteer-roster > div { grid-template-columns: 1fr 1fr; }
   .volunteer-roster > div > span { grid-column: 1 / -1; }
+  .event-content-sections { grid-template-columns: 1fr; }
+  .event-banner { height: 230px; }
   .scheduled-price-form, .finance-grid > div { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 8px; }
 }

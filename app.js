@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=18";
+} from "./core.js?v=19";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  communicationsAction, createEmailTemplate, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole,
-  deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
+  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole,
+  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift,
-} from "./data.js?v=18";
+  updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset,
+} from "./data.js?v=19";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -17,6 +17,7 @@ const notice = document.querySelector("#notice");
 const authButton = document.querySelector("#auth-button");
 const signOutButton = document.querySelector("#sign-out");
 const setupBanner = document.querySelector("#setup-banner");
+let draggedSectionId=null;
 
 const state = {
   view: "discover",
@@ -61,6 +62,16 @@ const parseResultTime = (value) => {
   if(parts.some(Number.isNaN) || parts.length<2 || parts.length>3) throw new Error(`Invalid time: ${clean}`);
   return (parts.length===3 ? parts[0]*3600+parts[1]*60+parts[2] : parts[0]*60+parts[1])*1000;
 };
+const safeColor=(value)=>/^#[0-9a-f]{6}$/i.test(value || "") ? value : "#0f6b4f";
+const safeUrl=(value)=>{try{const url=new URL(value);return ["http:","https:"].includes(url.protocol) ? url.href : "";}catch{return "";}};
+const contentHtml=(value)=>escapeHtml(value || "").replace(/\n/g,"<br>");
+function setPageMetadata(title="OpenStart — Open-source race registration",description="Great race days start in the open.",image="og.png"){
+  document.title=title;
+  document.querySelector('meta[name="description"]').content=description;
+  document.querySelector('meta[property="og:title"]').content=title;
+  document.querySelector('meta[property="og:description"]').content=description;
+  document.querySelector('meta[property="og:image"]').content=image || "og.png";
+}
 
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
@@ -90,6 +101,7 @@ function publicEventCard(event, index) {
 }
 
 function renderDiscover() {
+  setPageMetadata();
   const published = state.events.filter((event) => event.status === "published");
   page.innerHTML = `
     <section class="hero">
@@ -119,13 +131,18 @@ function renderDiscover() {
     </section>`;
 }
 
-function renderEvent(event) {
+function renderEvent(event, preview=false) {
   const registrations = eventRegistrations(event.id);
+  const customSite=event.website_published || preview;
+  const sections=customSite ? [...(event.os_event_sections || [])].filter((section)=>preview || section.published).sort((a,b)=>a.sort_order-b.sort_order) : [];
+  const sponsors=customSite ? [...(event.os_event_sponsors || [])].sort((a,b)=>a.sort_order-b.sort_order) : [];
+  setPageMetadata(`${event.name} — OpenStart`,event.description,event.banner_url || event.logo_url || "og.png");
   page.innerHTML = `
-    <section class="event-detail">
+    <section class="event-detail" style="--event-color:${safeColor(event.primary_color)}">
       <button class="back-button" data-back type="button">← All events</button>
+      ${customSite && safeUrl(event.banner_url) ? `<div class="event-banner"><img src="${escapeHtml(safeUrl(event.banner_url))}" alt=""></div>` : ""}
       <div class="detail-hero">
-        <div><p class="eyebrow">${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p><h1>${escapeHtml(event.name)}</h1><p>${escapeHtml(event.description)}</p></div>
+        <div>${customSite && safeUrl(event.logo_url) ? `<img class="event-logo" src="${escapeHtml(safeUrl(event.logo_url))}" alt="${escapeHtml(event.name)} logo">` : ""}<p class="eyebrow">${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p><h1>${escapeHtml(event.name)}</h1><p>${escapeHtml(event.description)}</p></div>
         <div class="start-badge"><span>OPEN</span><strong>START</strong></div>
       </div>
       <div class="detail-layout">
@@ -146,6 +163,8 @@ function renderEvent(event) {
           <button class="primary-button" data-register="${event.id}" type="button">Register now</button>
         </aside>
       </div>
+      ${sections.length ? `<div class="event-content-sections">${sections.map((section)=>`<article class="event-content-${section.section_type}"><p class="eyebrow">${escapeHtml(section.section_type.replace("_"," "))}</p><h2>${escapeHtml(section.title)}</h2><div>${contentHtml(section.content)}</div>${safeUrl(section.link_url) ? `<a class="subtle-button" href="${escapeHtml(safeUrl(section.link_url))}" target="_blank" rel="noopener">${escapeHtml(section.link_label || "Learn more")}</a>` : ""}</article>`).join("")}</div>` : ""}
+      ${sponsors.length ? `<section class="event-sponsors"><p class="eyebrow">Event partners</p><h2>Thank you to our sponsors</h2><div>${sponsors.map((sponsor)=>`<a href="${escapeHtml(safeUrl(sponsor.website_url) || "#")}" ${safeUrl(sponsor.website_url) ? 'target="_blank" rel="noopener"' : ""}>${safeUrl(sponsor.logo_url) ? `<img src="${escapeHtml(safeUrl(sponsor.logo_url))}" alt="${escapeHtml(sponsor.name)}">` : `<b>${escapeHtml(sponsor.name)}</b>`}<small>${escapeHtml(sponsor.sponsor_level)}</small></a>`).join("")}</div></section>` : ""}
     </section>`;
 }
 
@@ -243,7 +262,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -404,6 +423,19 @@ function productSettingsForm(event) {
     <div class="product-admin-list">${(event.os_products || []).map((product) => `<article><h3>${escapeHtml(product.name)}</h3><p>${escapeHtml(product.description)}</p>${product.os_product_variants.map((variant) => `<span>${escapeHtml(variant.name)} · ${money(variant.price_cents)} · ${variant.inventory === null ? "unlimited" : `${variant.inventory} inventory`}</span>`).join("")}</article>`).join("") || '<div class="empty-state">No products configured.</div>'}</div>
     <h3>Add product</h3><form id="product-form" data-event-id="${event.id}"><label>Product name<input name="name" placeholder="Race shirt" required></label><label>Description<input name="description"></label><div class="split-fields"><label>First variant<input name="variant_name" placeholder="Medium" required></label><label>Price<input name="price" type="number" min="0" step=".01" required></label></div><div class="split-fields"><label>Inventory<input name="inventory" type="number" min="0" placeholder="Blank for unlimited"></label><label>Fulfillment<select name="fulfillment_type"><option value="packet_pickup">Packet pickup</option><option value="digital">Digital</option><option value="none">No fulfillment</option></select></label></div><button class="primary-button" type="submit">Create product</button></form>
     <h3>Donations</h3><form id="donation-settings-form" data-event-id="${event.id}"><label class="check-label"><input name="donations_enabled" type="checkbox" ${event.donations_enabled ? "checked" : ""}> Accept donations during registration</label><div class="split-fields"><label>Beneficiary<input name="beneficiary_name" value="${escapeHtml(event.beneficiary_name || "")}"></label><label>Fundraising goal<input name="fundraising_goal" type="number" min="0" step=".01" value="${event.fundraising_goal_cents ? event.fundraising_goal_cents / 100 : ""}"></label></div><button class="subtle-button" type="submit">Save fundraising settings</button></form>
+  </section>`;
+}
+
+function siteEditorForm(event) {
+  const sections=[...(event.os_event_sections || [])].sort((a,b)=>a.sort_order-b.sort_order);
+  const sponsors=[...(event.os_event_sponsors || [])].sort((a,b)=>a.sort_order-b.sort_order);
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Event website</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="site-publish-state"><span><b>${event.website_published ? "Published" : "Draft"}</b>${event.website_published ? "Custom event content is public." : "Only the standard registration page is public."}</span><button class="subtle-button" data-preview-site="${event.id}" type="button">Preview site</button></div>
+    <form id="site-branding-form" data-event-id="${event.id}"><div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(event.primary_color)}"></label><label>Contact email<input name="contact_email" type="email" value="${escapeHtml(event.contact_email || "")}"></label></div><div class="split-fields"><label>Logo image<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label><label>Banner image<input name="banner" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label class="check-label"><input name="website_published" type="checkbox" ${event.website_published ? "checked" : ""}> Publish custom website content</label><button class="primary-button" type="submit">Save branding & publishing</button></form>
+    <h3>Page sections <small>Drag to reorder</small></h3><div id="site-section-list" class="site-section-list">${sections.map((section)=>`<article draggable="true" data-site-section-id="${section.id}"><span class="drag-handle">⋮⋮</span><div><b>${escapeHtml(section.title)}</b><small>${escapeHtml(section.section_type)} · ${section.published ? "visible" : "hidden"}</small></div><button data-delete-site-section="${section.id}" data-event="${event.id}" type="button">Delete</button></article>`).join("") || '<div class="empty-state">Add schedule, parking, course, FAQ, or other race information.</div>'}</div>
+    <form id="site-section-form" data-event-id="${event.id}"><div class="split-fields"><label>Section type<select name="section_type"><option value="text">General text</option><option value="schedule">Schedule</option><option value="location">Parking & location</option><option value="course">Course details</option><option value="packet_pickup">Packet pickup</option><option value="faq">FAQ</option><option value="downloads">Downloads</option></select></label><label>Heading<input name="title" required></label></div><label>Content<textarea name="content" rows="5" required></textarea></label><div class="split-fields"><label>Optional link<input name="link_url" type="url" placeholder="https://…"></label><label>Link label<input name="link_label" placeholder="Download course map"></label></div><label class="check-label"><input name="published" type="checkbox" checked> Show this section</label><button class="subtle-button" type="submit">Add section</button></form>
+    <h3>Sponsors</h3><div class="site-sponsor-list">${sponsors.map((sponsor)=>`<span>${sponsor.logo_url ? `<img src="${escapeHtml(sponsor.logo_url)}" alt="">` : ""}<b>${escapeHtml(sponsor.name)}</b><small>${escapeHtml(sponsor.sponsor_level)}</small><button data-delete-sponsor="${sponsor.id}" data-event="${event.id}" type="button">×</button></span>`).join("") || "<p>No sponsors added.</p>"}</div>
+    <form id="site-sponsor-form" data-event-id="${event.id}"><div class="split-fields"><label>Sponsor name<input name="name" required></label><label>Level<input name="sponsor_level" placeholder="Presenting sponsor"></label></div><div class="split-fields"><label>Website<input name="website_url" type="url"></label><label>Logo<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label></div><button class="subtle-button" type="submit">Add sponsor</button></form>
   </section>`;
 }
 
@@ -729,6 +761,25 @@ document.addEventListener("click", async (event) => {
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
   if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
+  if (target.dataset.siteEditor) openDialog(siteEditorForm(eventById(target.dataset.siteEditor)));
+  if (target.dataset.previewSite) {
+    const race=eventById(target.dataset.previewSite);
+    dialog.close();
+    renderEvent(race,true);
+    showNotice("Previewing draft website content.");
+  }
+  if (target.dataset.deleteSiteSection) {
+    await deleteEventSection(target.dataset.deleteSiteSection);
+    await loadDashboard();
+    openDialog(siteEditorForm(eventById(target.dataset.event)));
+    showNotice("Section deleted.");
+  }
+  if (target.dataset.deleteSponsor) {
+    await deleteEventSponsor(target.dataset.deleteSponsor);
+    await loadDashboard();
+    openDialog(siteEditorForm(eventById(target.dataset.event)));
+    showNotice("Sponsor deleted.");
+  }
   if (target.dataset.volunteer) openDialog(volunteerOpportunitiesForm(eventById(target.dataset.volunteer)));
   if (target.dataset.volunteerShift) openDialog(volunteerSignupForm(eventById(target.dataset.event),target.dataset.volunteerShift));
   if (target.dataset.volunteerManager) openDialog(volunteerManagerForm(eventById(target.dataset.volunteerManager)));
@@ -1235,6 +1286,45 @@ document.addEventListener("submit", async (event) => {
       showNotice("Volunteer roster updated.");
     }
 
+    if (form.id === "site-branding-form") {
+      const changes={
+        primary_color:data.get("primary_color"),contact_email:data.get("contact_email") || null,
+        website_published:data.get("website_published")==="on",
+      };
+      const logo=data.get("logo"); const banner=data.get("banner");
+      if(logo?.size) changes.logo_url=await uploadEventAsset(state.session.user.id,form.dataset.eventId,logo);
+      if(banner?.size) changes.banner_url=await uploadEventAsset(state.session.user.id,form.dataset.eventId,banner);
+      await updateEventSettings(form.dataset.eventId,changes);
+      await loadDashboard();
+      openDialog(siteEditorForm(eventById(form.dataset.eventId)));
+      showNotice(changes.website_published ? "Event website published." : "Website draft saved.");
+    }
+
+    if (form.id === "site-section-form") {
+      const race=eventById(form.dataset.eventId);
+      await createEventSection({
+        event_id:race.id,section_type:data.get("section_type"),title:data.get("title"),content:data.get("content"),
+        link_url:data.get("link_url") || null,link_label:data.get("link_label") || null,
+        published:data.get("published")==="on",sort_order:(race.os_event_sections || []).length,
+      });
+      await loadDashboard();
+      openDialog(siteEditorForm(eventById(race.id)));
+      showNotice("Website section added.");
+    }
+
+    if (form.id === "site-sponsor-form") {
+      const logo=data.get("logo");
+      const logoUrl=logo?.size ? await uploadEventAsset(state.session.user.id,form.dataset.eventId,logo) : null;
+      const race=eventById(form.dataset.eventId);
+      await createEventSponsor({
+        event_id:race.id,name:data.get("name"),sponsor_level:data.get("sponsor_level") || "Sponsor",
+        website_url:data.get("website_url") || null,logo_url:logoUrl,sort_order:(race.os_event_sponsors || []).length,
+      });
+      await loadDashboard();
+      openDialog(siteEditorForm(eventById(race.id)));
+      showNotice("Sponsor added.");
+    }
+
     if (form.id === "event-form") {
       const name = data.get("name");
       await createEvent({
@@ -1283,6 +1373,36 @@ document.addEventListener("input", (event) => {
   document.querySelectorAll(".result-row").forEach((row)=>{
     row.classList.toggle("hidden",Boolean(search && !row.dataset.resultSearch.includes(search)) || Boolean(tier && row.dataset.resultTier!==tier));
   });
+});
+document.addEventListener("dragstart",(event)=>{
+  const row=event.target.closest("[data-site-section-id]");
+  if(!row) return;
+  draggedSectionId=row.dataset.siteSectionId;
+  row.classList.add("dragging");
+});
+document.addEventListener("dragend",(event)=>{
+  event.target.closest("[data-site-section-id]")?.classList.remove("dragging");
+  draggedSectionId=null;
+});
+document.addEventListener("dragover",(event)=>{
+  const row=event.target.closest("[data-site-section-id]");
+  if(!row || !draggedSectionId || row.dataset.siteSectionId===draggedSectionId) return;
+  event.preventDefault();
+  const dragged=document.querySelector(`[data-site-section-id="${draggedSectionId}"]`);
+  const box=row.getBoundingClientRect();
+  row.parentElement.insertBefore(dragged,event.clientY < box.top+box.height/2 ? row : row.nextSibling);
+});
+document.addEventListener("drop",async(event)=>{
+  const list=event.target.closest("#site-section-list");
+  if(!list || !draggedSectionId) return;
+  event.preventDefault();
+  const ids=[...list.querySelectorAll("[data-site-section-id]")].map((row)=>row.dataset.siteSectionId);
+  const race=state.events.find((item)=>item.os_event_sections?.some((section)=>ids.includes(section.id)));
+  if(!race) return;
+  await updateEventSections(ids.map((id,sort_order)=>({...race.os_event_sections.find((section)=>section.id===id),sort_order})));
+  await loadDashboard();
+  openDialog(siteEditorForm(eventById(race.id)));
+  showNotice("Section order saved.");
 });
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();

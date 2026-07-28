@@ -28,6 +28,8 @@ There is no frontend framework, bundler, or build step.
   public leaderboards, division places, runner result views, and email notices
 - Volunteer roles and shifts with atomic capacity enforcement, public signup,
   waitlists, waivers, organizer check-in, hours tracking, and CSV exports
+- Branded event websites with image uploads, custom colors, ordered content
+  sections, sponsors, draft previews, publishing controls, and social metadata
 - Device-local demo mode when Supabase has not been configured
 
 ## Files
