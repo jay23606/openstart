@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=19";
+} from "./core.js?v=20";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole,
-  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, DEMO_ORGANIZER_ID,
+  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
+  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset,
-} from "./data.js?v=19";
+  updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=20";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -163,6 +163,7 @@ function renderEvent(event, preview=false) {
           <button class="primary-button" data-register="${event.id}" type="button">Register now</button>
         </aside>
       </div>
+      ${event.os_waves?.length ? `<section class="public-start-list"><p class="eyebrow">Start plan</p><h2>Waves & corrals</h2><div>${[...event.os_waves].sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at)).map((wave)=>`<span><b>${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</b><strong>${escapeHtml(wave.name)}</strong><small>${escapeHtml(tierById(event,wave.tier_id)?.name || "")} · capacity ${wave.capacity}</small></span>`).join("")}</div></section>` : ""}
       ${sections.length ? `<div class="event-content-sections">${sections.map((section)=>`<article class="event-content-${section.section_type}"><p class="eyebrow">${escapeHtml(section.section_type.replace("_"," "))}</p><h2>${escapeHtml(section.title)}</h2><div>${contentHtml(section.content)}</div>${safeUrl(section.link_url) ? `<a class="subtle-button" href="${escapeHtml(safeUrl(section.link_url))}" target="_blank" rel="noopener">${escapeHtml(section.link_label || "Learn more")}</a>` : ""}</article>`).join("")}</div>` : ""}
       ${sponsors.length ? `<section class="event-sponsors"><p class="eyebrow">Event partners</p><h2>Thank you to our sponsors</h2><div>${sponsors.map((sponsor)=>`<a href="${escapeHtml(safeUrl(sponsor.website_url) || "#")}" ${safeUrl(sponsor.website_url) ? 'target="_blank" rel="noopener"' : ""}>${safeUrl(sponsor.logo_url) ? `<img src="${escapeHtml(safeUrl(sponsor.logo_url))}" alt="${escapeHtml(sponsor.name)}">` : `<b>${escapeHtml(sponsor.name)}</b>`}<small>${escapeHtml(sponsor.sponsor_level)}</small></a>`).join("")}</div></section>` : ""}
     </section>`;
@@ -262,7 +263,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -301,8 +302,11 @@ function authForm() {
 
 function participantFields(event, index) {
   const questions = [...(event.os_event_questions || [])].sort((a, b) => a.sort_order - b.sort_order);
+  const waves=[...(event.os_waves || [])].filter((wave)=>wave.published && wave.self_select && (!wave.selection_closes_at || new Date(wave.selection_closes_at)>new Date())).sort((a,b)=>a.sort_order-b.sort_order);
+  const defaultTier=event.os_event_tiers[0]?.id;
   return `<fieldset class="participant-block" data-participant-index="${index}"><legend>Participant ${index + 1}</legend>
         <label>Event<select data-field="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(effectivePrice(tier))}</option>`).join("")}</select></label>
+        ${waves.length ? `<div class="split-fields"><label>Start wave<select data-field="wave_id"><option value="">Assign me automatically</option>${waves.map((wave)=>`<option value="${wave.id}" data-tier="${wave.tier_id}" ${wave.tier_id!==defaultTier ? "hidden" : ""}>${escapeHtml(wave.name)} · ${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</option>`).join("")}</select></label><label>Estimated pace per mile<input data-field="estimated_pace" placeholder="9:30"></label></div>` : ""}
         <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
         <label>Email<input name="email" type="email" required></label>
         ${questions.map((question) => question.field_type === "select"
@@ -371,12 +375,13 @@ function runnerRegistrationForm(item) {
     <form id="runner-registration-form" data-registration-id="${item.id}">
       <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
       <label>Email<input value="${escapeHtml(item.email)}" disabled></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
-      <div class="registration-facts"><span><b>Status</b>${escapeHtml(item.status)}</span><span><b>Payment</b>${escapeHtml(item.payment_status)}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Registration ID</b>${escapeHtml(item.id)}</span></div>
+      <div class="registration-facts"><span><b>Status</b>${escapeHtml(item.status)}</span><span><b>Payment</b>${escapeHtml(item.payment_status)}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Wave</b>${escapeHtml(item.os_waves?.name || "Not assigned")}</span></div>
       ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Your answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
       <button class="primary-button" type="submit">Save participant details</button>
     </form>
     <div class="self-service-actions">
       ${item.status === "confirmed" ? `<button class="primary-button" data-view-pass="${item.id}" type="button">View QR pass</button>` : ""}
+      ${item.status === "confirmed" && item.os_events?.os_waves?.some((wave)=>wave.tier_id===item.tier_id && wave.self_select) ? `<button class="subtle-button" data-runner-wave="${item.id}" type="button">Choose start wave</button>` : ""}
       ${item.status === "confirmed" && item.os_events?.allow_transfers ? `<button class="subtle-button" data-create-transfer="${item.id}" type="button">Create transfer link</button>` : ""}
       ${item.status === "confirmed" && item.os_events?.allow_refund_requests ? `<button class="danger-button" data-request-cancel="${item.id}" type="button">Request cancellation</button>` : ""}
     </div>
@@ -437,6 +442,20 @@ function siteEditorForm(event) {
     <h3>Sponsors</h3><div class="site-sponsor-list">${sponsors.map((sponsor)=>`<span>${sponsor.logo_url ? `<img src="${escapeHtml(sponsor.logo_url)}" alt="">` : ""}<b>${escapeHtml(sponsor.name)}</b><small>${escapeHtml(sponsor.sponsor_level)}</small><button data-delete-sponsor="${sponsor.id}" data-event="${event.id}" type="button">×</button></span>`).join("") || "<p>No sponsors added.</p>"}</div>
     <form id="site-sponsor-form" data-event-id="${event.id}"><div class="split-fields"><label>Sponsor name<input name="name" required></label><label>Level<input name="sponsor_level" placeholder="Presenting sponsor"></label></div><div class="split-fields"><label>Website<input name="website_url" type="url"></label><label>Logo<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label></div><button class="subtle-button" type="submit">Add sponsor</button></form>
   </section>`;
+}
+
+function waveManagerForm(event) {
+  const waves=[...(event.os_waves || [])].sort((a,b)=>a.sort_order-b.sort_order);
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Starts & corrals</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="wave-admin-list">${waves.map((wave)=>{const assigned=eventRegistrations(event.id).filter((registration)=>registration.wave_id===wave.id);return `<article><div><p>${new Date(wave.starts_at).toLocaleString()}</p><h3>${escapeHtml(wave.name)}</h3><small>${escapeHtml(tierById(event,wave.tier_id)?.name || "")} · ${assigned.length}/${wave.capacity} assigned${wave.bib_start ? ` · bibs ${wave.bib_start}–${wave.bib_end}` : ""}</small></div><span>${wave.gun_started_at ? `<b>Started ${new Date(wave.gun_started_at).toLocaleTimeString()}</b>` : `<button class="subtle-button" data-start-wave="${wave.id}" data-event="${event.id}" type="button">Start now</button>`}<button class="subtle-button" data-wave-bibs="${wave.id}" data-event="${event.id}" type="button">Assign bibs</button><button data-delete-wave="${wave.id}" data-event="${event.id}" type="button">Delete</button></span></article>`;}).join("") || '<div class="empty-state">Create the first start wave below.</div>'}</div>
+    <h3>Create wave or corral</h3><form id="wave-form" data-event-id="${event.id}"><div class="split-fields"><label>Name<input name="name" placeholder="Wave 1 · Under 8:00 pace" required></label><label>Distance<select name="tier_id">${event.os_event_tiers.map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label></div><div class="split-fields"><label>Start time<input name="starts_at" type="datetime-local" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div><div class="split-fields"><label>Minimum pace <span class="optional-label">MM:SS</span><input name="min_pace" placeholder="6:00"></label><label>Maximum pace <span class="optional-label">MM:SS</span><input name="max_pace" placeholder="8:00"></label></div><div class="split-fields"><label>First bib<input name="bib_start" type="number" min="1"></label><label>Last bib<input name="bib_end" type="number" min="1"></label></div><label>Runner selection closes<input name="selection_closes_at" type="datetime-local"></label><label class="check-label"><input name="self_select" type="checkbox" checked> Let runners choose this wave</label><button class="primary-button" type="submit">Create wave</button></form>
+    <h3>Bulk assignment</h3><form id="wave-assignment-form" data-event-id="${event.id}"><label>Wave<select name="wave_id">${waves.map((wave)=>`<option value="${wave.id}">${escapeHtml(wave.name)}</option>`).join("")}</select></label><label>Unassigned participants<select name="registration_ids" multiple size="8">${eventRegistrations(event.id).filter((item)=>item.status==="confirmed" && !item.wave_id).map((item)=>`<option value="${item.id}">${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}</option>`).join("")}</select></label><button class="subtle-button" type="submit">Assign selected runners</button></form>
+  </section>`;
+}
+
+function runnerWaveForm(item) {
+  const waves=(item.os_events?.os_waves || []).filter((wave)=>wave.tier_id===item.tier_id && wave.self_select && (!wave.selection_closes_at || new Date(wave.selection_closes_at)>new Date())).sort((a,b)=>a.sort_order-b.sort_order);
+  return `<section class="modal"><div class="form-heading"><div><p>Start assignment</p><h2>Choose your wave</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><form id="runner-wave-form" data-event-id="${item.event_id}" data-registration-id="${item.id}"><label>Wave<select name="wave_id" required>${waves.map((wave)=>`<option value="${wave.id}" ${item.wave_id===wave.id ? "selected" : ""}>${escapeHtml(wave.name)} · ${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</option>`).join("")}</select></label><label>Estimated pace per mile<input name="estimated_pace" value="${item.estimated_pace_seconds ? resultTime(item.estimated_pace_seconds*1000) : ""}" placeholder="9:30"></label><button class="primary-button" type="submit">Save start wave</button></form></section>`;
 }
 
 function volunteerOpportunitiesForm(event) {
@@ -500,7 +519,7 @@ function renderResults(event) {
     <div class="results-hero"><div><p class="eyebrow">Official results</p><h1>${escapeHtml(event.name)}</h1><p>${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p></div><strong>${rows.filter((item)=>item.status==="finisher").length}<span>finishers</span></strong></div>
     <div class="results-toolbar"><input data-results-search type="search" placeholder="Search name or bib"><select data-results-tier><option value="">All distances</option>${event.os_event_tiers.map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></div>
     <div class="results-table"><div class="results-header"><span>Place</span><span>Runner</span><span>Division</span><span>Chip time</span><span>Gun time</span></div>
-      ${rows.map((item)=>`<div class="result-row" data-result-tier="${item.tier_id}" data-result-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.bib_number || ""}`.toLowerCase())}"><span>${item.overallPlace || "—"}</span><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>Bib ${escapeHtml(item.bib_number || "—")} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}</small></span><span>${escapeHtml(item.division || "Open")}${item.divisionPlace ? `<small>${item.divisionPlace} in division</small>` : ""}</span><span><b>${item.status==="finisher" ? resultTime(item.chip_time_ms ?? item.gun_time_ms) : item.status.toUpperCase()}</b></span><span>${item.status==="finisher" ? resultTime(item.gun_time_ms) : "—"}</span></div>`).join("") || '<div class="empty-state">No published results yet.</div>'}
+      ${rows.map((item)=>`<div class="result-row" data-result-tier="${item.tier_id}" data-result-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.bib_number || ""}`.toLowerCase())}"><span>${item.overallPlace || "—"}</span><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>Bib ${escapeHtml(item.bib_number || "—")} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}${item.wave_id ? ` · ${escapeHtml(event.os_waves?.find((wave)=>wave.id===item.wave_id)?.name || "")}` : ""}</small></span><span>${escapeHtml(item.division || "Open")}${item.divisionPlace ? `<small>${item.divisionPlace} in division</small>` : ""}</span><span><b>${item.status==="finisher" ? resultTime(item.chip_time_ms ?? item.gun_time_ms) : item.status.toUpperCase()}</b></span><span>${item.status==="finisher" ? resultTime(item.gun_time_ms) : "—"}</span></div>`).join("") || '<div class="empty-state">No published results yet.</div>'}
     </div>
   </section>`;
 }
@@ -546,8 +565,8 @@ function campaignForm() {
     <form id="campaign-form">
       <div class="split-fields"><label>Event<select name="event_id">${state.events.map((event)=>`<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("")}</select></label><label>Campaign name<input name="name" placeholder="Final race instructions" required></label></div>
       <label>Start from a template<select name="template_id"><option value="">Blank message</option>${state.emailTemplates.map((template)=>`<option value="${template.id}">${escapeHtml(template.name)}</option>`).join("")}</select></label>
-      <div class="split-fields"><label>Audience<select name="audience_type"><option value="confirmed">All confirmed participants</option><option value="tier">Specific registration option</option><option value="team">Specific team</option><option value="captains">Team captains</option><option value="waitlist">Waitlist</option><option value="missing_bib">Missing bib</option><option value="checked_in">Checked in</option><option value="not_checked_in">Not checked in</option></select></label><label>Message type<select name="message_type"><option value="transactional">Transactional event message</option><option value="marketing">Marketing</option></select></label></div>
-      <div class="split-fields"><label>Registration option<select name="tier_id"><option value="">Choose when needed</option>${(firstEvent?.os_event_tiers || []).map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><label>Team<select name="team_id"><option value="">Choose when needed</option>${(firstEvent?.os_teams || []).map((team)=>`<option value="${team.id}">${escapeHtml(team.name)}</option>`).join("")}</select></label></div>
+      <div class="split-fields"><label>Audience<select name="audience_type"><option value="confirmed">All confirmed participants</option><option value="tier">Specific registration option</option><option value="wave">Specific start wave</option><option value="team">Specific team</option><option value="captains">Team captains</option><option value="waitlist">Waitlist</option><option value="missing_bib">Missing bib</option><option value="checked_in">Checked in</option><option value="not_checked_in">Not checked in</option></select></label><label>Message type<select name="message_type"><option value="transactional">Transactional event message</option><option value="marketing">Marketing</option></select></label></div>
+      <div class="split-fields"><label>Registration option<select name="tier_id"><option value="">Choose when needed</option>${(firstEvent?.os_event_tiers || []).map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><label>Start wave<select name="wave_id"><option value="">Choose when needed</option>${(firstEvent?.os_waves || []).map((wave)=>`<option value="${wave.id}">${escapeHtml(wave.name)}</option>`).join("")}</select></label></div><label>Team<select name="team_id"><option value="">Choose when needed</option>${(firstEvent?.os_teams || []).map((team)=>`<option value="${team.id}">${escapeHtml(team.name)}</option>`).join("")}</select></label>
       <label>Subject<input name="subject" required></label><label>Message<textarea name="html_body" rows="9" placeholder="<p>Hi {{first_name}}, ...</p>" required></textarea></label>
       <p class="template-help">Variables: <code>{{first_name}}</code> and <code>{{event_name}}</code></p>
       <label>Schedule <span class="optional-label">Leave blank for a draft</span><input name="scheduled_at" type="datetime-local"></label>
@@ -577,11 +596,11 @@ function raceDayForm(event) {
 }
 
 function raceDayResults(items) {
-  return items.length ? `<div class="race-day-results">${items.map((item) => { const products = item.os_orders?.os_order_items?.filter((orderItem) => orderItem.item_type === "product") || []; return `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(item.os_event_tiers?.name || "")} · Bib ${escapeHtml(item.bib_number || "—")}</small>${products.map((product) => `<small class="fulfillment-item">${escapeHtml(product.name)} × ${product.quantity} <button data-fulfill-item="${product.id}" type="button">${product.fulfilled_at ? "✓ Fulfilled" : "Mark fulfilled"}</button></small>`).join("")}</span><span class="checkin-actions"><button class="subtle-button" data-pickup="${item.id}" type="button">${item.packet_picked_up_at ? "✓ Packet" : "Mark packet"}</button><button class="primary-button" data-checkin="${item.id}" type="button">${item.checked_in_at ? "✓ Checked in" : "Check in"}</button></span></div>`; }).join("")}</div>` : '<div class="empty-state">No matching participants.</div>';
+  return items.length ? `<div class="race-day-results">${items.map((item) => { const products = item.os_orders?.os_order_items?.filter((orderItem) => orderItem.item_type === "product") || []; return `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(item.os_event_tiers?.name || "")} · Bib ${escapeHtml(item.bib_number || "—")}${item.os_waves?.name ? ` · ${escapeHtml(item.os_waves.name)}` : ""}</small>${products.map((product) => `<small class="fulfillment-item">${escapeHtml(product.name)} × ${product.quantity} <button data-fulfill-item="${product.id}" type="button">${product.fulfilled_at ? "✓ Fulfilled" : "Mark fulfilled"}</button></small>`).join("")}</span><span class="checkin-actions"><button class="subtle-button" data-pickup="${item.id}" type="button">${item.packet_picked_up_at ? "✓ Packet" : "Mark packet"}</button><button class="primary-button" data-checkin="${item.id}" type="button">${item.checked_in_at ? "✓ Checked in" : "Check in"}</button></span></div>`; }).join("")}</div>` : '<div class="empty-state">No matching participants.</div>';
 }
 
 function passForm(item, pass) {
-  return `<section class="modal pass-modal"><div class="form-heading"><div><p>Race-day pass</p><h2>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="pass-qr">${pass.qrSvg}</div><div class="registration-facts"><span><b>Race</b>${escapeHtml(item.os_events?.name || "")}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Entry</b>${escapeHtml(item.os_event_tiers?.name || "")}</span><span><b>Status</b>${escapeHtml(item.status)}</span></div><p class="pass-note">Show this code at packet pickup or check-in.</p></section>`;
+  return `<section class="modal pass-modal"><div class="form-heading"><div><p>Race-day pass</p><h2>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="pass-qr">${pass.qrSvg}</div><div class="registration-facts"><span><b>Race</b>${escapeHtml(item.os_events?.name || "")}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Entry</b>${escapeHtml(item.os_event_tiers?.name || "")}</span><span><b>Wave</b>${escapeHtml(item.os_waves?.name || "Not assigned")}</span></div><p class="pass-note">Show this code at packet pickup or check-in.</p></section>`;
 }
 
 async function startQrScanner(eventId) {
@@ -762,6 +781,26 @@ document.addEventListener("click", async (event) => {
   if (target.matches("[data-create-event]")) openDialog(eventForm());
   if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
   if (target.dataset.siteEditor) openDialog(siteEditorForm(eventById(target.dataset.siteEditor)));
+  if (target.dataset.waveManager) openDialog(waveManagerForm(eventById(target.dataset.waveManager)));
+  if (target.dataset.runnerWave) openDialog(runnerWaveForm(state.runnerRegistrations.find((item)=>item.id===target.dataset.runnerWave)));
+  if (target.dataset.deleteWave) {
+    await deleteWave(target.dataset.deleteWave);
+    await loadDashboard();
+    openDialog(waveManagerForm(eventById(target.dataset.event)));
+    showNotice("Wave deleted.");
+  }
+  if (target.dataset.startWave) {
+    await wavesAction("start",{eventId:target.dataset.event,waveId:target.dataset.startWave});
+    await loadDashboard();
+    openDialog(waveManagerForm(eventById(target.dataset.event)));
+    showNotice("Wave start time recorded.");
+  }
+  if (target.dataset.waveBibs) {
+    const result=await wavesAction("assign_bibs",{eventId:target.dataset.event,waveId:target.dataset.waveBibs});
+    await loadDashboard();
+    openDialog(waveManagerForm(eventById(target.dataset.event)));
+    showNotice(`${result.assigned} bibs assigned.`);
+  }
   if (target.dataset.previewSite) {
     const race=eventById(target.dataset.previewSite);
     dialog.close();
@@ -962,6 +1001,8 @@ document.addEventListener("submit", async (event) => {
       const race = eventById(form.dataset.eventId);
       const participants = Array.from(form.querySelectorAll(".participant-block")).map((block) => ({
         tierId: block.querySelector("[data-field='tier_id']").value,
+        waveId: block.querySelector("[data-field='wave_id']")?.value || null,
+        estimatedPaceSeconds: block.querySelector("[data-field='estimated_pace']")?.value ? Math.round(parseResultTime(block.querySelector("[data-field='estimated_pace']").value)/1000) : null,
         firstName: block.querySelector("[name='first_name']").value,
         lastName: block.querySelector("[name='last_name']").value,
         email: block.querySelector("[name='email']").value,
@@ -1199,7 +1240,7 @@ document.addEventListener("submit", async (event) => {
 
     if (form.id === "campaign-form") {
       const intent=event.submitter?.value || "preview";
-      const audience={type:data.get("audience_type"),tierId:data.get("tier_id") || null,teamId:data.get("team_id") || null};
+      const audience={type:data.get("audience_type"),tierId:data.get("tier_id") || null,waveId:data.get("wave_id") || null,teamId:data.get("team_id") || null};
       const common={eventId:data.get("event_id"),audience,subject:data.get("subject"),htmlBody:data.get("html_body")};
       if(intent==="template"){
         await createEmailTemplate({
@@ -1325,6 +1366,42 @@ document.addEventListener("submit", async (event) => {
       showNotice("Sponsor added.");
     }
 
+    if (form.id === "wave-form") {
+      const race=eventById(form.dataset.eventId);
+      await createWave({
+        event_id:race.id,tier_id:data.get("tier_id"),name:data.get("name"),
+        starts_at:new Date(data.get("starts_at")).toISOString(),capacity:Number(data.get("capacity")),
+        min_pace_seconds:data.get("min_pace") ? Math.round(parseResultTime(data.get("min_pace"))/1000) : null,
+        max_pace_seconds:data.get("max_pace") ? Math.round(parseResultTime(data.get("max_pace"))/1000) : null,
+        bib_start:data.get("bib_start") ? Number(data.get("bib_start")) : null,
+        bib_end:data.get("bib_end") ? Number(data.get("bib_end")) : null,
+        selection_closes_at:data.get("selection_closes_at") ? new Date(data.get("selection_closes_at")).toISOString() : null,
+        self_select:data.get("self_select")==="on",sort_order:(race.os_waves || []).length,
+      });
+      await loadDashboard();
+      openDialog(waveManagerForm(eventById(race.id)));
+      showNotice("Start wave created.");
+    }
+
+    if (form.id === "wave-assignment-form") {
+      const ids=[...form.elements.registration_ids.selectedOptions].map((option)=>option.value);
+      if(!ids.length) throw new Error("Select at least one participant");
+      const result=await wavesAction("assign",{eventId:form.dataset.eventId,waveId:data.get("wave_id"),registrationIds:ids});
+      await loadDashboard();
+      openDialog(waveManagerForm(eventById(form.dataset.eventId)));
+      showNotice(`${result.assigned} runners assigned.`);
+    }
+
+    if (form.id === "runner-wave-form") {
+      await wavesAction("assign_self",{
+        eventId:form.dataset.eventId,registrationId:form.dataset.registrationId,waveId:data.get("wave_id"),
+        estimatedPaceSeconds:data.get("estimated_pace") ? Math.round(parseResultTime(data.get("estimated_pace"))/1000) : null,
+      });
+      dialog.close();
+      await go("runner");
+      showNotice("Your start wave was updated.");
+    }
+
     if (form.id === "event-form") {
       const name = data.get("name");
       await createEvent({
@@ -1352,6 +1429,15 @@ document.addEventListener("submit", async (event) => {
 
 notice.querySelector("button").addEventListener("click", () => notice.classList.add("hidden"));
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-field='tier_id']")) {
+    const block=event.target.closest(".participant-block");
+    const waveSelect=block?.querySelector("[data-field='wave_id']");
+    if(waveSelect){
+      waveSelect.value="";
+      [...waveSelect.options].forEach((option)=>{option.hidden=Boolean(option.dataset.tier && option.dataset.tier!==event.target.value);});
+    }
+    return;
+  }
   if (event.target.id === "results-csv-file" && event.target.files?.[0]) {
     event.target.files[0].text().then((text)=>{
       const textarea=document.querySelector("#results-csv");

@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
     if (action === "scan") {
       const parsed = await verifyToken(String(body.token || ""));
       const { data: registration, error } = await admin.from("os_registrations")
-        .select("*, os_events!inner(name), os_event_tiers(name,distance_label)").eq("id", parsed.registrationId).single();
+        .select("*, os_events!inner(name), os_event_tiers(name,distance_label), os_waves(name,starts_at)").eq("id", parsed.registrationId).single();
       if (error) throw error;
       await authorizeEvent(registration.event_id, ["admin","packet_pickup","scanner"]);
       return json(request, { registration });
@@ -71,7 +71,7 @@ Deno.serve(async (request) => {
       const term = String(body.term || "").trim().replace(/[,%()]/g, "");
       if (term.length < 2) throw new Error("Enter at least two characters");
       const { data, error } = await admin.from("os_registrations")
-        .select("id,first_name,last_name,email,bib_number,status,payment_status,packet_picked_up_at,checked_in_at,tier_id,os_event_tiers(name),os_orders(os_order_items(id,item_type,name,quantity,fulfilled_at))")
+        .select("id,first_name,last_name,email,bib_number,status,payment_status,packet_picked_up_at,checked_in_at,tier_id,wave_id,os_event_tiers(name),os_waves(name,starts_at),os_orders(os_order_items(id,item_type,name,quantity,fulfilled_at))")
         .eq("event_id", body.eventId)
         .or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%,bib_number.ilike.%${term}%`)
         .limit(25);

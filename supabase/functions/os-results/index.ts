@@ -59,7 +59,7 @@ Deno.serve(async(request)=>{
       if(!rows.length || rows.length>500) return json(request,{error:"Submit between 1 and 500 results"},400);
       const registrationIds=rows.map((row)=>row.registrationId);
       const {data:registrations,error}=await admin.from("os_registrations")
-        .select("id,event_id,tier_id,bib_number,first_name,last_name").in("id",registrationIds);
+        .select("id,event_id,tier_id,wave_id,bib_number,first_name,last_name").in("id",registrationIds);
       if(error) throw error;
       const lookup=new Map((registrations || []).map((item)=>[item.id,item]));
       const upserts=rows.map((row)=>{
@@ -68,6 +68,7 @@ Deno.serve(async(request)=>{
         if(!["finisher","dnf","dns","dq"].includes(row.status)) throw new Error("Invalid result status");
         return {
           event_id:body.eventId,tier_id:registration.tier_id,registration_id:registration.id,
+          wave_id:registration.wave_id,
           bib_number:registration.bib_number,first_name:registration.first_name,last_name:registration.last_name,
           division:row.division || null,status:row.status,
           gun_time_ms:row.gunTimeMs ?? null,chip_time_ms:row.chipTimeMs ?? null,

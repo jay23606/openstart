@@ -58,6 +58,14 @@ Deno.serve(async (request) => {
           p_waiver_version: person.waiverVersion || null,
         });
         if (answersError) throw answersError;
+        if (person.waveId) {
+          const { error: waveError } = await admin.rpc("os_assign_registration_wave", {
+            p_registration_id: order.registration_ids[index],
+            p_wave_id: person.waveId,
+            p_estimated_pace_seconds: person.estimatedPaceSeconds || null,
+          });
+          if (waveError) throw waveError;
+        }
       }
 
       let teamId: string | null = null;

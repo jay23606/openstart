@@ -385,6 +385,20 @@ footer b { color: white; }
 .site-sponsor-list > span { align-items: center; background: var(--cream); display: grid; gap: 4px; grid-template-columns: 45px 1fr auto; min-width: 220px; padding: 10px; }
 .site-sponsor-list img { max-height: 32px; max-width: 42px; }
 .site-sponsor-list small { color: var(--muted); grid-column: 2; }
+.public-start-list { border-top: 1px solid var(--line); padding: 40px 0; }
+.public-start-list h2 { font-family: Georgia,serif; font-size: 38px; margin: 8px 0 22px; }
+.public-start-list > div { display: grid; gap: 9px; grid-template-columns: repeat(3,1fr); }
+.public-start-list span { background: var(--cream); padding: 18px; }
+.public-start-list b, .public-start-list strong, .public-start-list small { display: block; }
+.public-start-list b { color: var(--event-color,var(--green)); font-family: Georgia,serif; font-size: 27px; }
+.public-start-list strong { margin: 7px 0; }
+.public-start-list small { color: var(--muted); }
+.wave-admin-list { border-top: 1px solid var(--line); margin-bottom: 22px; }
+.wave-admin-list article { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 15px; justify-content: space-between; padding: 14px 0; }
+.wave-admin-list h3 { border: 0; margin: 4px 0; padding: 0; }
+.wave-admin-list p, .wave-admin-list small { color: var(--muted); font-size: 10px; margin: 0; }
+.wave-admin-list article > span { align-items: center; display: flex; gap: 7px; }
+.wave-admin-list article > span > button:last-child { background: none; border: 0; color: #a33; cursor: pointer; font-weight: 800; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
@@ -432,6 +446,8 @@ footer b { color: white; }
   .volunteer-roster > div > span { grid-column: 1 / -1; }
   .event-content-sections { grid-template-columns: 1fr; }
   .event-banner { height: 230px; }
+  .public-start-list > div { grid-template-columns: 1fr; }
+  .wave-admin-list article { align-items: stretch; flex-direction: column; }
   .scheduled-price-form, .finance-grid > div { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 8px; }
 }

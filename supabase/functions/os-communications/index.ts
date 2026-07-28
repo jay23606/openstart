@@ -26,11 +26,12 @@ const audienceRecipients = async (
     return (data || []).map((item)=>({email:item.email,firstName:item.first_name}));
   }
   let query = admin.from("os_registrations")
-    .select("id,email,first_name,status,bib_number,checked_in_at,team_role,tier_id,team_id")
+    .select("id,email,first_name,status,bib_number,checked_in_at,team_role,tier_id,team_id,wave_id")
     .eq("event_id",eventId);
   if (type === "confirmed" || type === "missing_bib" || type === "checked_in" || type === "not_checked_in" || type === "captains") query=query.eq("status","confirmed");
   if (type === "tier") query=query.eq("tier_id",audience.tierId);
   if (type === "team") query=query.eq("team_id",audience.teamId);
+  if (type === "wave") query=query.eq("wave_id",audience.waveId).eq("status","confirmed");
   if (type === "captains") query=query.eq("team_role","captain");
   if (type === "missing_bib") query=query.is("bib_number",null);
   if (type === "checked_in") query=query.not("checked_in_at","is",null);

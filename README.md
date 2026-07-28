@@ -30,6 +30,8 @@ There is no frontend framework, bundler, or build step.
   waitlists, waivers, organizer check-in, hours tracking, and CSV exports
 - Branded event websites with image uploads, custom colors, ordered content
   sections, sponsors, draft previews, publishing controls, and social metadata
+- Start waves and corrals with runner selection, capacity enforcement, pace
+  guidance, bulk assignment, bib ranges, start controls, and targeted messaging
 - Device-local demo mode when Supabase has not been configured
 
 ## Files
