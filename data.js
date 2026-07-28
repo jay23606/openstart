@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=28";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=28";
+import { configured, supabase } from "./core.js?v=29";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=29";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -272,6 +272,29 @@ export async function deleteEventQuestion(id) {
 export async function updateEventSettings(eventId, changes) {
   if (!configured) throw new Error("Event settings require Supabase");
   const { error } = await supabase.from("os_events").update(changes).eq("id", eventId);
+  if (error) throw error;
+}
+
+export async function createEventTier(tier) {
+  const { data, error } = await supabase.from("os_event_tiers").insert(tier).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function eventReadiness(eventId) {
+  const { data, error } = await supabase.rpc("os_event_readiness", { p_event_id: eventId });
+  if (error) throw error;
+  return data;
+}
+
+export async function publishEvent(eventId) {
+  const { data, error } = await supabase.rpc("os_publish_event", { p_event_id: eventId });
+  if (error) throw error;
+  return data;
+}
+
+export async function unpublishEvent(eventId) {
+  const { error } = await supabase.rpc("os_unpublish_event", { p_event_id: eventId });
   if (error) throw error;
 }
 

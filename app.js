@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=28";
+} from "./core.js?v=29";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
-  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
+  communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createEventTier, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
-  listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
+  eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=28";
+} from "./data.js?v=29";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -39,6 +39,7 @@ const state = {
   pendingView: "runner",
   pendingTransfer: null,
   pendingLotteryEvent: null,
+  setupEventId: null,
 };
 
 const helpArticles=[
@@ -47,7 +48,7 @@ const helpArticles=[
   {audience:"Runners",title:"Applying to a race lottery",keywords:"runner lottery application qualifier result selected waitlist tickets",body:"Sign in and select Apply to lottery from an eligible event. Choose a distance and provide qualifying-race evidence when required. Applying does not charge you or guarantee entry. My races shows qualification and selection status, ticket count, and organizer review notes."},
   {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
   {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},
-  {audience:"Organizers",title:"Create, duplicate, and prepare an event",keywords:"organizer create duplicate template checklist readiness event publish website branding sections sponsor",body:"Open Organizer → Create event, or open an existing event and select Duplicate to create a private draft for another year. The copy includes reusable configuration but never participants or payments. Use Checklist to track readiness, deadlines, and custom operational tasks before publishing."},
+  {audience:"Organizers",title:"Create, duplicate, and prepare an event",keywords:"organizer create wizard autosave setup duplicate template checklist readiness event publish website branding sections sponsor",body:"Open Organizer → Create event to start a private draft and guided six-step setup. Progress saves after each step. Required readiness items must pass before publishing; optional tools can be skipped and configured later. Draft events reopen the setup guide automatically. Duplicate creates a reusable private copy without participants or payments."},
   {audience:"Organizers",title:"Stripe payments and payouts",keywords:"organizer stripe connect sandbox payment payout refund fee",body:"Select Connect Stripe sandbox and complete Stripe-hosted onboarding. The account must have charges and payouts enabled. Registration funds use destination charges; OpenStart retains the configured application fee. Use test card 4242 4242 4242 4242 in sandbox."},
   {audience:"Organizers",title:"Registration, pricing, and merchandise",keywords:"organizer roster question waiver promo waitlist price product donation inventory",body:"From an event roster you can manage participants, questions, waivers, scheduled pricing, promo codes, waitlists, products, inventory, donations, and financial exports. Payment and capacity decisions remain server-authoritative."},
   {audience:"Organizers",title:"Configure a lottery and review qualifiers",keywords:"organizer lottery applications spots window qualifier review bonus tickets draw",body:"Open an event in Organizer and select Lottery. Set registration mode, application dates, available spots, and qualification instructions. Review submitted evidence, mark applicants qualified or disqualified, and assign justified bonus tickets. Selection and payment are handled in the next lottery release."},
@@ -135,6 +136,73 @@ function renderDemo() {
         ${showcaseFeatures.map(([key,title,description],index) => `<article><span>${String(index+1).padStart(2,"0")}</span><h3>${title}</h3><p>${description}</p>${showcase && key !== "communications" ? `<button class="text-button" data-demo-feature="${key}" data-event-id-demo="${showcase.id}" type="button">Open tool →</button>` : key === "communications" ? `<small>Guided preview only — sending is disabled in the showcase.</small>` : `<small>${state.session ? "Create the showcase to open this tool." : "Sign in to unlock the working demo."}</small>`}</article>`).join("")}
       </div>
     </section>`;
+}
+
+const setupSteps = ["Basics","Registration options","Runner experience","Website","Optional tools","Review & publish"];
+
+function localReadiness(event) {
+  const paid=(event.os_event_tiers || []).some((tier)=>tier.price_cents>0);
+  return {ready:false,items:[
+    {key:"basics",label:"Event details",required:true,complete:Boolean(event.name && event.description?.length>=10 && event.location_name),detail:"Add a name, location, and useful description."},
+    {key:"schedule",label:"Future event date",required:true,complete:new Date(event.starts_at)>new Date(),detail:"Choose a future date."},
+    {key:"tiers",label:"Registration option",required:true,complete:Boolean(event.os_event_tiers?.length),detail:"Add at least one distance."},
+    {key:"payments",label:"Payment account",required:paid,complete:!paid,detail:"Paid registration requires Stripe."},
+  ]};
+}
+
+async function renderSetupWizard(event,step=0) {
+  state.setupEventId=event.id;
+  const readiness=configured ? await eventReadiness(event.id) : localReadiness(event);
+  const completed=readiness.items.filter((item)=>item.complete).length;
+  const content=[
+    `<form id="setup-basics-form" data-event-id="${event.id}" data-next-step="1">
+      <label>Event name<input name="name" value="${escapeHtml(event.name)}" required minlength="3" maxlength="120"></label>
+      <div class="split-fields"><label>Date and time<input name="starts_at" type="datetime-local" value="${localDateTime(event.starts_at)}" required></label><label>Location<input name="location_name" value="${escapeHtml(event.location_name)}" required></label></div>
+      <label>Description<textarea name="description" rows="6" required minlength="10">${escapeHtml(event.description)}</textarea></label>
+      <button class="primary-button" type="submit">Save and continue</button>
+    </form>`,
+    `<div class="setup-tier-summary">${event.os_event_tiers.map((tier)=>`<article><span><b>${escapeHtml(tier.name)}</b><small>${escapeHtml(tier.distance_label)}</small></span><span><b>${money(tier.price_cents)}</b><small>${tier.capacity} spots</small></span></article>`).join("")}</div>
+    <form id="setup-tier-form" data-event-id="${event.id}">
+      <h3>Add another registration option</h3>
+      <div class="split-fields"><label>Name<input name="name" placeholder="Half Marathon" required></label><label>Distance<input name="distance_label" placeholder="13.1 miles" required></label></div>
+      <div class="split-fields"><label>Price<input name="price" type="number" min="0" step=".01" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div>
+      <div class="dialog-actions"><button class="subtle-button" type="submit">Add option</button><button class="primary-button" data-setup-step="2" data-setup-event="${event.id}" type="button">Continue</button></div>
+    </form>`,
+    `<form id="setup-runner-form" data-event-id="${event.id}" data-next-step="3">
+      <label>Participant waiver <span class="optional-label">Strongly recommended</span><textarea name="waiver_text" rows="7" placeholder="Enter the agreement participants must accept">${escapeHtml(event.waiver_text || "")}</textarea></label>
+      <div class="split-fields"><label>Participant edits close<input name="participant_edits_close_at" type="datetime-local" value="${localDateTime(event.participant_edits_close_at)}"></label><label>Transfers close<input name="transfers_close_at" type="datetime-local" value="${localDateTime(event.transfers_close_at)}"></label></div>
+      <div class="setup-inline-actions"><button class="subtle-button" data-registration-settings="${event.id}" type="button">Manage custom questions</button><span>${event.os_event_questions?.length || 0} questions configured</span></div>
+      <button class="primary-button" type="submit">Save and continue</button>
+    </form>`,
+    `<form id="setup-website-form" data-event-id="${event.id}" data-next-step="4">
+      <div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(event.primary_color)}"></label><label>Public contact email<input name="contact_email" type="email" value="${escapeHtml(event.contact_email || state.session?.user?.email || "")}"></label></div>
+      <label class="check-label"><input name="website_published" type="checkbox" ${event.website_published ? "checked" : ""}> Publish custom website sections when the event goes live</label>
+      <div class="setup-inline-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Edit page sections and sponsors</button><span>${event.os_event_sections?.length || 0} sections configured</span></div>
+      <button class="primary-button" type="submit">Save and continue</button>
+    </form>`,
+    `<div class="setup-option-grid">
+      <article><h3>Pricing & promotions</h3><p>Scheduled prices, promo codes, and capacity.</p><button class="subtle-button" data-pricing-settings="${event.id}" type="button">Configure</button></article>
+      <article><h3>Merchandise & donations</h3><p>Products, inventory, fundraising, and fulfillment.</p><button class="subtle-button" data-product-settings="${event.id}" type="button">Configure</button></article>
+      <article><h3>Lottery</h3><p>Applications, qualification rules, and available spots.</p><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Configure</button></article>
+      <article><h3>Waves & corrals</h3><p>Start times, pace ranges, capacity, and bib ranges.</p><button class="subtle-button" data-wave-manager="${event.id}" type="button">Configure</button></article>
+      <article><h3>Volunteers</h3><p>Roles, shifts, requirements, and capacity.</p><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Configure</button></article>
+      <article><h3>Readiness checklist</h3><p>Permits, course planning, communications, and race day.</p><button class="subtle-button" data-checklist="${event.id}" type="button">Open checklist</button></article>
+    </div><button class="primary-button" data-setup-step="5" data-setup-event="${event.id}" type="button">Continue to review</button>`,
+    `<div class="setup-review">
+      <div class="setup-readiness">${readiness.items.map((item)=>`<article class="${item.complete ? "complete" : item.required ? "required" : ""}"><i>${item.complete ? "✓" : item.required ? "!" : "○"}</i><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}${item.required ? " · Required" : " · Optional"}</small></span></article>`).join("")}</div>
+      <aside><p class="eyebrow">${event.status==="published" ? "EVENT IS LIVE" : readiness.ready ? "READY TO PUBLISH" : "SETUP INCOMPLETE"}</p><h3>${event.status==="published" ? "Registration is public." : readiness.ready ? "Everything required is ready." : "Finish the required items first."}</h3><p>You can preview at any time. Publishing makes the event discoverable and opens eligible registration or lottery applications.</p>
+      <button class="subtle-button" data-setup-preview="${event.id}" type="button">Preview event page</button>
+      ${event.status==="published" ? `<button class="danger-button" data-unpublish-event="${event.id}" type="button">Return to draft</button>` : `<button class="primary-button" data-publish-event="${event.id}" type="button" ${readiness.ready ? "" : "disabled"}>Publish event</button>`}</aside>
+    </div>`,
+  ][step];
+  setPageMetadata(`${event.name} setup — OpenStart`,"Guided event setup and publishing.");
+  page.innerHTML=`<section class="setup-wizard">
+    <header><button class="back-button" data-exit-setup type="button">← Organizer</button><p class="eyebrow">GUIDED EVENT SETUP</p><h1>${escapeHtml(event.name)}</h1><div><span><b>${completed}/${readiness.items.length}</b> readiness items</span><span><b>${event.status}</b> visibility</span></div></header>
+    <nav class="setup-steps" aria-label="Event setup steps">${setupSteps.map((label,index)=>`<button class="${index===step ? "active" : ""}" data-setup-step="${index}" data-setup-event="${event.id}" type="button"><i>${index+1}</i><span>${label}</span></button>`).join("")}</nav>
+    <div class="setup-content"><div><p class="eyebrow">STEP ${step+1} OF ${setupSteps.length}</p><h2>${setupSteps[step]}</h2></div>${content}</div>
+  </section>`;
+  syncNavigation();
+  scrollTo(0,0);
 }
 const effectivePrice = (tier) => {
   const now = Date.now();
@@ -351,7 +419,7 @@ function renderDashboard() {
           <div class="table-header"><span>Event</span><span>Status</span><span>Registrations</span><span>Date</span></div>
           ${realEvents.map((event) => `
             <button class="table-row" data-roster="${event.id}" type="button">
-              <span><b>${escapeHtml(event.name)}</b><small>${escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
+              <span><b>${escapeHtml(event.name)}</b><small>${event.status === "draft" ? "Continue guided setup" : escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
               <span><i class="status-dot ${event.status}"></i>${event.status}</span>
               <span>${eventRegistrations(event.id).filter((registration) => registration.status === "confirmed").length}</span>
               <span>${displayDate(event.starts_at)} <b>›</b></span>
@@ -413,7 +481,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-open-setup="${event.id}" type="button">Setup guide</button><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -801,8 +869,8 @@ function eventForm() {
         <h3>First registration option</h3>
         <div class="split-fields"><label>Name<input name="tier_name" placeholder="10K" required></label><label>Distance<input name="distance" placeholder="6.2 miles" required></label></div>
         <div class="split-fields"><label>Price<input name="price" type="number" min="0" step="0.01" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div>
-        <label class="check-label"><input name="publish" type="checkbox"> Publish immediately</label>
-        <button class="primary-button" type="submit">Create event</button>
+        <p class="modal-note">OpenStart creates a private draft, then guides you through registration, payments, website content, optional tools, and a final readiness review.</p>
+        <button class="primary-button" type="submit">Create draft & continue</button>
       </form>
     </section>`;
 }
@@ -1013,6 +1081,13 @@ document.addEventListener("click", async (event) => {
     document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
   }
   if (target.matches("[data-action='discover'], [data-back]")) {
+    if (state.setupEventId) {
+      const setupEvent=eventById(state.setupEventId);
+      if (setupEvent) {
+        await renderSetupWizard(setupEvent,5);
+        return;
+      }
+    }
     history.replaceState({},"",location.pathname);
     await go("discover");
   }
@@ -1223,7 +1298,39 @@ document.addEventListener("click", async (event) => {
       await go("dashboard");
     }
   }
-  if (target.dataset.roster) renderRoster(eventById(target.dataset.roster));
+  if (target.dataset.roster) {
+    const race=eventById(target.dataset.roster);
+    if (race.status==="draft") await renderSetupWizard(race,0);
+    else renderRoster(race);
+  }
+  if (target.dataset.openSetup) await renderSetupWizard(eventById(target.dataset.openSetup),0);
+  if (target.dataset.setupStep) await renderSetupWizard(eventById(target.dataset.setupEvent),Number(target.dataset.setupStep));
+  if (target.matches("[data-exit-setup]")) {
+    state.setupEventId=null;
+    await go("dashboard");
+  }
+  if (target.dataset.setupPreview) {
+    state.setupEventId=target.dataset.setupPreview;
+    renderEvent(eventById(target.dataset.setupPreview),true);
+  }
+  if (target.dataset.publishEvent) {
+    target.disabled=true;
+    try {
+      await publishEvent(target.dataset.publishEvent);
+      await loadDashboard();
+      await renderSetupWizard(eventById(target.dataset.publishEvent),5);
+      showNotice("Event published. Registration is now public.");
+    } catch(error) {
+      target.disabled=false;
+      showNotice(error.message || "The event is not ready to publish.");
+    }
+  }
+  if (target.dataset.unpublishEvent) {
+    await unpublishEvent(target.dataset.unpublishEvent);
+    await loadDashboard();
+    await renderSetupWizard(eventById(target.dataset.unpublishEvent),5);
+    showNotice("Event returned to a private draft.");
+  }
   if (target.dataset.addParticipant) openDialog(manualRegistrationForm(eventById(target.dataset.addParticipant)));
   if (target.dataset.registrationSettings) openDialog(registrationSettingsForm(eventById(target.dataset.registrationSettings)));
   if (target.dataset.pricingSettings) openDialog(pricingSettingsForm(eventById(target.dataset.pricingSettings)));
@@ -1365,6 +1472,56 @@ document.addEventListener("submit", async (event) => {
       } else {
         await go(state.pendingView || "runner");
       }
+    }
+
+    if (form.id === "setup-basics-form") {
+      await updateEventSettings(form.dataset.eventId,{
+        name:data.get("name").trim(),
+        starts_at:new Date(data.get("starts_at")).toISOString(),
+        location_name:data.get("location_name").trim(),
+        description:data.get("description").trim(),
+        updated_at:new Date().toISOString(),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId),1);
+      showNotice("Event details saved.");
+    }
+
+    if (form.id === "setup-tier-form") {
+      await createEventTier({
+        event_id:form.dataset.eventId,
+        name:data.get("name").trim(),
+        distance_label:data.get("distance_label").trim(),
+        price_cents:Math.round(Number(data.get("price"))*100),
+        capacity:Number(data.get("capacity")),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId),1);
+      showNotice("Registration option added.");
+    }
+
+    if (form.id === "setup-runner-form") {
+      await updateEventSettings(form.dataset.eventId,{
+        waiver_text:data.get("waiver_text").trim(),
+        participant_edits_close_at:data.get("participant_edits_close_at") ? new Date(data.get("participant_edits_close_at")).toISOString() : null,
+        transfers_close_at:data.get("transfers_close_at") ? new Date(data.get("transfers_close_at")).toISOString() : null,
+        updated_at:new Date().toISOString(),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId),3);
+      showNotice("Runner experience saved.");
+    }
+
+    if (form.id === "setup-website-form") {
+      await updateEventSettings(form.dataset.eventId,{
+        primary_color:data.get("primary_color"),
+        contact_email:data.get("contact_email") || null,
+        website_published:data.get("website_published")==="on",
+        updated_at:new Date().toISOString(),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId),4);
+      showNotice("Website settings saved.");
     }
 
     if (form.id === "series-form") {
@@ -1886,14 +2043,14 @@ document.addEventListener("submit", async (event) => {
 
     if (form.id === "event-form") {
       const name = data.get("name");
-      await createEvent({
+      const created=await createEvent({
         organizer_id: state.session?.user?.id || DEMO_ORGANIZER_ID,
         slug: `${slugify(name)}-${Date.now().toString().slice(-6)}`,
         name,
         description: data.get("description"),
         starts_at: new Date(`${data.get("date")}T12:00:00`).toISOString(),
         location_name: data.get("location"),
-        status: data.get("publish") ? "published" : "draft",
+        status: "draft",
       }, {
         name: data.get("tier_name"),
         distance_label: data.get("distance"),
@@ -1901,8 +2058,9 @@ document.addEventListener("submit", async (event) => {
         capacity: Number(data.get("capacity")),
       });
       dialog.close();
-      await go("dashboard");
-      showNotice(`${name} was created.`);
+      await loadDashboard();
+      await renderSetupWizard(eventById(created.id),0);
+      showNotice(`${name} draft created. Your progress saves at each step.`);
     }
   } catch (error) {
     showNotice(error.message || "Something went wrong.");

@@ -9,6 +9,8 @@ There is no frontend framework, bundler, or build step.
 
 - Public feature explorer plus a private, disposable organizer showcase with
   realistic sample data that stays out of real event and financial totals
+- Guided six-step event setup with progressive saving, optional-tool shortcuts,
+  preview, server-authoritative readiness checks, and protected publishing
 - Public event discovery and event detail pages
 - Registration tiers, prices, capacity, and participant registration
 - Supabase email/password authentication for organizers

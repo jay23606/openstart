@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=28"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=28"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=29"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=29"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -110,6 +110,23 @@ test("the private showcase is isolated, disposable, and server-created", async (
   assert.match(migration, /where organizer_id=v_user and is_showcase/);
   assert.match(migration, /organizer_id=auth\.uid\(\) and is_showcase/);
   assert.match(migration, /status.*'draft'/s);
+});
+
+test("event publishing is guided and server-authoritative", async () => {
+  const [app,data,migration] = await Promise.all([
+    read("app.js"),
+    read("data.js"),
+    read("supabase/migrations/20260729130000_event_setup_wizard.sql"),
+  ]);
+  assert.match(app,/function renderSetupWizard/);
+  assert.match(app,/Create draft & continue/);
+  assert.match(app,/READY TO PUBLISH/);
+  assert.match(app,/setup-basics-form/);
+  assert.match(data,/os_event_readiness/);
+  assert.match(data,/os_publish_event/);
+  assert.match(migration,/os_enforce_event_publish_readiness/);
+  assert.match(migration,/Finish Stripe setup before publishing a paid event/);
+  assert.match(migration,/Showcase events cannot be published/);
 });
 
 test("no framework runtime is referenced by the application", async () => {
