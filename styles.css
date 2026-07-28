@@ -339,6 +339,23 @@ footer b { color: white; }
 .result-row > span:first-child { color: var(--green); font-family: Georgia,serif; font-size: 24px; }
 .result-row b, .result-row small { display: block; }
 .result-row small { color: var(--muted); margin-top: 3px; }
+.event-secondary-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.volunteer-opportunities { display: grid; gap: 10px; }
+.volunteer-opportunities article { align-items: center; border: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 18px; }
+.volunteer-opportunities h3 { border: 0; margin: 4px 0; padding: 0; }
+.volunteer-opportunities p, .volunteer-opportunities small { color: var(--muted); display: block; font-size: 10px; margin: 5px 0; }
+.volunteer-opportunities span { font-size: 12px; }
+.shift-summary { background: var(--cream); display: grid; gap: 5px; margin-bottom: 18px; padding: 16px; }
+.shift-summary span, .shift-summary p { color: var(--muted); font-size: 11px; margin: 0; }
+.volunteer-summary { align-items: center; display: grid; gap: 10px; grid-template-columns: repeat(3,1fr) auto; margin-bottom: 20px; }
+.volunteer-summary span { background: var(--cream); color: var(--muted); font-size: 10px; padding: 14px; }
+.volunteer-summary b { color: var(--ink); display: block; font-family: Georgia,serif; font-size: 25px; }
+.volunteer-admin-list article { border-top: 1px solid var(--line); padding: 13px 0; }
+.volunteer-admin-list article > div { display: flex; font-size: 11px; justify-content: space-between; padding: 6px 0; }
+.volunteer-admin-list small { color: var(--muted); }
+.volunteer-roster > div { align-items: center; border-top: 1px solid var(--line); display: grid; gap: 9px; grid-template-columns: 1.8fr 1fr 1fr 90px; padding: 10px 0; }
+.volunteer-roster b, .volunteer-roster small { display: block; }
+.volunteer-roster small { color: var(--muted); margin-top: 4px; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
@@ -380,6 +397,10 @@ footer b { color: white; }
   .results-header { display: none; }
   .result-row { grid-template-columns: 45px 1.5fr 1fr; }
   .result-row span:nth-child(3), .result-row span:nth-child(5) { display: none; }
+  .volunteer-opportunities article { align-items: stretch; flex-direction: column; }
+  .volunteer-summary { grid-template-columns: 1fr 1fr; }
+  .volunteer-roster > div { grid-template-columns: 1fr 1fr; }
+  .volunteer-roster > div > span { grid-column: 1 / -1; }
   .scheduled-price-form, .finance-grid > div { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 8px; }
 }

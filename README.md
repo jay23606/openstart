@@ -26,6 +26,8 @@ There is no frontend framework, bundler, or build step.
   scheduled delivery, delivery reporting, and marketing unsubscribe handling
 - Official race results with CSV timing imports, manual corrections, searchable
   public leaderboards, division places, runner result views, and email notices
+- Volunteer roles and shifts with atomic capacity enforcement, public signup,
+  waitlists, waivers, organizer check-in, hours tracking, and CSV exports
 - Device-local demo mode when Supabase has not been configured
 
 ## Files

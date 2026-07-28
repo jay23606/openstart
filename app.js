@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=17";
+} from "./core.js?v=18";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  communicationsAction, createEmailTemplate, createManualRegistration, createProduct, createPromoCode, createScheduledPrice,
+  communicationsAction, createEmailTemplate, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
-  listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  updateOrderItem, updateRegistration, updateWaitlist,
-} from "./data.js?v=17";
+  listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
+  updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift,
+} from "./data.js?v=18";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -30,6 +30,7 @@ const state = {
   orderItems: [],
   campaigns: [],
   emailTemplates: [],
+  volunteerSignups: [],
   pendingView: "dashboard",
   pendingTransfer: null,
 };
@@ -136,7 +137,7 @@ function renderEvent(event) {
               return `<div class="tier-row"><div><h3>${escapeHtml(tier.name)}</h3><p>${escapeHtml(tier.distance_label)} · capacity ${tier.capacity}${used ? ` · ${used} registered` : ""}</p></div><strong>${money(effectivePrice(tier))}</strong></div>`;
             }).join("")}
           </div>
-          ${event.results_published_at ? `<button class="subtle-button results-link" data-view-results="${event.id}" type="button">View official results</button>` : ""}
+          <div class="event-secondary-actions">${event.results_published_at ? `<button class="subtle-button results-link" data-view-results="${event.id}" type="button">View official results</button>` : ""}${event.os_volunteer_roles?.length ? `<button class="subtle-button results-link" data-volunteer="${event.id}" type="button">Volunteer</button>` : ""}</div>
           <div class="detail-note"><b>Simple for now, extensible later.</b><p>Registration is connected. Paid entries remain pending until a payment provider confirms them server-side.</p></div>
         </div>
         <aside class="registration-panel">
@@ -233,6 +234,7 @@ function renderRunnerDashboard() {
             <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
       </div>
+      ${state.volunteerSignups.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My volunteer shifts</h2><p>Upcoming assignments and service history.</p></div></div>${state.volunteerSignups.map((signup)=>{const shift=signup.os_volunteer_shifts;const role=shift?.os_volunteer_roles;return `<article><h3>${escapeHtml(role?.name || "Volunteer")} <small>${escapeHtml(role?.os_events?.name || "")}</small></h3><p><span>${new Date(shift.starts_at).toLocaleString()} · ${escapeHtml(shift.location)}</span><b>${escapeHtml(signup.status)}</b></p>${signup.hours_worked!==null ? `<p><span>Recorded service</span><b>${signup.hours_worked} hours</b></p>` : ""}</article>`;}).join("")}</div>` : ""}
       ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
     </section>`;
 }
@@ -241,7 +243,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, race-day details, questions, waiver, and results.</p></div><div class="card-actions"><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -403,6 +405,42 @@ function productSettingsForm(event) {
     <h3>Add product</h3><form id="product-form" data-event-id="${event.id}"><label>Product name<input name="name" placeholder="Race shirt" required></label><label>Description<input name="description"></label><div class="split-fields"><label>First variant<input name="variant_name" placeholder="Medium" required></label><label>Price<input name="price" type="number" min="0" step=".01" required></label></div><div class="split-fields"><label>Inventory<input name="inventory" type="number" min="0" placeholder="Blank for unlimited"></label><label>Fulfillment<select name="fulfillment_type"><option value="packet_pickup">Packet pickup</option><option value="digital">Digital</option><option value="none">No fulfillment</option></select></label></div><button class="primary-button" type="submit">Create product</button></form>
     <h3>Donations</h3><form id="donation-settings-form" data-event-id="${event.id}"><label class="check-label"><input name="donations_enabled" type="checkbox" ${event.donations_enabled ? "checked" : ""}> Accept donations during registration</label><div class="split-fields"><label>Beneficiary<input name="beneficiary_name" value="${escapeHtml(event.beneficiary_name || "")}"></label><label>Fundraising goal<input name="fundraising_goal" type="number" min="0" step=".01" value="${event.fundraising_goal_cents ? event.fundraising_goal_cents / 100 : ""}"></label></div><button class="subtle-button" type="submit">Save fundraising settings</button></form>
   </section>`;
+}
+
+function volunteerOpportunitiesForm(event) {
+  const shifts=(event.os_volunteer_roles || []).flatMap((role)=>(role.os_volunteer_shifts || []).map((shift)=>({role,shift})))
+    .filter(({shift})=>new Date(shift.ends_at)>new Date()).sort((a,b)=>new Date(a.shift.starts_at)-new Date(b.shift.starts_at));
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Join the race-day team</p><h2>Volunteer at ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="volunteer-opportunities">${shifts.map(({role,shift})=>`<article><div><p>${new Date(shift.starts_at).toLocaleString()}–${new Date(shift.ends_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</p><h3>${escapeHtml(role.name)}</h3><span>${escapeHtml(role.description)}</span><small>${escapeHtml(shift.location)} · ${shift.capacity} spots${role.minimum_age ? ` · Age ${role.minimum_age}+` : ""}</small></div><button class="primary-button" data-volunteer-shift="${shift.id}" data-event="${event.id}" type="button">Choose shift</button></article>`).join("") || '<div class="empty-state">No volunteer shifts are currently open.</div>'}</div>
+  </section>`;
+}
+
+function volunteerSignupForm(event,shiftId) {
+  const role=(event.os_volunteer_roles || []).find((item)=>item.os_volunteer_shifts?.some((shift)=>shift.id===shiftId));
+  const shift=role?.os_volunteer_shifts?.find((item)=>item.id===shiftId);
+  return `<section class="modal"><div class="form-heading"><div><p>${escapeHtml(role?.name || "Volunteer")}</p><h2>Sign up to help</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="shift-summary"><b>${new Date(shift.starts_at).toLocaleString()}</b><span>${escapeHtml(shift.location)}</span>${role.requirements ? `<p>${escapeHtml(role.requirements)}</p>` : ""}</div>
+    <form id="volunteer-signup-form" data-shift-id="${shiftId}"><div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div><label>Email<input name="email" type="email" value="${escapeHtml(state.session?.user?.email || "")}" required></label><label>Phone<input name="phone" type="tel"></label><label>Emergency contact<input name="emergency_contact"></label><label>Notes or accommodations<textarea name="notes" rows="3"></textarea></label>${role.waiver_text ? `<div class="waiver-box"><p>${escapeHtml(role.waiver_text)}</p><label class="check-label"><input name="waiver" type="checkbox" required> I accept the volunteer waiver</label></div>` : ""}<button class="primary-button" type="submit">Join this shift</button></form>
+  </section>`;
+}
+
+function volunteerManagerForm(event) {
+  const signups=(event.os_volunteer_roles || []).flatMap((role)=>(role.os_volunteer_shifts || []).flatMap((shift)=>(shift.os_volunteer_signups || []).map((signup)=>({role,shift,signup}))));
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Volunteer operations</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="volunteer-summary"><span><b>${signups.filter(({signup})=>signup.status==="confirmed").length}</b>confirmed</span><span><b>${signups.filter(({signup})=>signup.status==="waitlisted").length}</b>waitlisted</span><span><b>${signups.filter(({signup})=>signup.checked_in_at).length}</b>checked in</span><button class="subtle-button" data-export-volunteers="${event.id}" type="button">Export CSV</button></div>
+    <div class="volunteer-admin-list">${(event.os_volunteer_roles || []).map((role)=>`<article><h3>${escapeHtml(role.name)}</h3>${(role.os_volunteer_shifts || []).map((shift)=>`<div><b>${new Date(shift.starts_at).toLocaleString()}</b><small>${escapeHtml(shift.location)} · capacity ${shift.capacity} · ${(shift.os_volunteer_signups || []).filter((item)=>item.status==="confirmed").length} confirmed</small></div>`).join("")}</article>`).join("") || '<div class="empty-state">No volunteer roles yet.</div>'}</div>
+    <h3>Create a role and first shift</h3><form id="volunteer-role-form" data-event-id="${event.id}"><div class="split-fields"><label>Role name<input name="name" placeholder="Course marshal" required></label><label>Minimum age<input name="minimum_age" type="number" min="0"></label></div><label>Description<input name="description" required></label><label>Requirements<input name="requirements" placeholder="Comfortable standing outdoors"></label><label>Volunteer waiver<textarea name="waiver_text" rows="3"></textarea></label><div class="split-fields"><label>Starts<input name="starts_at" type="datetime-local" required></label><label>Ends<input name="ends_at" type="datetime-local" required></label></div><div class="split-fields"><label>Location<input name="location" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div><label>Shift instructions<input name="instructions"></label><button class="primary-button" type="submit">Create volunteer shift</button></form>
+    <h3>Volunteer roster</h3><form id="volunteer-roster-form" data-event-id="${event.id}"><div class="volunteer-roster">${signups.map(({role,shift,signup})=>`<div data-volunteer-signup-id="${signup.id}"><span><b>${escapeHtml(signup.first_name)} ${escapeHtml(signup.last_name)}</b><small>${escapeHtml(signup.email)} · ${escapeHtml(role.name)} · ${new Date(shift.starts_at).toLocaleString()}</small></span><select name="status">${["confirmed","waitlisted","completed","no_show","cancelled"].map((status)=>`<option ${signup.status===status ? "selected" : ""}>${status}</option>`).join("")}</select><label class="check-label"><input name="checked_in" type="checkbox" ${signup.checked_in_at ? "checked" : ""}> Checked in</label><input name="hours" type="number" min="0" step=".25" placeholder="Hours" value="${signup.hours_worked ?? ""}"></div>`).join("") || '<div class="empty-state">No volunteers have signed up.</div>'}</div>${signups.length ? '<button class="primary-button" type="submit">Save volunteer roster</button>' : ""}</form>
+  </section>`;
+}
+
+function exportVolunteers(event) {
+  const rows=[["role","shift_start","shift_end","location","first_name","last_name","email","phone","emergency_contact","status","checked_in","hours"]];
+  for(const role of event.os_volunteer_roles || []) for(const shift of role.os_volunteer_shifts || []) for(const signup of shift.os_volunteer_signups || []) rows.push([
+    role.name,shift.starts_at,shift.ends_at,shift.location,signup.first_name,signup.last_name,signup.email,signup.phone,signup.emergency_contact,signup.status,signup.checked_in_at || "",signup.hours_worked ?? "",
+  ]);
+  const csv=rows.map((row)=>row.map((value)=>`"${String(value ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+  const link=document.createElement("a"); link.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); link.download=`${event.slug}-volunteers.csv`; link.click(); URL.revokeObjectURL(link.href);
 }
 
 function rankedResults(event) {
@@ -638,9 +676,10 @@ async function loadDashboard() {
 }
 
 async function loadRunnerDashboard() {
-  [state.runnerRegistrations, state.captainTeams] = await Promise.all([
+  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups] = await Promise.all([
     listRunnerRegistrations(),
     listCaptainTeams(state.session.user.id),
+    listMyVolunteerSignups(),
   ]);
 }
 
@@ -690,6 +729,10 @@ document.addEventListener("click", async (event) => {
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
   if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
+  if (target.dataset.volunteer) openDialog(volunteerOpportunitiesForm(eventById(target.dataset.volunteer)));
+  if (target.dataset.volunteerShift) openDialog(volunteerSignupForm(eventById(target.dataset.event),target.dataset.volunteerShift));
+  if (target.dataset.volunteerManager) openDialog(volunteerManagerForm(eventById(target.dataset.volunteerManager)));
+  if (target.dataset.exportVolunteers) exportVolunteers(eventById(target.dataset.exportVolunteers));
   if (target.dataset.viewResults) renderResults(eventById(target.dataset.viewResults));
   if (target.dataset.resultsManager) openDialog(resultsManagerForm(eventById(target.dataset.resultsManager)));
   if (target.dataset.importResults) {
@@ -1150,6 +1193,46 @@ document.addEventListener("submit", async (event) => {
       await loadDashboard();
       openDialog(resultsManagerForm(eventById(form.dataset.eventId)));
       showNotice(`${results.length} results saved.`);
+    }
+
+    if (form.id === "volunteer-signup-form") {
+      const signup=await joinVolunteerShift({
+        shiftId:form.dataset.shiftId,firstName:data.get("first_name"),lastName:data.get("last_name"),
+        email:data.get("email"),phone:data.get("phone"),emergencyContact:data.get("emergency_contact"),
+        notes:data.get("notes"),waiverAccepted:data.get("waiver")==="on",
+      });
+      dialog.close();
+      showNotice(signup.status==="waitlisted" ? "That shift is full, so you joined its waitlist." : "Your volunteer shift is confirmed.");
+    }
+
+    if (form.id === "volunteer-role-form") {
+      await createVolunteerRole({
+        event_id:form.dataset.eventId,name:data.get("name"),description:data.get("description"),
+        requirements:data.get("requirements") || "",waiver_text:data.get("waiver_text") || "",
+        minimum_age:data.get("minimum_age") ? Number(data.get("minimum_age")) : null,
+      },{
+        starts_at:new Date(data.get("starts_at")).toISOString(),ends_at:new Date(data.get("ends_at")).toISOString(),
+        location:data.get("location"),capacity:Number(data.get("capacity")),instructions:data.get("instructions") || "",
+      });
+      await loadDashboard();
+      openDialog(volunteerManagerForm(eventById(form.dataset.eventId)));
+      showNotice("Volunteer role and shift created.");
+    }
+
+    if (form.id === "volunteer-roster-form") {
+      const updates=[...form.querySelectorAll("[data-volunteer-signup-id]")].map((row)=>{
+        const checked=row.querySelector('[name="checked_in"]').checked;
+        return updateVolunteerSignup(row.dataset.volunteerSignupId,{
+          status:row.querySelector('[name="status"]').value,
+          checked_in_at:checked ? new Date().toISOString() : null,
+          hours_worked:row.querySelector('[name="hours"]').value==="" ? null : Number(row.querySelector('[name="hours"]').value),
+          checked_out_at:row.querySelector('[name="status"]').value==="completed" ? new Date().toISOString() : null,
+        });
+      });
+      await Promise.all(updates);
+      await loadDashboard();
+      openDialog(volunteerManagerForm(eventById(form.dataset.eventId)));
+      showNotice("Volunteer roster updated.");
     }
 
     if (form.id === "event-form") {

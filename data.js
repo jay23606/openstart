@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=17";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=17";
+import { configured, supabase } from "./core.js?v=18";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=18";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*))")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*)))")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -294,6 +294,40 @@ export async function listEmailTemplates(userId) {
 export async function createEmailTemplate(template) {
   const { data, error } = await supabase.from("os_email_templates").insert(template).select().single();
   if (error) throw error;
+  return data;
+}
+
+export async function createVolunteerRole(role, shift) {
+  const { data, error }=await supabase.from("os_volunteer_roles").insert(role).select().single();
+  if(error) throw error;
+  const { error: shiftError }=await supabase.from("os_volunteer_shifts")
+    .insert({...shift,role_id:data.id});
+  if(shiftError) throw shiftError;
+  return data;
+}
+
+export async function joinVolunteerShift(payload) {
+  const { data, error }=await supabase.rpc("os_join_volunteer_shift",{
+    p_shift_id:payload.shiftId,p_first_name:payload.firstName,p_last_name:payload.lastName,
+    p_email:payload.email,p_phone:payload.phone || "",p_emergency_contact:payload.emergencyContact || "",
+    p_notes:payload.notes || "",p_waiver_accepted:Boolean(payload.waiverAccepted),
+  });
+  if(error) throw error;
+  return data?.[0];
+}
+
+export async function updateVolunteerSignup(id, changes) {
+  const { data, error }=await supabase.from("os_volunteer_signups").update(changes).eq("id",id).select().single();
+  if(error) throw error;
+  return data;
+}
+
+export async function listMyVolunteerSignups() {
+  if(!configured) return [];
+  const { data, error }=await supabase.from("os_volunteer_signups")
+    .select("*,os_volunteer_shifts(*,os_volunteer_roles(name,os_events(name,location_name)))")
+    .order("created_at",{ascending:false});
+  if(error) throw error;
   return data;
 }
 
