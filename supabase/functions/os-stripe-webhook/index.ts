@@ -123,6 +123,9 @@ Deno.serve(async (request) => {
           stripe_payment_intent_id: String(session.payment_intent || ""),
           reservation_expires_at: null,
         }).eq("id", registrationId).neq("payment_status", "paid");
+        if(session.metadata?.openstart_lottery_application_id){
+          await admin.rpc("os_confirm_lottery_registration",{p_registration_id:registrationId});
+        }
         await sendConfirmationEmail(admin, registrationId);
       }
     }

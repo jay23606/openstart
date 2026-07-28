@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=29"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=29"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=30"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=30"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -127,6 +127,28 @@ test("event publishing is guided and server-authoritative", async () => {
   assert.match(migration,/os_enforce_event_publish_readiness/);
   assert.match(migration,/Finish Stripe setup before publishing a paid event/);
   assert.match(migration,/Showcase events cannot be published/);
+});
+
+test("the lottery lifecycle is immutable, auditable, and payment verified", async () => {
+  const [app,data,migration,lottery,webhook,workflow] = await Promise.all([
+    read("app.js"),
+    read("data.js"),
+    read("supabase/migrations/20260729140000_lottery_lifecycle.sql"),
+    read("supabase/functions/os-lottery/index.ts"),
+    read("supabase/functions/os-stripe-webhook/index.ts"),
+    read(".github/workflows/campaigns.yml"),
+  ]);
+  assert.match(app,/lotteryLifecycleForm/);
+  assert.match(app,/lotteryCheckoutForm/);
+  assert.match(data,/os-lottery/);
+  assert.match(migration,/weighted-exponential-v1/);
+  assert.match(migration,/This lottery draw is already finalized/);
+  assert.match(migration,/os_process_lottery_expirations/);
+  assert.match(migration,/revoke update on table public\.os_lottery_applications/);
+  assert.match(lottery,/openstart_lottery_application_id/);
+  assert.match(lottery,/os_reserve_lottery_registration/);
+  assert.match(webhook,/os_confirm_lottery_registration/);
+  assert.match(workflow,/expired lottery invitations/);
 });
 
 test("no framework runtime is referenced by the application", async () => {
