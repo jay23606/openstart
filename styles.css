@@ -240,6 +240,7 @@ dialog::backdrop { background: #071b1488; }
 .form-message { color: var(--green); font-size: 12px; min-height: 1em; }
 .modal .form-heading p { color: var(--green); }
 .modal h3 { border-top: 1px solid var(--line); font-size: 13px; margin: 8px 0 0; padding-top: 20px; }
+.modal-note { background: var(--cream); border-left: 4px solid var(--green); color: var(--muted); font-size: 13px; line-height: 1.6; padding: 14px 16px; }
 .check-label { align-items: center; display: flex; gap: 9px; }
 .check-label input { width: auto; }
 
@@ -337,6 +338,21 @@ footer b { color: white; }
 .runner-result b { color: var(--green); font-family: Georgia,serif; font-size: 20px; }
 .runner-result span { color: var(--muted); font-size: 10px; }
 .card-actions { display: flex; gap: 8px; }
+.checklist-progress { align-items: center; display: grid; gap: 12px; grid-template-columns: 1fr auto; margin-bottom: 24px; }
+.checklist-progress span { color: var(--muted); font-size: 13px; }
+.checklist-progress span b { color: var(--ink); }
+.checklist-progress > strong { color: var(--green); }
+.checklist-progress > i { background: var(--cream); border-radius: 99px; grid-column: 1 / -1; height: 9px; overflow: hidden; }
+.checklist-progress > i em { background: var(--green); display: block; height: 100%; transition: width .2s; }
+.checklist-list { border-top: 1px solid var(--line); margin-bottom: 24px; }
+.checklist-list article { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 12px; grid-template-columns: 30px 1fr 30px; padding: 13px 2px; }
+.checklist-list article.complete span { opacity: .58; text-decoration: line-through; }
+.checklist-list span b, .checklist-list span small { display: block; }
+.checklist-list span small { color: var(--muted); font-size: 11px; margin-top: 4px; text-transform: capitalize; }
+.checklist-list .overdue { color: #a33; font-weight: 800; }
+.checklist-toggle { background: white; border: 2px solid var(--green); border-radius: 50%; color: var(--green); cursor: pointer; font-weight: 900; height: 26px; padding: 0; width: 26px; }
+.checklist-list article.complete .checklist-toggle { background: var(--green); color: white; }
+.icon-button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 21px; }
 .result-publish-state { align-items: center; background: var(--cream); display: flex; justify-content: space-between; margin-bottom: 16px; padding: 14px; }
 .result-publish-state span { color: var(--muted); font-size: 11px; }
 .csv-import { border: 1px solid var(--line); margin-bottom: 22px; padding: 16px; }
@@ -482,6 +498,7 @@ footer b { color: white; }
   .sandbox-badge { display: none; }
   .help-grid { grid-template-columns: 1fr; }
   .help-support { align-items: stretch; grid-template-columns: 1fr; }
+  .card-actions { flex-wrap: wrap; }
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
   .runner-entry-meta { text-align: left; }
 }

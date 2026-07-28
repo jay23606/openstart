@@ -36,6 +36,10 @@ There is no frontend framework, bundler, or build step.
   limits, health checks, account export/deletion, CSP, and Playwright smoke tests
 - Branded race series with event calendars, configurable placement points,
   eligibility rules, tie-breakers, individual/team standings, and CSV reporting
+- Private event duplication that carries reusable registration, website,
+  sponsor, merchandise, and deadline configuration into a new race date
+- Operational readiness checklists with due dates, completion tracking,
+  starter tasks, custom tasks, and organizer audit history
 - Device-local demo mode when Supabase has not been configured
 
 ## Help and sandbox use

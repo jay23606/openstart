@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=24";
+} from "./core.js?v=25";
 import {
-  accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion, createSeries,
+  accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
-  deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID, removeSeriesEvent,
+  deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
-  seriesAction, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=24";
+  seriesAction, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=25";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -44,7 +44,7 @@ const helpArticles=[
   {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation",body:"Open an event, choose Register now, enter each participant, then continue to Stripe Checkout for paid entries. OpenStart confirms a paid registration only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
   {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
   {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},
-  {audience:"Organizers",title:"Create and publish an event",keywords:"organizer create event publish website branding sections sponsor",body:"Open Organizer → Create event. Configure registration options first, then open the event roster. Website controls branding, content sections, sponsors, preview, and publishing. Draft events and draft website content are visible only to you."},
+  {audience:"Organizers",title:"Create, duplicate, and prepare an event",keywords:"organizer create duplicate template checklist readiness event publish website branding sections sponsor",body:"Open Organizer → Create event, or open an existing event and select Duplicate to create a private draft for another year. The copy includes reusable configuration but never participants or payments. Use Checklist to track readiness, deadlines, and custom operational tasks before publishing."},
   {audience:"Organizers",title:"Stripe payments and payouts",keywords:"organizer stripe connect sandbox payment payout refund fee",body:"Select Connect Stripe sandbox and complete Stripe-hosted onboarding. The account must have charges and payouts enabled. Registration funds use destination charges; OpenStart retains the configured application fee. Use test card 4242 4242 4242 4242 in sandbox."},
   {audience:"Organizers",title:"Registration, pricing, and merchandise",keywords:"organizer roster question waiver promo waitlist price product donation inventory",body:"From an event roster you can manage participants, questions, waivers, scheduled pricing, promo codes, waitlists, products, inventory, donations, and financial exports. Payment and capacity decisions remain server-authoritative."},
   {audience:"Organizers",title:"Communications",keywords:"organizer email campaign resend template audience unsubscribe",body:"Open Communications to preview an audience, send yourself a test, save templates, schedule messages, and review deliveries. Participant delivery requires a verified Resend sending domain. Marketing campaigns respect unsubscribe records."},
@@ -296,7 +296,7 @@ function renderDashboard() {
           <div class="table-header"><span>Event</span><span>Status</span><span>Registrations</span><span>Date</span></div>
           ${state.events.map((event) => `
             <button class="table-row" data-roster="${event.id}" type="button">
-              <span><b>${escapeHtml(event.name)}</b><small>${escapeHtml(event.location_name)}</small></span>
+              <span><b>${escapeHtml(event.name)}</b><small>${escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
               <span><i class="status-dot ${event.status}"></i>${event.status}</span>
               <span>${eventRegistrations(event.id).filter((registration) => registration.status === "confirmed").length}</span>
               <span>${displayDate(event.starts_at)} <b>›</b></span>
@@ -357,7 +357,7 @@ function renderRoster(event) {
   const registrations = eventRegistrations(event.id);
   document.querySelector("#roster-slot").innerHTML = `
     <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
+      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
       <div class="roster-toolbar">
         <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
@@ -751,6 +751,44 @@ function eventForm() {
     </section>`;
 }
 
+function duplicateEventForm(event) {
+  const suggestedDate = new Date(new Date(event.starts_at).setFullYear(new Date(event.starts_at).getFullYear() + 1)).toISOString().slice(0,10);
+  return `<section class="modal"><div class="form-heading"><div><p>Reusable event</p><h2>Duplicate ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <p class="modal-note">Creates a private draft with registration options, questions, waiver, website content, sponsors, products, and shifted registration deadlines. Participants, payments, results, and staff are never copied.</p>
+    <form id="duplicate-event-form" data-source-event-id="${event.id}">
+      <label>New event name<input name="name" value="${escapeHtml(event.name)}" required minlength="3" maxlength="120"></label>
+      <label>New event date<input name="date" type="date" value="${suggestedDate}" required></label>
+      <button class="primary-button" type="submit">Create draft copy</button>
+    </form></section>`;
+}
+
+function checklistForm(event) {
+  const items = [...(event.os_event_checklist_items || [])].sort((a,b) =>
+    Number(Boolean(a.completed_at)) - Number(Boolean(b.completed_at)) ||
+    new Date(a.due_at || "9999-12-31") - new Date(b.due_at || "9999-12-31") ||
+    a.sort_order - b.sort_order
+  );
+  const complete = items.filter((item) => item.completed_at).length;
+  const percent = items.length ? Math.round(complete / items.length * 100) : 0;
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Operational readiness</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="checklist-progress"><span><b>${complete} of ${items.length}</b> tasks complete</span><strong>${percent}% ready</strong><i><em style="width:${percent}%"></em></i></div>
+    <div class="checklist-list">${items.map((item) => {
+      const overdue = !item.completed_at && item.due_at && new Date(item.due_at) < new Date();
+      return `<article class="${item.completed_at ? "complete" : ""}">
+        <button class="checklist-toggle" data-toggle-checklist="${item.id}" data-event="${event.id}" data-complete="${item.completed_at ? "true" : "false"}" type="button" aria-label="${item.completed_at ? "Mark incomplete" : "Mark complete"}">${item.completed_at ? "✓" : ""}</button>
+        <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.category.replaceAll("_"," "))}${item.due_at ? ` · <time class="${overdue ? "overdue" : ""}">${overdue ? "Overdue · " : ""}${displayDate(item.due_at)}</time>` : " · No due date"}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></span>
+        <button class="icon-button" data-delete-checklist="${item.id}" data-event="${event.id}" type="button" aria-label="Delete ${escapeHtml(item.title)}">×</button>
+      </article>`;
+    }).join("") || '<div class="empty-state">No checklist tasks yet.</div>'}</div>
+    <h3>Add a task</h3>
+    <form id="checklist-item-form" data-event-id="${event.id}">
+      <label>Task<input name="title" placeholder="Confirm medical team" required maxlength="180"></label>
+      <div class="split-fields"><label>Category<select name="category"><option value="planning">Planning</option><option value="registration">Registration</option><option value="course">Course</option><option value="volunteers">Volunteers</option><option value="communications">Communications</option><option value="race_day">Race day</option><option value="post_event">Post-event</option><option value="operations">Other operations</option></select></label><label>Due date<input name="due_at" type="date"></label></div>
+      <label>Notes<input name="notes" placeholder="Optional owner, vendor, or detail"></label>
+      <button class="primary-button" type="submit">Add task</button>
+    </form></section>`;
+}
+
 function openDialog(content) {
   dialogContent.innerHTML = content;
   dialog.showModal();
@@ -901,6 +939,22 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.dataset.duplicateEvent) openDialog(duplicateEventForm(eventById(target.dataset.duplicateEvent)));
+  if (target.dataset.checklist) openDialog(checklistForm(eventById(target.dataset.checklist)));
+  if (target.dataset.toggleChecklist) {
+    await updateChecklistItem(target.dataset.toggleChecklist, {
+      completed_at: target.dataset.complete === "true" ? null : new Date().toISOString(),
+    });
+    await loadDashboard();
+    openDialog(checklistForm(eventById(target.dataset.event)));
+  }
+  if (target.dataset.deleteChecklist) {
+    if (!confirm("Delete this checklist task?")) return;
+    await deleteChecklistItem(target.dataset.deleteChecklist);
+    await loadDashboard();
+    openDialog(checklistForm(eventById(target.dataset.event)));
+    showNotice("Checklist task deleted.");
+  }
   if (target.matches("[data-series-manager]")) openDialog(seriesManagerForm());
   if (target.dataset.configureSeries) openDialog(seriesSettingsForm(state.series.find((series)=>series.id===target.dataset.configureSeries)));
   if (target.dataset.viewSeries) {
@@ -1589,6 +1643,32 @@ document.addEventListener("submit", async (event) => {
       dialog.close();
       await go("runner");
       showNotice("Your start wave was updated.");
+    }
+
+    if (form.id === "duplicate-event-form") {
+      const name = data.get("name").trim();
+      await duplicateEvent(
+        form.dataset.sourceEventId,
+        name,
+        new Date(`${data.get("date")}T12:00:00`).toISOString(),
+      );
+      dialog.close();
+      await go("dashboard");
+      showNotice(`${name} was created as a private draft.`);
+    }
+
+    if (form.id === "checklist-item-form") {
+      await createChecklistItem({
+        event_id: form.dataset.eventId,
+        title: data.get("title").trim(),
+        category: data.get("category"),
+        due_at: data.get("due_at") ? new Date(`${data.get("due_at")}T12:00:00`).toISOString() : null,
+        notes: data.get("notes").trim(),
+        sort_order: (eventById(form.dataset.eventId).os_event_checklist_items || []).length * 10 + 10,
+      });
+      await loadDashboard();
+      openDialog(checklistForm(eventById(form.dataset.eventId)));
+      showNotice("Checklist task added.");
     }
 
     if (form.id === "event-form") {

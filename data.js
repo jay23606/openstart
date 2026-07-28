@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=24";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=23";
+import { configured, supabase } from "./core.js?v=25";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=25";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -167,7 +167,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*))), os_event_sections(*), os_event_sponsors(*), os_waves(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*,os_volunteer_signups(*))), os_event_sections(*), os_event_sponsors(*), os_waves(*), os_event_checklist_items(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -509,6 +509,94 @@ export async function createEvent(event, tier) {
     throw tierError;
   }
   return { ...created, os_event_tiers: [createdTier] };
+}
+
+export async function duplicateEvent(sourceEventId, name, startsAt) {
+  if (!configured) {
+    const state = demoState();
+    const source = state.events.find((event) => event.id === sourceEventId);
+    if (!source) throw new Error("Source event was not found");
+    const created = structuredClone(source);
+    created.id = crypto.randomUUID();
+    created.name = name;
+    created.slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}-${Date.now().toString().slice(-6)}`;
+    created.starts_at = startsAt;
+    created.status = "draft";
+    created.website_published = false;
+    created.os_event_tiers = (created.os_event_tiers || []).map((tier) => ({ ...tier, id: crypto.randomUUID(), event_id: created.id }));
+    created.os_event_checklist_items = defaultChecklist(created.id, startsAt);
+    state.events.push(created);
+    saveDemo(state);
+    return created.id;
+  }
+  const { data, error } = await supabase.rpc("os_duplicate_event", {
+    p_source_event_id: sourceEventId,
+    p_name: name,
+    p_starts_at: startsAt,
+  });
+  if (error) throw error;
+  return data;
+}
+
+function defaultChecklist(eventId, startsAt) {
+  const day = 86400000;
+  return [
+    ["Confirm permits and insurance","planning",-120],
+    ["Publish registration and event website","registration",-100],
+    ["Confirm course and aid-station plan","course",-60],
+    ["Open volunteer shifts","volunteers",-45],
+    ["Send participant race guide","communications",-7],
+    ["Assign bibs and prepare check-in","race_day",-3],
+    ["Confirm timing and emergency contacts","race_day",-1],
+    ["Publish official results","post_event",1],
+    ["Close financials and send follow-up","post_event",7],
+  ].map(([title,category,offset],sortOrder) => ({
+    id: crypto.randomUUID(), event_id: eventId, title, category,
+    due_at: new Date(new Date(startsAt).getTime() + offset * day).toISOString(),
+    completed_at: null, notes: "", sort_order: (sortOrder + 1) * 10,
+  }));
+}
+
+export async function createChecklistItem(item) {
+  if (!configured) {
+    const state = demoState();
+    const event = state.events.find((candidate) => candidate.id === item.event_id);
+    const created = { ...item, id: crypto.randomUUID(), completed_at: null };
+    event.os_event_checklist_items ||= [];
+    event.os_event_checklist_items.push(created);
+    saveDemo(state);
+    return created;
+  }
+  const { data, error } = await supabase.from("os_event_checklist_items").insert(item).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateChecklistItem(id, changes) {
+  if (!configured) {
+    const state = demoState();
+    const item = state.events.flatMap((event) => event.os_event_checklist_items || []).find((candidate) => candidate.id === id);
+    if (!item) throw new Error("Checklist item was not found");
+    Object.assign(item, changes);
+    saveDemo(state);
+    return item;
+  }
+  const { data, error } = await supabase.from("os_event_checklist_items").update(changes).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteChecklistItem(id) {
+  if (!configured) {
+    const state = demoState();
+    state.events.forEach((event) => {
+      event.os_event_checklist_items = (event.os_event_checklist_items || []).filter((item) => item.id !== id);
+    });
+    saveDemo(state);
+    return;
+  }
+  const { error } = await supabase.from("os_event_checklist_items").delete().eq("id", id);
+  if (error) throw error;
 }
 
 async function createDemoRegistration(registration) {
