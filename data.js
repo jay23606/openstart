@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=21";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=21";
+import { configured, supabase } from "./core.js?v=22";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=22";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 

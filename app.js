@@ -1,6 +1,6 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=21";
+} from "./core.js?v=22";
 import {
   accountAction, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
@@ -8,7 +8,7 @@ import {
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=21";
+} from "./data.js?v=22";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -33,7 +33,7 @@ const state = {
   emailTemplates: [],
   volunteerSignups: [],
   auditLog: [],
-  pendingView: "dashboard",
+  pendingView: "runner",
   pendingTransfer: null,
 };
 
@@ -1024,7 +1024,7 @@ document.addEventListener("submit", async (event) => {
       }
       state.session = result.data.session;
       dialog.close();
-      await go(state.pendingView || "dashboard");
+      await go(state.pendingView || "runner");
     }
 
     if (form.id === "registration-form") {
@@ -1524,7 +1524,10 @@ window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
   showNotice(event.reason?.message || "Something went wrong.");
 });
-authButton.addEventListener("click", () => configured ? openDialog(authForm()) : showNotice("Add Supabase credentials in config.js to enable accounts."));
+authButton.addEventListener("click", () => {
+  state.pendingView="runner";
+  configured ? openDialog(authForm()) : showNotice("Add Supabase credentials in config.js to enable accounts.");
+});
 signOutButton.addEventListener("click", async () => {
   await supabase.auth.signOut();
   state.session = null;
