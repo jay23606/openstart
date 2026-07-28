@@ -288,6 +288,19 @@ footer b { color: white; }
 .pass-modal .form-heading { text-align: left; }
 .pass-qr svg { height: auto; max-width: 300px; width: 100%; }
 .pass-note { color: var(--muted); font-size: 12px; margin: 18px 0 0; }
+.product-options > div { align-items: end; background: var(--cream); display: grid; gap: 10px; grid-template-columns: 1fr 1fr 80px; margin-bottom: 8px; padding: 14px; }
+.product-options b, .product-options small { display: block; }
+.product-options small { color: var(--muted); margin-top: 4px; }
+.donation-fields { background: #eef5ff; display: grid; gap: 12px; padding: 16px; }
+.product-admin-list article { border-top: 1px solid var(--line); padding: 15px 0; }
+.product-admin-list article h3 { border: 0; padding: 0; }
+.product-admin-list article p { color: var(--muted); font-size: 11px; }
+.product-admin-list article span { background: var(--cream); border-radius: 999px; display: inline-block; font-size: 10px; margin: 3px; padding: 7px 9px; }
+.fulfillment-item { background: var(--cream); padding: 6px; }
+.fulfillment-item button { background: none; border: 0; color: var(--green); cursor: pointer; font-size: 10px; font-weight: 800; }
+.revenue-categories { display: grid; gap: 10px; grid-template-columns: repeat(3,1fr); margin-bottom: 18px; }
+.revenue-categories span { background: var(--cream); color: var(--muted); font-size: 10px; padding: 14px; }
+.revenue-categories b { color: var(--ink); display: block; font-family: Georgia,serif; font-size: 25px; margin-bottom: 4px; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }

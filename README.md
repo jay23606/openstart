@@ -18,6 +18,7 @@ There is no frontend framework, bundler, or build step.
 - Multi-person orders, itemized Stripe Checkout, teams, clubs, and relay legs
 - Signed QR passes, camera scanning, bib assignment, packet pickup, and race-day check-in
 - Event staff roles, walk-up registration, and race-day audit history
+- Products, variants, atomic inventory, donations, and packet-pickup fulfillment
 - Row-level security for organizer and participant data
 - A provider-neutral payment boundary that leaves paid entries pending
 - Installable PWA shell with an offline cache

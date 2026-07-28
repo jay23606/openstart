@@ -45,7 +45,7 @@ Deno.serve(async (request) => {
         p_promo_code: body.promoCode || null,
       });
       if (orderError) throw orderError;
-      const order = orderRows?.[0];
+      let order = orderRows?.[0];
       if (!order) throw new Error("Order could not be reserved");
       orderId = order.order_id;
 
@@ -96,6 +96,16 @@ Deno.serve(async (request) => {
         }
       }
 
+      const { data: extrasRows, error: extrasError } = await admin.rpc("os_add_order_extras", {
+        p_order_id: order.order_id,
+        p_items: Array.isArray(body.items) ? body.items : [],
+        p_donation_cents: Math.max(0, Math.round(Number(body.donationCents) || 0)),
+        p_dedication: body.dedication || null,
+        p_anonymous: body.anonymousDonation === true,
+      });
+      if (extrasError) throw extrasError;
+      if (extrasRows?.[0]) order = { ...order, total_cents: extrasRows[0].total_cents };
+
       if (order.total_cents === 0) {
         await admin.from("os_orders").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", order.order_id);
         return json(request, { status: "confirmed", orderId: order.order_id, registrationIds: order.registration_ids });
@@ -105,6 +115,9 @@ Deno.serve(async (request) => {
       const { data: reservedRegistrations, error: registrationsError } = await admin.from("os_registrations")
         .select("id,amount_cents,first_name,last_name,os_event_tiers(name)").in("id", order.registration_ids);
       if (registrationsError) throw registrationsError;
+      const { data: extras, error: extrasFetchError } = await admin.from("os_order_items")
+        .select("name,unit_amount_cents,quantity").eq("order_id", order.order_id);
+      if (extrasFetchError) throw extrasFetchError;
       const successUrl = new URL(cleanUrl(body.successUrl));
       successUrl.searchParams.set("payment", "success");
       successUrl.searchParams.set("order", order.order_id);
@@ -116,11 +129,14 @@ Deno.serve(async (request) => {
         mode: "payment", customer_email: String(body.email), client_reference_id: order.order_id,
         success_url: successUrl.toString(), cancel_url: cancelUrl.toString(),
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-        line_items: reservedRegistrations.map((item) => ({
+        line_items: [...reservedRegistrations.map((item) => ({
           quantity: 1,
           price_data: { currency: "usd", unit_amount: item.amount_cents,
             product_data: { name: `${order.event_name} — ${(item.os_event_tiers as unknown as Record<string,unknown>)?.name || "Entry"} — ${item.first_name} ${item.last_name}` } },
-        })),
+        })), ...(extras || []).map((item) => ({
+          quantity: item.quantity,
+          price_data: { currency: "usd", unit_amount: item.unit_amount_cents, product_data: { name: item.name } },
+        }))],
         payment_intent_data: { application_fee_amount: fee, transfer_data: { destination: order.stripe_account_id },
           metadata: { openstart_order_id: order.order_id } },
         metadata: { openstart_order_id: order.order_id },

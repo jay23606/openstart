@@ -71,7 +71,7 @@ Deno.serve(async (request) => {
       const term = String(body.term || "").trim().replace(/[,%()]/g, "");
       if (term.length < 2) throw new Error("Enter at least two characters");
       const { data, error } = await admin.from("os_registrations")
-        .select("id,first_name,last_name,email,bib_number,status,payment_status,packet_picked_up_at,checked_in_at,tier_id,os_event_tiers(name)")
+        .select("id,first_name,last_name,email,bib_number,status,payment_status,packet_picked_up_at,checked_in_at,tier_id,os_event_tiers(name),os_orders(os_order_items(id,item_type,name,quantity,fulfilled_at))")
         .eq("event_id", body.eventId)
         .or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%,bib_number.ilike.%${term}%`)
         .limit(25);
@@ -93,6 +93,18 @@ Deno.serve(async (request) => {
         p_action: action === "pickup" ? "packet_picked_up" : "checked_in", p_details: {},
       });
       return json(request, { ok: true, ...changes });
+    }
+
+    if (action === "fulfill_item") {
+      const { data: item, error } = await admin.from("os_order_items")
+        .select("id,fulfilled_at,os_orders!inner(event_id)").eq("id", body.itemId).single();
+      if (error) throw error;
+      const customerOrder = item.os_orders as unknown as Record<string, unknown>;
+      await authorizeEvent(String(customerOrder.event_id), ["admin","packet_pickup"]);
+      if (item.fulfilled_at) throw new Error("This item was already fulfilled");
+      const fulfilledAt = new Date().toISOString();
+      await admin.from("os_order_items").update({ fulfilled_at: fulfilledAt, fulfilled_by: user.id }).eq("id", item.id).is("fulfilled_at", null);
+      return json(request, { ok: true, fulfilledAt });
     }
 
     if (action === "bulk_assign_bibs") {

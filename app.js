@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=14";
+} from "./core.js?v=15";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  createManualRegistration, createPromoCode, createScheduledPrice,
+  createManualRegistration, createProduct, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listCaptainTeams, listOrganizerEvents, listPublishedEvents, listRegistrations,
+  getOrganizerProfile, listCaptainTeams, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
-  updateRegistration, updateWaitlist,
-} from "./data.js?v=14";
+  updateOrderItem, updateRegistration, updateWaitlist,
+} from "./data.js?v=15";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -27,6 +27,7 @@ const state = {
   profile: null,
   runnerRegistrations: [],
   captainTeams: [],
+  orderItems: [],
   pendingView: "dashboard",
   pendingTransfer: null,
 };
@@ -137,6 +138,9 @@ function renderDashboard() {
     const race = eventById(registration.event_id);
     return sum + Math.round(registration.amount_cents * (race?.platform_fee_bps || 500) / 10000);
   }, 0);
+  const paidItems = state.orderItems.filter((item) => ["paid","partially_refunded"].includes(item.os_orders?.status));
+  const merchandiseRevenue = paidItems.filter((item) => item.item_type === "product").reduce((sum,item) => sum + item.amount_cents, 0);
+  const donationRevenue = paidItems.filter((item) => item.item_type === "donation").reduce((sum,item) => sum + item.amount_cents, 0);
   const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
   const stripeStarted = Boolean(state.profile?.stripe_account_id);
   page.innerHTML = `
@@ -169,6 +173,7 @@ function renderDashboard() {
       </div>
       <div class="dashboard-card">
         <div class="card-heading"><div><h2>Financial overview</h2><p>Confirmed registration revenue and OpenStart application fees.</p></div><button class="subtle-button" data-export-finance type="button">Export financial CSV</button></div>
+        <div class="revenue-categories"><span><b>${money(gross)}</b>Registrations</span><span><b>${money(merchandiseRevenue)}</b>Merchandise</span><span><b>${money(donationRevenue)}</b>Donations</span></div>
         <div class="finance-grid">${state.events.map((event) => {
           const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
           const revenue = entries.reduce((sum, item) => sum + item.amount_cents, 0);
@@ -218,6 +223,7 @@ function renderRoster(event) {
         <button class="subtle-button" data-add-participant="${event.id}" type="button">+ Manual entry</button>
         <button class="subtle-button" data-export-roster="${event.id}" type="button">Export CSV</button>
         <button class="subtle-button" data-race-day="${event.id}" type="button">Race day</button>
+        <button class="subtle-button" data-product-settings="${event.id}" type="button">Products</button>
         <button class="subtle-button" data-pricing-settings="${event.id}" type="button">Pricing</button>
         <button class="subtle-button" data-registration-settings="${event.id}" type="button">Form settings</button>
       </div>
@@ -283,6 +289,8 @@ function registrationForm(event) {
           <label>Team name<input name="team_name"></label>
           <div class="split-fields"><label>Category<select name="team_category"><option>club</option><option>corporate</option><option>family</option><option>relay</option></select></label><label>Access code<input name="team_code" autocomplete="off"></label></div>
         </div>
+        ${(event.os_products || []).length ? `<h3>Add-ons</h3><div class="product-options">${event.os_products.filter((product) => product.active).map((product) => `<div><span><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.description)}</small></span><select data-product-variant><option value="">No thanks</option>${product.os_product_variants.map((variant) => `<option value="${variant.id}">${escapeHtml(variant.name)} · ${money(variant.price_cents)}${variant.inventory !== null ? ` · ${variant.inventory} total` : ""}</option>`).join("")}</select><input data-product-quantity type="number" min="1" max="10" value="1" aria-label="${escapeHtml(product.name)} quantity"></div>`).join("")}</div>` : ""}
+        ${event.donations_enabled ? `<h3>Support ${escapeHtml(event.beneficiary_name || event.name)}</h3><div class="donation-fields"><label>Donation amount<input name="donation_amount" type="number" min="0" step=".01" placeholder="0.00"></label><label>Dedication or message<input name="dedication" maxlength="300"></label><label class="check-label"><input name="anonymous_donation" type="checkbox"> Make this donation anonymous</label></div>` : ""}
         <button class="primary-button" type="submit">Continue to group checkout</button>
       </form>
     </section>`;
@@ -364,6 +372,14 @@ function pricingSettingsForm(event) {
   </section>`;
 }
 
+function productSettingsForm(event) {
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Products & fundraising</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="product-admin-list">${(event.os_products || []).map((product) => `<article><h3>${escapeHtml(product.name)}</h3><p>${escapeHtml(product.description)}</p>${product.os_product_variants.map((variant) => `<span>${escapeHtml(variant.name)} · ${money(variant.price_cents)} · ${variant.inventory === null ? "unlimited" : `${variant.inventory} inventory`}</span>`).join("")}</article>`).join("") || '<div class="empty-state">No products configured.</div>'}</div>
+    <h3>Add product</h3><form id="product-form" data-event-id="${event.id}"><label>Product name<input name="name" placeholder="Race shirt" required></label><label>Description<input name="description"></label><div class="split-fields"><label>First variant<input name="variant_name" placeholder="Medium" required></label><label>Price<input name="price" type="number" min="0" step=".01" required></label></div><div class="split-fields"><label>Inventory<input name="inventory" type="number" min="0" placeholder="Blank for unlimited"></label><label>Fulfillment<select name="fulfillment_type"><option value="packet_pickup">Packet pickup</option><option value="digital">Digital</option><option value="none">No fulfillment</option></select></label></div><button class="primary-button" type="submit">Create product</button></form>
+    <h3>Donations</h3><form id="donation-settings-form" data-event-id="${event.id}"><label class="check-label"><input name="donations_enabled" type="checkbox" ${event.donations_enabled ? "checked" : ""}> Accept donations during registration</label><div class="split-fields"><label>Beneficiary<input name="beneficiary_name" value="${escapeHtml(event.beneficiary_name || "")}"></label><label>Fundraising goal<input name="fundraising_goal" type="number" min="0" step=".01" value="${event.fundraising_goal_cents ? event.fundraising_goal_cents / 100 : ""}"></label></div><button class="subtle-button" type="submit">Save fundraising settings</button></form>
+  </section>`;
+}
+
 function raceDayForm(event) {
   const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
   const pickedUp = entries.filter((item) => item.packet_picked_up_at).length;
@@ -384,7 +400,7 @@ function raceDayForm(event) {
 }
 
 function raceDayResults(items) {
-  return items.length ? `<div class="race-day-results">${items.map((item) => `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(item.os_event_tiers?.name || "")} · Bib ${escapeHtml(item.bib_number || "—")}</small></span><span class="checkin-actions"><button class="subtle-button" data-pickup="${item.id}" type="button">${item.packet_picked_up_at ? "✓ Packet" : "Mark packet"}</button><button class="primary-button" data-checkin="${item.id}" type="button">${item.checked_in_at ? "✓ Checked in" : "Check in"}</button></span></div>`).join("")}</div>` : '<div class="empty-state">No matching participants.</div>';
+  return items.length ? `<div class="race-day-results">${items.map((item) => { const products = item.os_orders?.os_order_items?.filter((orderItem) => orderItem.item_type === "product") || []; return `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(item.os_event_tiers?.name || "")} · Bib ${escapeHtml(item.bib_number || "—")}</small>${products.map((product) => `<small class="fulfillment-item">${escapeHtml(product.name)} × ${product.quantity} <button data-fulfill-item="${product.id}" type="button">${product.fulfilled_at ? "✓ Fulfilled" : "Mark fulfilled"}</button></small>`).join("")}</span><span class="checkin-actions"><button class="subtle-button" data-pickup="${item.id}" type="button">${item.packet_picked_up_at ? "✓ Packet" : "Mark packet"}</button><button class="primary-button" data-checkin="${item.id}" type="button">${item.checked_in_at ? "✓ Checked in" : "Check in"}</button></span></div>`; }).join("")}</div>` : '<div class="empty-state">No matching participants.</div>';
 }
 
 function passForm(item, pass) {
@@ -464,14 +480,20 @@ function exportRoster(event) {
 }
 
 function exportFinancials() {
-  const headers = ["Event", "Participant", "Email", "Status", "Payment", "Base amount", "Discount", "Collected", "OpenStart fee", "Estimated organizer net", "Created"];
+  const headers = ["Category", "Event", "Description", "Email", "Status", "Payment", "Base amount", "Discount", "Collected", "OpenStart fee", "Estimated organizer net", "Created"];
   const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const rows = state.registrations.map((item) => {
     const race = eventById(item.event_id);
     const fee = Math.round(item.amount_cents * (race?.platform_fee_bps || 500) / 10000);
-    return [race?.name, `${item.first_name} ${item.last_name}`, item.email, item.status, item.payment_status,
+    return ["registration", race?.name, `${item.first_name} ${item.last_name}`, item.email, item.status, item.payment_status,
       ((item.base_amount_cents || item.amount_cents) / 100).toFixed(2), ((item.discount_cents || 0) / 100).toFixed(2),
       (item.amount_cents / 100).toFixed(2), (fee / 100).toFixed(2), ((item.amount_cents - fee) / 100).toFixed(2), item.created_at];
+  });
+  state.orderItems.forEach((item) => {
+    const event = eventById(item.os_orders?.event_id);
+    rows.push([item.item_type, event?.name || "", item.name, "", item.os_orders?.status || "", item.os_orders?.status === "paid" ? "paid" : "",
+      (item.amount_cents / 100).toFixed(2), "0.00", (item.amount_cents / 100).toFixed(2), "0.00",
+      (item.amount_cents / 100).toFixed(2), item.created_at]);
   });
   const blob = new Blob([[headers, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
@@ -501,6 +523,7 @@ async function loadDashboard() {
     getOrganizerProfile(userId),
   ]);
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
+  state.orderItems = await listOrganizerOrderItems(state.events.map((event) => event.id));
 }
 
 async function loadRunnerDashboard() {
@@ -571,6 +594,7 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.addParticipant) openDialog(manualRegistrationForm(eventById(target.dataset.addParticipant)));
   if (target.dataset.registrationSettings) openDialog(registrationSettingsForm(eventById(target.dataset.registrationSettings)));
   if (target.dataset.pricingSettings) openDialog(pricingSettingsForm(eventById(target.dataset.pricingSettings)));
+  if (target.dataset.productSettings) openDialog(productSettingsForm(eventById(target.dataset.productSettings)));
   if (target.dataset.raceDay) openDialog(raceDayForm(eventById(target.dataset.raceDay)));
   if (target.dataset.startScanner) await startQrScanner(target.dataset.startScanner);
   if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
@@ -599,6 +623,12 @@ document.addEventListener("click", async (event) => {
     target.textContent = "✓ Checked in";
     target.disabled = true;
     showNotice("Participant checked in.");
+  }
+  if (target.dataset.fulfillItem) {
+    await updateOrderItem(target.dataset.fulfillItem, {});
+    target.textContent = "✓ Fulfilled";
+    target.disabled = true;
+    showNotice("Merchandise marked fulfilled.");
   }
   if (target.dataset.createTransfer) {
     const result = await registrationAction("create_transfer", { registrationId: target.dataset.createTransfer });
@@ -712,6 +742,10 @@ document.addEventListener("submit", async (event) => {
         idempotencyKey: crypto.randomUUID(),
       }));
       const teamMode = data.get("team_mode");
+      const items = Array.from(form.querySelectorAll(".product-options > div")).map((row) => ({
+        variantId: row.querySelector("[data-product-variant]").value,
+        quantity: Number(row.querySelector("[data-product-quantity]").value) || 1,
+      })).filter((item) => item.variantId);
       const result = await beginRegistration({
         eventId: race.id,
         email: data.get("purchaser_email"),
@@ -723,6 +757,10 @@ document.addEventListener("submit", async (event) => {
           category: data.get("team_category"),
           joinCode: data.get("team_code") || null,
         } : null,
+        items,
+        donationCents: Math.max(0, Math.round(Number(data.get("donation_amount") || 0) * 100)),
+        dedication: data.get("dedication") || null,
+        anonymousDonation: data.get("anonymous_donation") === "on",
         promoCode: data.get("promo_code") || null,
         joinWaitlist: data.get("join_waitlist") === "on",
         idempotencyKey: crypto.randomUUID(),
@@ -899,6 +937,30 @@ document.addEventListener("submit", async (event) => {
       await loadDashboard();
       openDialog(raceDayForm(eventById(form.dataset.eventId)));
       showNotice("Walk-up participant added.");
+    }
+
+    if (form.id === "product-form") {
+      await createProduct({
+        event_id: form.dataset.eventId, name: data.get("name"),
+        description: data.get("description") || "", fulfillment_type: data.get("fulfillment_type"),
+      }, {
+        name: data.get("variant_name"), price_cents: Math.round(Number(data.get("price")) * 100),
+        inventory: data.get("inventory") === "" ? null : Number(data.get("inventory")),
+      });
+      await loadDashboard();
+      openDialog(productSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Product created.");
+    }
+
+    if (form.id === "donation-settings-form") {
+      await updateEventSettings(form.dataset.eventId, {
+        donations_enabled: data.get("donations_enabled") === "on",
+        beneficiary_name: data.get("beneficiary_name") || null,
+        fundraising_goal_cents: data.get("fundraising_goal") ? Math.round(Number(data.get("fundraising_goal")) * 100) : null,
+      });
+      await loadDashboard();
+      openDialog(productSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Fundraising settings saved.");
     }
 
     if (form.id === "event-form") {

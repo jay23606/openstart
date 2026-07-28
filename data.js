@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=14";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=14";
+import { configured, supabase } from "./core.js?v=15";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=15";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*))")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*), os_teams(id,name,category,max_members,captain_user_id), os_event_staff(*), os_products(*, os_product_variants(*))")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -137,6 +137,14 @@ export async function listRegistrations(eventIds) {
     .select("*, os_registration_answers(*, os_event_questions(label)), os_registration_activity(*), os_teams(name,category)")
     .in("event_id", eventIds)
     .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function listOrganizerOrderItems(eventIds) {
+  if (!configured || !eventIds.length) return [];
+  const { data, error } = await supabase.from("os_order_items")
+    .select("*, os_orders!inner(event_id,status)").in("os_orders.event_id", eventIds);
   if (error) throw error;
   return data;
 }
@@ -229,6 +237,19 @@ export async function createPromoCode(promo) {
 export async function updateWaitlist(id, changes) {
   const { error } = await supabase.from("os_waitlist").update(changes).eq("id", id);
   if (error) throw error;
+}
+
+export async function createProduct(product, variant) {
+  const { data, error } = await supabase.from("os_products").insert(product).select().single();
+  if (error) throw error;
+  const { error: variantError } = await supabase.from("os_product_variants")
+    .insert({ ...variant, product_id: data.id });
+  if (variantError) throw variantError;
+  return data;
+}
+
+export async function updateOrderItem(id, changes) {
+  return raceDayAction("fulfill_item", { itemId: id, ...changes });
 }
 
 export async function resendConfirmation(registrationId) {
