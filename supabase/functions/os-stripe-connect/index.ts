@@ -59,6 +59,9 @@ Deno.serve(async (request) => {
       const account = await stripeV2("core/accounts", {
         contact_email: user.email,
         display_name: user.user_metadata?.display_name || user.email?.split("@")[0] || "OpenStart organizer",
+        identity: {
+          country: "US",
+        },
         dashboard: "express",
         configuration: {
           merchant: {
