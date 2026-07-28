@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=10";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=10";
+import { configured, supabase } from "./core.js?v=11";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=11";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -134,7 +134,7 @@ export async function listRegistrations(eventIds) {
   if (!configured) return demoState().registrations.filter((registration) => eventIds.includes(registration.event_id));
   const { data, error } = await supabase
     .from("os_registrations")
-    .select("*, os_registration_answers(*, os_event_questions(label))")
+    .select("*, os_registration_answers(*, os_event_questions(label)), os_registration_activity(*)")
     .in("event_id", eventIds)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -236,13 +236,18 @@ export async function resendConfirmation(registrationId) {
   return functionResult("os-registration-email", { registrationId });
 }
 
+export async function registrationAction(action, payload) {
+  if (!configured) throw new Error("Registration actions require Supabase");
+  return functionResult("os-registration-action", { action, ...payload });
+}
+
 export async function listRunnerRegistrations() {
   if (!configured) return [];
   const { error: claimError } = await supabase.rpc("os_claim_my_registrations");
   if (claimError) throw claimError;
   const { data, error } = await supabase
     .from("os_registrations")
-    .select("*, os_events(name, starts_at, location_name), os_event_tiers(name, distance_label)")
+    .select("*, os_events(name, starts_at, location_name, participant_edits_close_at, transfers_close_at, refunds_close_at, allow_transfers, allow_refund_requests), os_event_tiers(name, distance_label), os_registration_answers(*, os_event_questions(label)), os_registration_activity(*)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;

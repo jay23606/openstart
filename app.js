@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=10";
+} from "./core.js?v=11";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   createManualRegistration, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
-  listRunnerRegistrations, resendConfirmation, resetDemo, updateEventSettings,
+  listRunnerRegistrations, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
   updateRegistration, updateWaitlist,
-} from "./data.js?v=10";
+} from "./data.js?v=11";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -27,6 +27,7 @@ const state = {
   profile: null,
   runnerRegistrations: [],
   pendingView: "dashboard",
+  pendingTransfer: null,
 };
 
 const eventById = (id) => state.events.find((event) => event.id === id);
@@ -38,6 +39,7 @@ const effectivePrice = (tier) => {
     .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   return active[0]?.price_cents ?? tier.price_cents;
 };
+const localDateTime = (value) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
 
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
@@ -197,7 +199,7 @@ function renderRunnerDashboard() {
               <h2>${escapeHtml(item.os_events?.name || "Race registration")}</h2>
               <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}</small>
             </div>
-            <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span></div>
+            <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
       </div>
     </section>`;
@@ -280,17 +282,46 @@ function editRegistrationForm(item) {
     <form id="edit-registration-form" data-registration-id="${item.id}">
       <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
       <label>Email<input name="email" type="email" value="${escapeHtml(item.email)}" required></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
-      <div class="split-fields"><label>Bib number<input name="bib_number" value="${escapeHtml(item.bib_number || "")}"></label><label>Status<select name="status">${["confirmed", "pending", "cancelled", "expired"].map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div>
+      <div class="split-fields"><label>Bib number<input name="bib_number" value="${escapeHtml(item.bib_number || "")}"></label><label>Status<select name="status">${["confirmed", "pending", "cancel_requested", "cancelled", "expired"].map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div>
       <label>Organizer notes<textarea name="organizer_notes" rows="3">${escapeHtml(item.organizer_notes || "")}</textarea></label>
       ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Registration answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
-      <div class="dialog-actions"><button class="primary-button" type="submit">Save changes</button><button class="subtle-button" data-resend-confirmation="${item.id}" type="button">Resend confirmation</button></div>
+      <div class="dialog-actions"><button class="primary-button" type="submit">Save changes</button><button class="subtle-button" data-resend-confirmation="${item.id}" type="button">Resend confirmation</button>${item.payment_status === "paid" ? `<button class="danger-button" data-organizer-refund="${item.id}" type="button">Refund & cancel</button>` : `<button class="danger-button" data-organizer-cancel="${item.id}" type="button">Cancel entry</button>`}</div>
     </form></section>`;
+}
+
+function runnerRegistrationForm(item) {
+  const activity = [...(item.os_registration_activity || [])].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  return `<section class="modal"><div class="form-heading"><div><p>My registration</p><h2>${escapeHtml(item.os_events?.name || "Race")}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="runner-registration-form" data-registration-id="${item.id}">
+      <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
+      <label>Email<input value="${escapeHtml(item.email)}" disabled></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
+      <div class="registration-facts"><span><b>Status</b>${escapeHtml(item.status)}</span><span><b>Payment</b>${escapeHtml(item.payment_status)}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Registration ID</b>${escapeHtml(item.id)}</span></div>
+      ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Your answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
+      <button class="primary-button" type="submit">Save participant details</button>
+    </form>
+    <div class="self-service-actions">
+      ${item.status === "confirmed" && item.os_events?.allow_transfers ? `<button class="subtle-button" data-create-transfer="${item.id}" type="button">Create transfer link</button>` : ""}
+      ${item.status === "confirmed" && item.os_events?.allow_refund_requests ? `<button class="danger-button" data-request-cancel="${item.id}" type="button">Request cancellation</button>` : ""}
+    </div>
+    ${item.transfer_token ? `<div class="transfer-link"><b>Active transfer link</b><input readonly value="${location.origin}${location.pathname}?transfer=${item.transfer_token}"><small>Expires ${displayDate(item.transfer_expires_at)}</small></div>` : ""}
+    <div class="activity-list"><h3>Activity</h3>${activity.map((entry) => `<p><span>${escapeHtml(entry.action.replaceAll("_"," "))}</span><small>${new Date(entry.created_at).toLocaleString()}</small></p>`).join("") || "<p>No changes recorded yet.</p>"}</div>
+  </section>`;
+}
+
+function acceptTransferForm(token) {
+  return `<section class="modal"><div class="form-heading"><div><p>Registration transfer</p><h2>Accept this entry</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="accept-transfer-form" data-token="${escapeHtml(token)}"><div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div><label>Emergency contact<input name="emergency_contact" required></label><label class="check-label"><input type="checkbox" required> I accept the event waiver and this transferred registration.</label><button class="primary-button" type="submit">Accept transfer</button></form>
+  </section>`;
 }
 
 function registrationSettingsForm(event) {
   const questions = event.os_event_questions || [];
   return `<section class="modal"><div class="form-heading"><div><p>Registration form</p><h2>Questions & waiver</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="registration-settings-form" data-event-id="${event.id}"><label>Waiver text<textarea name="waiver_text" rows="6" placeholder="Leave blank to disable the waiver">${escapeHtml(event.waiver_text || "")}</textarea></label><button class="subtle-button" type="submit">Save waiver</button></form>
+    <form id="registration-settings-form" data-event-id="${event.id}"><label>Waiver text<textarea name="waiver_text" rows="6" placeholder="Leave blank to disable the waiver">${escapeHtml(event.waiver_text || "")}</textarea></label>
+      <div class="split-fields"><label>Participant edits close<input name="participant_edits_close_at" type="datetime-local" value="${localDateTime(event.participant_edits_close_at)}"></label><label>Transfers close<input name="transfers_close_at" type="datetime-local" value="${localDateTime(event.transfers_close_at)}"></label></div>
+      <label>Refund requests close<input name="refunds_close_at" type="datetime-local" value="${localDateTime(event.refunds_close_at)}"></label>
+      <div class="split-fields"><label class="check-label"><input name="allow_transfers" type="checkbox" ${event.allow_transfers !== false ? "checked" : ""}> Allow transfers</label><label class="check-label"><input name="allow_refund_requests" type="checkbox" ${event.allow_refund_requests !== false ? "checked" : ""}> Allow cancellation requests</label></div>
+      <button class="subtle-button" type="submit">Save self-service settings</button></form>
     <h3>Custom questions</h3>
     <div class="question-list">${questions.map((question) => `<div><span><b>${escapeHtml(question.label)}</b><small>${question.field_type}${question.required ? " · required" : ""}</small></span><button data-delete-question="${question.id}" data-event-id="${event.id}" type="button">Remove</button></div>`).join("") || "<p>No custom questions yet.</p>"}</div>
     <form id="question-form" data-event-id="${event.id}"><label>Question<input name="label" placeholder="Shirt size" required></label><div class="split-fields"><label>Answer type<select name="field_type"><option value="text">Text</option><option value="select">Dropdown</option><option value="checkbox">Checkbox</option></select></label><label>Dropdown choices<input name="options" placeholder="XS, S, M, L, XL"></label></div><label class="check-label"><input name="required" type="checkbox"> Required</label><button class="primary-button" type="submit">Add question</button></form>
@@ -407,6 +438,7 @@ async function go(view) {
   } else if (view === "runner") {
     await loadRunnerDashboard();
     renderRunnerDashboard();
+    if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
   } else {
     await loadPublic();
     renderDiscover();
@@ -449,6 +481,35 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.editRegistration) {
     const item = state.registrations.find((registration) => registration.id === target.dataset.editRegistration);
     openDialog(editRegistrationForm(item));
+  }
+  if (target.dataset.manageRunner) {
+    const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.manageRunner);
+    openDialog(runnerRegistrationForm(item));
+  }
+  if (target.dataset.createTransfer) {
+    const result = await registrationAction("create_transfer", { registrationId: target.dataset.createTransfer });
+    await loadRunnerDashboard();
+    openDialog(runnerRegistrationForm(state.runnerRegistrations.find((item) => item.id === target.dataset.createTransfer)));
+    await navigator.clipboard?.writeText(`${location.origin}${location.pathname}?transfer=${result.token}`).catch(() => {});
+    showNotice("Transfer link created and copied. It expires in 7 days.");
+  }
+  if (target.dataset.requestCancel && confirm("Request cancellation for this registration? The organizer will review any refund.")) {
+    await registrationAction("request_cancel", { registrationId: target.dataset.requestCancel });
+    dialog.close();
+    await go("runner");
+    showNotice("Cancellation requested.");
+  }
+  if (target.dataset.organizerRefund && confirm("Issue a full Stripe refund and cancel this registration? This cannot be undone.")) {
+    await registrationAction("organizer_refund", { registrationId: target.dataset.organizerRefund });
+    dialog.close();
+    await go("dashboard");
+    showNotice("Registration refunded and cancelled.");
+  }
+  if (target.dataset.organizerCancel && confirm("Cancel this registration?")) {
+    await registrationAction("organizer_cancel", { registrationId: target.dataset.organizerCancel });
+    dialog.close();
+    await go("dashboard");
+    showNotice("Registration cancelled.");
   }
   if (target.dataset.resendConfirmation) {
     target.disabled = true;
@@ -591,8 +652,42 @@ document.addEventListener("submit", async (event) => {
       showNotice("Registration updated.");
     }
 
+    if (form.id === "runner-registration-form") {
+      await registrationAction("runner_update", {
+        registrationId: form.dataset.registrationId,
+        firstName: data.get("first_name"),
+        lastName: data.get("last_name"),
+        emergencyContact: data.get("emergency_contact"),
+      });
+      dialog.close();
+      await go("runner");
+      showNotice("Participant details updated.");
+    }
+
+    if (form.id === "accept-transfer-form") {
+      await registrationAction("accept_transfer", {
+        token: form.dataset.token,
+        firstName: data.get("first_name"),
+        lastName: data.get("last_name"),
+        emergencyContact: data.get("emergency_contact"),
+      });
+      dialog.close();
+      state.pendingTransfer = null;
+      history.replaceState({}, "", location.pathname);
+      await go("runner");
+      showNotice("Registration transfer accepted.");
+    }
+
     if (form.id === "registration-settings-form") {
-      await updateEventSettings(form.dataset.eventId, { waiver_text: data.get("waiver_text") || "" });
+      const asIso = (name) => data.get(name) ? new Date(data.get(name)).toISOString() : null;
+      await updateEventSettings(form.dataset.eventId, {
+        waiver_text: data.get("waiver_text") || "",
+        participant_edits_close_at: asIso("participant_edits_close_at"),
+        transfers_close_at: asIso("transfers_close_at"),
+        refunds_close_at: asIso("refunds_close_at"),
+        allow_transfers: data.get("allow_transfers") === "on",
+        allow_refund_requests: data.get("allow_refund_requests") === "on",
+      });
       await loadDashboard();
       openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
       showNotice("Waiver settings saved.");
@@ -667,6 +762,10 @@ document.addEventListener("submit", async (event) => {
 });
 
 notice.querySelector("button").addEventListener("click", () => notice.classList.add("hidden"));
+window.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
+  showNotice(event.reason?.message || "Something went wrong.");
+});
 authButton.addEventListener("click", () => configured ? openDialog(authForm()) : showNotice("Add Supabase credentials in config.js to enable accounts."));
 signOutButton.addEventListener("click", async () => {
   await supabase.auth.signOut();
@@ -687,8 +786,10 @@ async function boot() {
       syncNavigation();
     });
   }
-  await go("discover");
   const params = new URLSearchParams(location.search);
+  state.pendingTransfer = params.get("transfer");
+  if (state.pendingTransfer) state.pendingView = "runner";
+  await go(state.pendingTransfer ? "runner" : "discover");
   if (params.get("payment") === "success") {
     showNotice("Payment received. Stripe is confirming your registration.");
     history.replaceState({}, "", location.pathname);
