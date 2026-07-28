@@ -85,6 +85,17 @@ Deno.serve(async (request) => {
     if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
       const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.openstart_registration_id;
+      const orderId = session.metadata?.openstart_order_id;
+      if (orderId && session.payment_status === "paid") {
+        await admin.from("os_orders").update({
+          status: "paid", stripe_payment_intent_id: String(session.payment_intent || ""), paid_at: new Date().toISOString(),
+        }).eq("id", orderId).neq("status", "paid");
+        const { data: orderRegistrations } = await admin.from("os_registrations").update({
+          status: "confirmed", payment_status: "paid",
+          stripe_payment_intent_id: String(session.payment_intent || ""), reservation_expires_at: null,
+        }).eq("order_id", orderId).neq("payment_status", "paid").select("id");
+        for (const registration of orderRegistrations || []) await sendConfirmationEmail(admin, registration.id);
+      }
       if (registrationId && session.payment_status === "paid") {
         await admin.from("os_registrations").update({
           status: "confirmed",
@@ -99,6 +110,12 @@ Deno.serve(async (request) => {
     if (["checkout.session.expired", "checkout.session.async_payment_failed"].includes(event.type)) {
       const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.openstart_registration_id;
+      const orderId = session.metadata?.openstart_order_id;
+      if (orderId) {
+        await admin.from("os_orders").update({ status: "expired" }).eq("id", orderId).eq("status", "reserved");
+        await admin.from("os_registrations").update({ status: "expired", payment_status: "failed" })
+          .eq("order_id", orderId).in("status", ["reserved", "pending"]);
+      }
       if (registrationId) {
         await admin.from("os_registrations").update({
           status: "expired",

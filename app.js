@@ -1,6 +1,6 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=11";
+} from "./core.js?v=12";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   createManualRegistration, createPromoCode, createScheduledPrice,
@@ -8,7 +8,7 @@ import {
   getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
   updateRegistration, updateWaitlist,
-} from "./data.js?v=11";
+} from "./data.js?v=12";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -197,7 +197,7 @@ function renderRunnerDashboard() {
             <div>
               <p>${escapeHtml(item.os_events?.location_name || "")} · ${displayDate(item.os_events?.starts_at)}</p>
               <h2>${escapeHtml(item.os_events?.name || "Race registration")}</h2>
-              <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}</small>
+              <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}${item.os_teams?.name ? ` · Team ${escapeHtml(item.os_teams.name)}` : ""}</small>
             </div>
             <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
           </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
@@ -225,6 +225,7 @@ function renderRoster(event) {
         : '<div class="empty-state">No registrations yet. Share the published event to get the first runner on the list.</div>'}
       <div class="form-summary"><strong>${event.os_event_questions?.length || 0} custom questions</strong><span>${event.waiver_text ? "Waiver enabled" : "No waiver configured"}</span></div>
       ${(event.os_waitlist || []).length ? `<div class="waitlist-list"><h3>Waitlist</h3>${event.os_waitlist.map((item) => `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(tierById(event, item.tier_id)?.name || "")}</small></span><select data-waitlist-id="${item.id}"><option ${item.status === "waiting" ? "selected" : ""}>waiting</option><option ${item.status === "invited" ? "selected" : ""}>invited</option><option ${item.status === "registered" ? "selected" : ""}>registered</option><option ${item.status === "removed" ? "selected" : ""}>removed</option></select></div>`).join("")}</div>` : ""}
+      ${(event.os_teams || []).length ? `<div class="team-list"><h3>Teams</h3>${event.os_teams.map((team) => { const members = registrations.filter((item) => item.team_id === team.id && item.status !== "cancelled"); return `<div><span><b>${escapeHtml(team.name)}</b><small>${escapeHtml(team.category)} · ${members.length}${team.max_members ? ` / ${team.max_members}` : ""} members</small></span><span>${members.map((member) => escapeHtml(`${member.first_name} ${member.last_name}`)).join(", ") || "No members"}</span></div>`; }).join("")}</div>` : ""}
     </div>`;
   document.querySelector("#roster-slot").scrollIntoView({ behavior: "smooth" });
 }
@@ -243,25 +244,43 @@ function authForm() {
     </section>`;
 }
 
-function registrationForm(event) {
+function participantFields(event, index) {
   const questions = [...(event.os_event_questions || [])].sort((a, b) => a.sort_order - b.sort_order);
-  return `
-    <section class="modal">
-      <div class="form-heading"><div><p>Registration</p><h2>Your details</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-      <form id="registration-form" data-event-id="${event.id}">
-        <label>Event<select name="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(tier.price_cents)}</option>`).join("")}</select></label>
+  return `<fieldset class="participant-block" data-participant-index="${index}"><legend>Participant ${index + 1}</legend>
+        <label>Event<select data-field="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(effectivePrice(tier))}</option>`).join("")}</select></label>
         <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
         <label>Email<input name="email" type="email" required></label>
         ${questions.map((question) => question.field_type === "select"
-          ? `<label>${escapeHtml(question.label)}<select name="question_${question.id}" ${question.required ? "required" : ""}><option value="">Choose one</option>${(question.options || []).map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`
+          ? `<label>${escapeHtml(question.label)}<select data-question-id="${question.id}" ${question.required ? "required" : ""}><option value="">Choose one</option>${(question.options || []).map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`
           : question.field_type === "checkbox"
-            ? `<label class="check-label"><input name="question_${question.id}" type="checkbox" value="Yes" ${question.required ? "required" : ""}> ${escapeHtml(question.label)}</label>`
-            : `<label>${escapeHtml(question.label)}<input name="question_${question.id}" ${question.required ? "required" : ""}></label>`).join("")}
+            ? `<label class="check-label"><input data-question-id="${question.id}" type="checkbox" value="Yes" ${question.required ? "required" : ""}> ${escapeHtml(question.label)}</label>`
+            : `<label>${escapeHtml(question.label)}<input data-question-id="${question.id}" ${question.required ? "required" : ""}></label>`).join("")}
         <label>Emergency contact<input name="emergency_contact" placeholder="Name · phone" required></label>
+        <label>Relay leg <span class="optional-label">Optional</span><input name="relay_leg" placeholder="Leg 1"></label>
+        ${event.waiver_text ? `<div class="waiver-box"><strong>Participant waiver</strong><p>${escapeHtml(event.waiver_text)}</p></div><label class="check-label"><input name="waiver" type="checkbox" required> This participant accepts the waiver.</label>` : ""}
+        ${index ? '<button class="remove-participant" data-remove-participant type="button">Remove participant</button>' : ""}
+      </fieldset>`;
+}
+
+function registrationForm(event) {
+  const teams = event.os_teams || [];
+  return `
+    <section class="modal wide-modal">
+      <div class="form-heading"><div><p>Group registration</p><h2>Register your crew</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+      <form id="registration-form" data-event-id="${event.id}">
+        <label>Purchaser email<input name="purchaser_email" type="email" value="${escapeHtml(state.session?.user?.email || "")}" required></label>
+        <div id="participant-fields">${participantFields(event, 0)}</div>
+        <button class="subtle-button" data-add-participant-field type="button">+ Add another participant</button>
         <label>Promo code <span class="optional-label">Optional</span><input name="promo_code" autocomplete="off"></label>
         <label class="check-label"><input name="join_waitlist" type="checkbox" checked> Join the waitlist automatically if this option sells out.</label>
-        ${event.waiver_text ? `<div class="waiver-box"><strong>Participant waiver</strong><p>${escapeHtml(event.waiver_text)}</p></div><label class="check-label"><input name="waiver" type="checkbox" required> I have read and accept this waiver.</label>` : ""}
-        <button class="primary-button" type="submit">Complete registration</button>
+        <h3>Team</h3>
+        <label>Team option<select name="team_mode"><option value="">No team</option><option value="join">Join an existing team</option><option value="create">Create a team</option></select></label>
+        <div class="team-fields">
+          <label>Existing team<select name="team_id"><option value="">Choose a team</option>${teams.map((team) => `<option value="${team.id}">${escapeHtml(team.name)} · ${escapeHtml(team.category)}</option>`).join("")}</select></label>
+          <label>Team name<input name="team_name"></label>
+          <div class="split-fields"><label>Category<select name="team_category"><option>club</option><option>corporate</option><option>family</option><option>relay</option></select></label><label>Access code<input name="team_code" autocomplete="off"></label></div>
+        </div>
+        <button class="primary-button" type="submit">Continue to group checkout</button>
       </form>
     </section>`;
 }
@@ -459,6 +478,15 @@ document.addEventListener("click", async (event) => {
     scrollTo(0, 0);
   }
   if (target.dataset.register) openDialog(registrationForm(eventById(target.dataset.register)));
+  if (target.matches("[data-add-participant-field]")) {
+    const form = target.closest("form");
+    const race = eventById(form.dataset.eventId);
+    const container = form.querySelector("#participant-fields");
+    const count = container.querySelectorAll(".participant-block").length;
+    if (count >= 10) return showNotice("An order can contain up to 10 participants.");
+    container.insertAdjacentHTML("beforeend", participantFields(race, count));
+  }
+  if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
   if (target.matches("[data-connect-stripe]")) {
     target.disabled = true;
@@ -579,21 +607,33 @@ document.addEventListener("submit", async (event) => {
 
     if (form.id === "registration-form") {
       const race = eventById(form.dataset.eventId);
-      const tier = tierById(race, data.get("tier_id"));
-      const answers = (race.os_event_questions || []).map((question) => ({
-        questionId: question.id,
-        answer: data.get(`question_${question.id}`) || "",
+      const participants = Array.from(form.querySelectorAll(".participant-block")).map((block) => ({
+        tierId: block.querySelector("[data-field='tier_id']").value,
+        firstName: block.querySelector("[name='first_name']").value,
+        lastName: block.querySelector("[name='last_name']").value,
+        email: block.querySelector("[name='email']").value,
+        emergencyContact: block.querySelector("[name='emergency_contact']").value,
+        relayLeg: block.querySelector("[name='relay_leg']").value || null,
+        answers: Array.from(block.querySelectorAll("[data-question-id]")).map((input) => ({
+          questionId: input.dataset.questionId,
+          answer: input.type === "checkbox" ? (input.checked ? "Yes" : "") : input.value,
+        })),
+        waiverAccepted: !race.waiver_text || block.querySelector("[name='waiver']")?.checked === true,
+        waiverVersion: race.waiver_text ? String(race.updated_at || race.id) : null,
+        idempotencyKey: crypto.randomUUID(),
       }));
+      const teamMode = data.get("team_mode");
       const result = await beginRegistration({
         eventId: race.id,
-        tierId: tier.id,
-        firstName: data.get("first_name"),
-        lastName: data.get("last_name"),
-        email: data.get("email"),
-        emergencyContact: data.get("emergency_contact"),
-        answers,
-        waiverAccepted: data.get("waiver") === "on",
-        waiverVersion: race.waiver_text ? String(race.updated_at || race.id) : null,
+        email: data.get("purchaser_email"),
+        participants,
+        team: teamMode ? {
+          mode: teamMode,
+          teamId: data.get("team_id") || null,
+          name: data.get("team_name") || null,
+          category: data.get("team_category"),
+          joinCode: data.get("team_code") || null,
+        } : null,
         promoCode: data.get("promo_code") || null,
         joinWaitlist: data.get("join_waitlist") === "on",
         idempotencyKey: crypto.randomUUID(),

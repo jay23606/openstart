@@ -113,6 +113,7 @@ Deno.serve(async (request) => {
         if (!stripe || !registration.stripe_payment_intent_id) throw new Error("Stripe refund information is unavailable");
         const refund = await stripe.refunds.create({
           payment_intent: registration.stripe_payment_intent_id,
+          amount: registration.amount_cents,
           refund_application_fee: true, reverse_transfer: true,
           metadata: { openstart_registration_id: registration.id },
         }, { idempotencyKey: `openstart-refund-${registration.id}` });
@@ -124,6 +125,13 @@ Deno.serve(async (request) => {
         stripe_refund_id: refundId,
         refunded_at: refundId ? new Date().toISOString() : null,
       }).eq("id", registration.id);
+      if (registration.order_id && refundId) {
+        const { count: remaining } = await admin.from("os_registrations")
+          .select("id", { count: "exact", head: true }).eq("order_id", registration.order_id)
+          .eq("payment_status", "paid").neq("id", registration.id);
+        await admin.from("os_orders").update({ status: remaining ? "partially_refunded" : "refunded" })
+          .eq("id", registration.order_id);
+      }
       await admin.rpc("os_log_registration_activity", { p_registration_id: registration.id, p_actor_user_id: user.id, p_action: refundId ? "refunded" : "cancelled", p_details: { stripe_refund_id: refundId } });
       await inviteNext(admin, registration.tier_id, String(race.name));
       return json(request, { ok: true, refunded: Boolean(refundId) });

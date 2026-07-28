@@ -15,6 +15,7 @@ There is no frontend framework, bundler, or build step.
 - Scheduled pricing, promotion codes, waitlists, and financial reporting
 - Runner-managed participant details, cancellation requests, transfers, and refunds
 - Registration activity history and automatic waitlist invitations
+- Multi-person orders, itemized Stripe Checkout, teams, clubs, and relay legs
 - Row-level security for organizer and participant data
 - A provider-neutral payment boundary that leaves paid entries pending
 - Installable PWA shell with an offline cache

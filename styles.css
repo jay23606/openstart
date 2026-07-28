@@ -258,6 +258,14 @@ footer b { color: white; }
 .activity-list { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 12px; }
 .activity-list p { align-items: center; border-top: 1px solid var(--line); display: flex; font-size: 11px; justify-content: space-between; margin: 0; padding: 9px 0; text-transform: capitalize; }
 .activity-list small { color: var(--muted); }
+.participant-block { border: 1px solid var(--line); display: grid; gap: 14px; margin: 0 0 18px; padding: 18px; }
+.participant-block legend { color: var(--green); font-size: 11px; font-weight: 900; padding: 0 8px; text-transform: uppercase; }
+.remove-participant { background: none; border: 0; color: #a33; cursor: pointer; font-size: 11px; font-weight: 800; justify-self: start; padding: 0; }
+.team-fields { background: var(--cream); display: grid; gap: 12px; padding: 16px; }
+.team-list { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 20px; }
+.team-list > div { border-top: 1px solid var(--line); display: grid; font-size: 11px; gap: 18px; grid-template-columns: .8fr 1.6fr; padding: 12px 0; }
+.team-list b, .team-list small { display: block; }
+.team-list small { color: var(--muted); margin-top: 4px; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
