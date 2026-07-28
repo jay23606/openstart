@@ -43,6 +43,9 @@ Deno.serve(async (request) => {
       if (!registration || !registration.transfer_expires_at || new Date(registration.transfer_expires_at) <= new Date()) {
         throw new Error("This transfer link is invalid or expired");
       }
+      if (registration.status !== "confirmed") {
+        throw new Error("This registration is no longer eligible for transfer");
+      }
       const race = registration.os_events as unknown as Record<string, unknown>;
       if (!race.allow_transfers || (race.transfers_close_at && new Date(String(race.transfers_close_at)) <= new Date())) {
         throw new Error("Transfers are closed");

@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=26"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=26"/);
+  assert.match(html, /<script type="module" src="app\.js\?v=27"><\/script>/);
+  assert.match(html, /href="styles\.css\?v=27"/);
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
@@ -17,13 +17,15 @@ test("the static shell connects the app, stylesheet, manifest, and service worke
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, data, checkout, connect, webhook, runnerMigration] = await Promise.all([
+  const [app, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
     read("supabase/functions/os-stripe-webhook/index.ts"),
+    read("supabase/functions/os-registration-action/index.ts"),
     read("supabase/migrations/20260728190000_runner_accounts_and_email.sql"),
+    read("supabase/migrations/20260729110000_registration_integrity.sql"),
   ]);
   assert.match(app, /createEvent\(/);
   assert.match(app, /beginRegistration\(/);
@@ -80,6 +82,15 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /lotteryManagerForm/);
   assert.match(data, /os_submit_lottery_application/);
   assert.match(data, /os_lottery_applications/);
+  assert.match(integrityMigration, /os_registration_email_event_active_unique/);
+  assert.match(integrityMigration, /registration_mode<>'open'/);
+  assert.match(integrityMigration, /os_enforce_tier_capacity/);
+  assert.match(integrityMigration, /os_enforce_team_capacity/);
+  assert.match(integrityMigration, /status='expired',payment_status='failed'/);
+  assert.match(integrityMigration, /drop policy if exists "participants create registrations"/);
+  assert.match(integrityMigration, /revoke update on table public\.os_profiles/);
+  assert.match(integrityMigration, /os_protect_event_financial_settings/);
+  assert.match(registrationAction, /registration\.status !== "confirmed"/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

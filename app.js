@@ -1,6 +1,6 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=26";
+} from "./core.js?v=27";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
@@ -8,7 +8,7 @@ import {
   getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   reviewLotteryApplication, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=26";
+} from "./data.js?v=27";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -43,7 +43,7 @@ const state = {
 
 const helpArticles=[
   {audience:"Start here",title:"Understanding OpenStart accounts",keywords:"account login runner organizer staff navigation",body:"One account can be a runner, organizer, team captain, volunteer, or race-day staff member. My races contains your registrations and volunteer shifts. Organizer contains events you own. Staff tools appear when an organizer assigns your verified account email."},
-  {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation",body:"Open an event, choose Register now, enter each participant, then continue to Stripe Checkout for paid entries. OpenStart confirms a paid registration only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
+  {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation duplicate email",body:"Open an event, choose Register now, enter each participant with a distinct email, then continue to Stripe Checkout for paid entries. One active registration is allowed per participant per event. A cancelled or expired attempt can register again. OpenStart confirms payment only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
   {audience:"Runners",title:"Applying to a race lottery",keywords:"runner lottery application qualifier result selected waitlist tickets",body:"Sign in and select Apply to lottery from an eligible event. Choose a distance and provide qualifying-race evidence when required. Applying does not charge you or guarantee entry. My races shows qualification and selection status, ticket count, and organizer review notes."},
   {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
   {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},

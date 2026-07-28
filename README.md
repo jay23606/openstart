@@ -103,6 +103,23 @@ The browser must never be allowed to mark its own registration as paid.
 The browser also never calculates an authoritative discount or scheduled price;
 the atomic reservation function validates those values before Checkout is created.
 
+### Registration integrity
+
+The database, rather than the interface, enforces the core registration rules:
+
+- one active registration per normalized participant email and event;
+- one active registration per signed-in account and event;
+- cancelled and expired checkout attempts may safely try again;
+- open registration is rejected for lottery or closed events;
+- tiers, teams, and waitlists must belong to the same event;
+- tier, team, wave, volunteer, product, and promotion capacities are serialized
+  at their server-side write boundaries;
+- an accepted transfer cannot create a second active registration for its new
+  owner; and
+- expired registrations release order and inventory reservations.
+
+Group orders remain supported, but every participant must use a distinct email.
+
 ### Stripe sandbox setup
 
 OpenStart's database migration and Edge Functions are deployed. To activate
