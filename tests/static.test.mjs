@@ -29,7 +29,8 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(checkout, /idempotencyKey/);
   assert.match(connect, /core\/accounts/);
   assert.match(connect, /core\/account_links/);
-  assert.match(connect, /configurations: \["merchant"\]/);
+  assert.match(connect, /configurations: \["merchant", "recipient"\]/);
+  assert.match(connect, /stripe_transfers: \{ requested: true \}/);
   assert.doesNotMatch(connect, /type: "express"/);
   assert.match(webhook, /constructEventAsync/);
   assert.match(webhook, /payment_status: "paid"/);

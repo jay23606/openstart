@@ -2,6 +2,13 @@ import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripeApiVersion = "2026-06-24.dahlia";
+const recipientConfiguration = {
+  capabilities: {
+    stripe_balance: {
+      stripe_transfers: { requested: true },
+    },
+  },
+};
 
 const stripeV2 = async (
   path: string,
@@ -69,6 +76,7 @@ Deno.serve(async (request) => {
               card_payments: { requested: true },
             },
           },
+          recipient: recipientConfiguration,
         },
         defaults: {
           responsibilities: {
@@ -85,6 +93,12 @@ Deno.serve(async (request) => {
         stripe_account_id: accountId,
       });
       if (error) throw error;
+    } else {
+      await stripeV2(`core/accounts/${accountId}`, {
+        configuration: {
+          recipient: recipientConfiguration,
+        },
+      }, `openstart-recipient-v2-${user.id}`);
     }
 
     const link = await stripeV2("core/account_links", {
@@ -92,7 +106,7 @@ Deno.serve(async (request) => {
       use_case: {
         type: "account_onboarding",
         account_onboarding: {
-          configurations: ["merchant"],
+          configurations: ["merchant", "recipient"],
           refresh_url: returnUrl,
           return_url: returnUrl,
           collection_options: {
