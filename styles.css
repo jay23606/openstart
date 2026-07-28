@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 :root {
   --ink: #17211d;
   --muted: #66716b;
@@ -23,6 +21,10 @@ body {
 button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
+.hidden { display: none !important; }
+.setup-banner { background: var(--lime); color: var(--ink); font-size: 12px; padding: 9px 20px; text-align: center; }
+.setup-banner code { font-weight: 800; }
+.account-actions { justify-self: end; }
 
 .site-header {
   align-items: center;
@@ -42,7 +44,7 @@ nav { display: flex; gap: 28px; }
 nav button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 700; padding: 8px 0; position: relative; }
 nav button.nav-active { color: var(--ink); }
 nav button.nav-active::after { background: var(--orange); bottom: -19px; content: ""; height: 3px; left: 0; position: absolute; right: 0; }
-.github-link { color: var(--ink); font-size: 13px; font-weight: 700; justify-self: end; text-decoration: none; }
+.github-link { background: none; border: 0; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 700; justify-self: end; text-decoration: none; }
 
 .notice { align-items: center; background: var(--green-dark); border-radius: 10px; color: white; display: flex; gap: 24px; justify-content: space-between; left: 50%; max-width: calc(100% - 32px); padding: 14px 18px; position: fixed; top: 86px; transform: translateX(-50%); width: 620px; z-index: 50; box-shadow: 0 12px 40px #17211d33; }
 .notice button { background: none; border: 0; color: white; cursor: pointer; font-size: 22px; }
@@ -163,6 +165,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 
 .modal-backdrop { align-items: center; background: #071b1488; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 100; }
 .modal { background: var(--paper); box-shadow: 0 20px 80px #071b1455; max-height: calc(100vh - 40px); max-width: 620px; overflow: auto; padding: 36px; width: 100%; }
+dialog { background: transparent; border: 0; max-height: 100vh; max-width: 100vw; padding: 20px; width: 100%; }
+dialog::backdrop { background: #071b1488; }
+.auth-modal { margin: auto; }
+.form-message { color: var(--green); font-size: 12px; min-height: 1em; }
 .modal .form-heading p { color: var(--green); }
 .modal h3 { border-top: 1px solid var(--line); font-size: 13px; margin: 8px 0 0; padding-top: 20px; }
 .check-label { align-items: center; display: flex; gap: 9px; }
@@ -176,7 +182,7 @@ footer b { color: white; }
   nav { bottom: 0; box-shadow: 0 -2px 14px #17211d15; background: var(--paper); display: grid; grid-template-columns: 1fr 1fr; left: 0; padding: 0 20px; position: fixed; right: 0; z-index: 30; }
   nav button { padding: 16px; }
   nav button.nav-active::after { bottom: auto; top: 0; }
-  .github-link { display: none; }
+  .account-actions { display: none; }
   .hero, .open-promise, .detail-layout { grid-template-columns: 1fr; }
   .hero { padding-top: 64px; }
   .hero-card { max-width: 560px; }

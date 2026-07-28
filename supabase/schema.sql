@@ -105,7 +105,11 @@ create policy "organizers manage tiers"
 create policy "participants create registrations"
   on public.os_registrations for insert
   with check (
-    status = 'pending'
+    (participant_user_id is null or participant_user_id = auth.uid())
+    and (
+      status = 'pending'
+      or (status = 'confirmed' and amount_cents = 0 and payment_status = 'not_required')
+    )
     and payment_status in ('not_required', 'pending')
     and exists (
       select 1

@@ -1,0 +1,13 @@
+{
+  "name": "OpenStart",
+  "short_name": "OpenStart",
+  "description": "Open-source race registration and event management.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#0f6b4f",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

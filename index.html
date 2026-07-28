@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0f6b4f">
+  <meta name="description" content="Open-source race registration and event management for organizers, runners, and their communities.">
+  <meta property="og:title" content="OpenStart">
+  <meta property="og:description" content="Great race days start in the open.">
+  <meta property="og:image" content="og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>OpenStart — Open-source race registration</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+  <div id="setup-banner" class="setup-banner hidden">
+    Demo mode is active. Add your Supabase URL and publishable key to <code>config.js</code> to enable shared data and accounts.
+  </div>
+
+  <header class="site-header">
+    <button class="brand" data-action="discover" type="button"><span class="brand-mark">OS</span><span>OpenStart</span></button>
+    <nav aria-label="Primary navigation">
+      <button class="nav-active" data-view="discover" type="button">Find events</button>
+      <button data-view="dashboard" type="button">Organizer</button>
+    </nav>
+    <div class="account-actions">
+      <button id="auth-button" class="github-link" type="button">Sign in</button>
+      <button id="sign-out" class="github-link hidden" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <div id="notice" class="notice hidden" role="status"><span></span><button aria-label="Dismiss notification" type="button">×</button></div>
+
+  <main id="page-content" tabindex="-1"></main>
+
+  <dialog id="app-dialog"><div id="dialog-content"></div></dialog>
+
+  <footer>
+    <span><b>OpenStart</b> · Open-source race registration</span>
+    <span>Built for organizers, runners, and the communities between them.</span>
+  </footer>
+
+  <script type="module" src="app.js?v=1"></script>
+</body>
+</html>
