@@ -1,0 +1,21 @@
+name: Process scheduled campaigns
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process due OpenStart campaigns
+        env:
+          CAMPAIGN_CRON_SECRET: ${{ secrets.CAMPAIGN_CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CAMPAIGN_CRON_SECRET}" \
+            -d '{"action":"process_due"}' \
+            https://zbtgonklxweikgukzukg.supabase.co/functions/v1/os-communications

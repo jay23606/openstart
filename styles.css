@@ -301,6 +301,14 @@ footer b { color: white; }
 .revenue-categories { display: grid; gap: 10px; grid-template-columns: repeat(3,1fr); margin-bottom: 18px; }
 .revenue-categories span { background: var(--cream); color: var(--muted); font-size: 10px; padding: 14px; }
 .revenue-categories b { color: var(--ink); display: block; font-family: Georgia,serif; font-size: 25px; margin-bottom: 4px; }
+.campaign-list { border-top: 1px solid var(--line); }
+.campaign-list > div { align-items: center; border-bottom: 1px solid var(--line); display: grid; font-size: 11px; gap: 14px; grid-template-columns: 1.8fr .7fr 1fr; padding: 13px 0; }
+.campaign-list b, .campaign-list small { display: block; }
+.campaign-list small { color: var(--muted); margin-top: 4px; }
+.campaign-status { color: var(--green); text-transform: capitalize; }
+.template-help { color: var(--muted); font-size: 11px; margin-top: -7px; }
+.audience-preview { background: var(--cream); color: var(--muted); display: grid; font-size: 11px; gap: 5px; margin: 15px 0; padding: 14px; }
+.audience-preview b { color: var(--ink); font-size: 13px; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
@@ -333,6 +341,7 @@ footer b { color: white; }
   .roster-manage > button { grid-template-columns: 38px 1fr; }
   .roster-manage > button > span:nth-child(n+3) { display: none; }
   .metric-grid { grid-template-columns: 1fr; }
+  .campaign-list > div { grid-template-columns: 1fr; }
   .scheduled-price-form, .finance-grid > div { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 8px; }
 }

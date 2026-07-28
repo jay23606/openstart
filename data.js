@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=15";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=15";
+import { configured, supabase } from "./core.js?v=16";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=16";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -265,6 +265,32 @@ export async function registrationAction(action, payload) {
 export async function raceDayAction(action, payload) {
   if (!configured) throw new Error("Race-day tools require Supabase");
   return functionResult("os-race-day", { action, ...payload });
+}
+
+export async function communicationsAction(action, payload) {
+  return functionResult("os-communications", { action, ...payload });
+}
+
+export async function listOrganizerCampaigns(eventIds) {
+  if (!configured || !eventIds.length) return [];
+  const { data, error } = await supabase.from("os_campaigns")
+    .select("*,os_campaign_deliveries(status)").in("event_id",eventIds).order("created_at",{ascending:false});
+  if (error) throw error;
+  return data;
+}
+
+export async function listEmailTemplates(userId) {
+  if (!configured) return [];
+  const { data, error } = await supabase.from("os_email_templates").select("*")
+    .eq("organizer_id",userId).order("name");
+  if (error) throw error;
+  return data;
+}
+
+export async function createEmailTemplate(template) {
+  const { data, error } = await supabase.from("os_email_templates").insert(template).select().single();
+  if (error) throw error;
+  return data;
 }
 
 export async function listRunnerRegistrations() {

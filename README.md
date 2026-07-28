@@ -22,6 +22,8 @@ There is no frontend framework, bundler, or build step.
 - Row-level security for organizer and participant data
 - A provider-neutral payment boundary that leaves paid entries pending
 - Installable PWA shell with an offline cache
+- Organizer email campaigns with audience previews, reusable templates,
+  scheduled delivery, delivery reporting, and marketing unsubscribe handling
 - Device-local demo mode when Supabase has not been configured
 
 ## Files
@@ -93,6 +95,22 @@ sandbox checkout:
 
 The secrets take effect without a redeploy. They must never be committed to
 GitHub or placed in `config.js`.
+
+## Organizer communications
+
+Organizers can send transactional race updates or opted-out-aware marketing
+campaigns to confirmed runners, registration options, teams, captains,
+waitlists, and race-day status groups. Sends are materialized into delivery
+rows for reporting and processed in batches by `os-communications`.
+
+The scheduled GitHub Action requires the same random secret in both places:
+
+`supabase secrets set CAMPAIGN_CRON_SECRET=...`
+
+`gh secret set CAMPAIGN_CRON_SECRET`
+
+Resend's test sender can only deliver to the account owner. Verify a sending
+domain and set `RESEND_FROM_EMAIL` before sending campaigns to participants.
 
 New events default to a 5% OpenStart application fee. The value is stored as
 `platform_fee_bps` on each event and can be changed before registrations open.

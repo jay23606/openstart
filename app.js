@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=15";
+} from "./core.js?v=16";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  createManualRegistration, createProduct, createPromoCode, createScheduledPrice,
+  communicationsAction, createEmailTemplate, createManualRegistration, createProduct, createPromoCode, createScheduledPrice,
   deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listCaptainTeams, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
+  getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, updateEventSettings,
   updateOrderItem, updateRegistration, updateWaitlist,
-} from "./data.js?v=15";
+} from "./data.js?v=16";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -28,6 +28,8 @@ const state = {
   runnerRegistrations: [],
   captainTeams: [],
   orderItems: [],
+  campaigns: [],
+  emailTemplates: [],
   pendingView: "dashboard",
   pendingTransfer: null,
 };
@@ -149,6 +151,7 @@ function renderDashboard() {
         <div><p class="eyebrow">Organizer workspace</p><h1>Good morning, race director.</h1><p>Here’s what’s happening across your starting lines.</p></div>
         <div class="dashboard-actions">
           ${configured ? `<button class="stripe-button ${stripeReady ? "ready" : ""}" data-connect-stripe type="button">${stripeReady ? "✓ Stripe ready" : stripeStarted ? "Finish Stripe setup" : "Connect Stripe sandbox"}</button>` : ""}
+          <button class="subtle-button" data-compose-campaign type="button">Communications</button>
           <button class="primary-button" data-create-event type="button">+ Create event</button>
         </div>
       </div>
@@ -180,6 +183,10 @@ function renderDashboard() {
           const fees = entries.reduce((sum, item) => sum + Math.round(item.amount_cents * (event.platform_fee_bps || 500) / 10000), 0);
           return `<div><span>${escapeHtml(event.name)}</span><b>${money(revenue)}</b><small>${entries.length} entries · ${money(revenue - fees)} estimated net</small></div>`;
         }).join("")}</div>
+      </div>
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Communications</h2><p>Drafts, scheduled messages, and delivery status.</p></div><button class="subtle-button" data-compose-campaign type="button">+ New campaign</button></div>
+        <div class="campaign-list">${state.campaigns.slice(0,8).map((campaign) => `<div><span><b>${escapeHtml(campaign.name)}</b><small>${escapeHtml(eventById(campaign.event_id)?.name || "")} · ${escapeHtml(campaign.message_type)}</small></span><span>${campaign.recipient_count} recipients</span><span><b class="campaign-status">${escapeHtml(campaign.status)}</b><small>${campaign.sent_count} sent · ${campaign.failed_count} failed</small></span></div>`).join("") || '<div class="empty-state">No campaigns yet.</div>'}</div>
       </div>
       <div id="roster-slot"></div>
     </section>`;
@@ -380,6 +387,23 @@ function productSettingsForm(event) {
   </section>`;
 }
 
+function campaignForm() {
+  const firstEvent=state.events[0];
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Organizer communications</p><h2>Create a campaign</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <form id="campaign-form">
+      <div class="split-fields"><label>Event<select name="event_id">${state.events.map((event)=>`<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("")}</select></label><label>Campaign name<input name="name" placeholder="Final race instructions" required></label></div>
+      <label>Start from a template<select name="template_id"><option value="">Blank message</option>${state.emailTemplates.map((template)=>`<option value="${template.id}">${escapeHtml(template.name)}</option>`).join("")}</select></label>
+      <div class="split-fields"><label>Audience<select name="audience_type"><option value="confirmed">All confirmed participants</option><option value="tier">Specific registration option</option><option value="team">Specific team</option><option value="captains">Team captains</option><option value="waitlist">Waitlist</option><option value="missing_bib">Missing bib</option><option value="checked_in">Checked in</option><option value="not_checked_in">Not checked in</option></select></label><label>Message type<select name="message_type"><option value="transactional">Transactional event message</option><option value="marketing">Marketing</option></select></label></div>
+      <div class="split-fields"><label>Registration option<select name="tier_id"><option value="">Choose when needed</option>${(firstEvent?.os_event_tiers || []).map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><label>Team<select name="team_id"><option value="">Choose when needed</option>${(firstEvent?.os_teams || []).map((team)=>`<option value="${team.id}">${escapeHtml(team.name)}</option>`).join("")}</select></label></div>
+      <label>Subject<input name="subject" required></label><label>Message<textarea name="html_body" rows="9" placeholder="<p>Hi {{first_name}}, ...</p>" required></textarea></label>
+      <p class="template-help">Variables: <code>{{first_name}}</code> and <code>{{event_name}}</code></p>
+      <label>Schedule <span class="optional-label">Leave blank for a draft</span><input name="scheduled_at" type="datetime-local"></label>
+      <div id="audience-preview" class="audience-preview">Preview the audience before sending.</div>
+      <div class="dialog-actions"><button class="subtle-button" name="campaign_intent" value="preview" type="submit">Preview audience</button><button class="subtle-button" name="campaign_intent" value="test" type="submit">Send test to me</button><button class="subtle-button" name="campaign_intent" value="template" type="submit">Save as template</button><button class="subtle-button" name="campaign_intent" value="save" type="submit">Save draft/schedule</button><button class="primary-button" name="campaign_intent" value="send" type="submit">Send now</button></div>
+    </form>
+  </section>`;
+}
+
 function raceDayForm(event) {
   const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
   const pickedUp = entries.filter((item) => item.packet_picked_up_at).length;
@@ -523,7 +547,11 @@ async function loadDashboard() {
     getOrganizerProfile(userId),
   ]);
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
-  state.orderItems = await listOrganizerOrderItems(state.events.map((event) => event.id));
+  [state.orderItems,state.campaigns,state.emailTemplates] = await Promise.all([
+    listOrganizerOrderItems(state.events.map((event) => event.id)),
+    listOrganizerCampaigns(state.events.map((event) => event.id)),
+    listEmailTemplates(userId),
+  ]);
 }
 
 async function loadRunnerDashboard() {
@@ -578,6 +606,7 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
   if (target.matches("[data-connect-stripe]")) {
     target.disabled = true;
     target.textContent = "Opening Stripe…";
@@ -963,6 +992,40 @@ document.addEventListener("submit", async (event) => {
       showNotice("Fundraising settings saved.");
     }
 
+    if (form.id === "campaign-form") {
+      const intent=event.submitter?.value || "preview";
+      const audience={type:data.get("audience_type"),tierId:data.get("tier_id") || null,teamId:data.get("team_id") || null};
+      const common={eventId:data.get("event_id"),audience,subject:data.get("subject"),htmlBody:data.get("html_body")};
+      if(intent==="template"){
+        await createEmailTemplate({
+          organizer_id:state.session.user.id,name:data.get("name"),
+          subject:data.get("subject"),html_body:data.get("html_body"),
+        });
+        await loadDashboard();
+        showNotice("Email template saved.");
+        return;
+      }
+      if(intent==="preview"){
+        const result=await communicationsAction("preview",common);
+        form.querySelector("#audience-preview").innerHTML=`<b>${result.count} recipients</b>${result.sample?.length ? `<span>${result.sample.map(escapeHtml).join(", ")}</span>` : ""}`;
+        return;
+      }
+      if(intent==="test"){
+        await communicationsAction("test",common);
+        showNotice("Test email sent to your account.");
+        return;
+      }
+      if(intent==="send" && !confirm("Send this campaign now to the selected audience?")) return;
+      await communicationsAction("create",{
+        ...common,name:data.get("name"),messageType:data.get("message_type"),
+        scheduledAt:data.get("scheduled_at") ? new Date(data.get("scheduled_at")).toISOString() : null,
+        sendNow:intent==="send",
+      });
+      dialog.close();
+      await go("dashboard");
+      showNotice(intent==="send" ? "Campaign sending started." : data.get("scheduled_at") ? "Campaign scheduled." : "Campaign saved as a draft.");
+    }
+
     if (form.id === "event-form") {
       const name = data.get("name");
       await createEvent({
@@ -989,6 +1052,14 @@ document.addEventListener("submit", async (event) => {
 });
 
 notice.querySelector("button").addEventListener("click", () => notice.classList.add("hidden"));
+document.addEventListener("change", (event) => {
+  if (event.target.name !== "template_id") return;
+  const template=state.emailTemplates.find((item)=>item.id===event.target.value);
+  if (!template) return;
+  const form=event.target.closest("form");
+  form.elements.subject.value=template.subject;
+  form.elements.html_body.value=template.html_body;
+});
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
   showNotice(event.reason?.message || "Something went wrong.");
@@ -1020,7 +1091,11 @@ async function boot() {
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
   await go(state.pendingTransfer ? "runner" : "discover");
-  if (params.get("payment") === "success") {
+  if (params.get("unsubscribe") && params.get("token")) {
+    await communicationsAction("unsubscribe",{email:params.get("unsubscribe"),token:params.get("token")});
+    showNotice("You have been unsubscribed from OpenStart marketing emails.");
+    history.replaceState({}, "", location.pathname);
+  } else if (params.get("payment") === "success") {
     showNotice("Payment received. Stripe is confirming your registration.");
     history.replaceState({}, "", location.pathname);
   } else if (params.get("payment") === "cancelled") {
