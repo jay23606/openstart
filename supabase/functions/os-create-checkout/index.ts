@@ -1,5 +1,5 @@
 import Stripe from "npm:stripe@18.5.0";
-import { adminClient, corsHeaders, json, optionalUserId } from "../_shared/common.ts";
+import { adminClient, corsHeaders, enforceRateLimit, json, optionalUserId } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripe = stripeKey
@@ -20,6 +20,7 @@ const sha256 = async (value: string) => Array.from(
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
+  if(!await enforceRateLimit(request,"checkout",20,300)) return json(request,{error:"Too many checkout attempts. Try again shortly."},429);
 
   const admin = adminClient();
   let registrationId: string | null = null;

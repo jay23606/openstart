@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=20";
+} from "./core.js?v=21";
 import {
-  beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
+  accountAction, beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createVolunteerRole, createWave,
   deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteWave, DEMO_ORGANIZER_ID,
-  getOrganizerProfile, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
+  getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listPublishedEvents, listRegistrations,
   listMyVolunteerSignups, listRunnerRegistrations, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, updateEventSettings,
   updateEventSections, updateOrderItem, updateRegistration, updateVolunteerSignup, updateWaitlist, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=20";
+} from "./data.js?v=21";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -32,6 +32,7 @@ const state = {
   campaigns: [],
   emailTemplates: [],
   volunteerSignups: [],
+  auditLog: [],
   pendingView: "dashboard",
   pendingTransfer: null,
 };
@@ -76,6 +77,16 @@ function setPageMetadata(title="OpenStart — Open-source race registration",des
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
   notice.classList.remove("hidden");
+}
+
+function healthForm(health) {
+  return `<section class="modal"><div class="form-heading"><div><p>Platform status</p><h2>System health</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="health-grid"><span><b class="${health.database ? "health-ok" : "health-bad"}">${health.database ? "Operational" : "Degraded"}</b>Database</span><span><b class="${health.stripeConfigured ? "health-ok" : "health-bad"}">${health.stripeConfigured ? "Configured" : "Missing"}</b>Stripe</span><span><b class="${health.emailConfigured ? "health-ok" : "health-bad"}">${health.emailConfigured ? "Configured" : "Missing"}</b>Email</span><span><b>${health.responseMs} ms</b>Health response</span></div><p class="health-checked">Checked ${new Date(health.checkedAt).toLocaleString()}</p></section>`;
+}
+
+function downloadJson(filename,value){
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));
+  link.download=filename; link.click(); URL.revokeObjectURL(link.href);
 }
 
 function syncNavigation() {
@@ -189,6 +200,7 @@ function renderDashboard() {
         <div><p class="eyebrow">Organizer workspace</p><h1>Good morning, race director.</h1><p>Here’s what’s happening across your starting lines.</p></div>
         <div class="dashboard-actions">
           ${configured ? `<button class="stripe-button ${stripeReady ? "ready" : ""}" data-connect-stripe type="button">${stripeReady ? "✓ Stripe ready" : stripeStarted ? "Finish Stripe setup" : "Connect Stripe sandbox"}</button>` : ""}
+          <button class="subtle-button" data-system-health type="button">System health</button>
           <button class="subtle-button" data-compose-campaign type="button">Communications</button>
           <button class="primary-button" data-create-event type="button">+ Create event</button>
         </div>
@@ -226,6 +238,7 @@ function renderDashboard() {
         <div class="card-heading"><div><h2>Communications</h2><p>Drafts, scheduled messages, and delivery status.</p></div><button class="subtle-button" data-compose-campaign type="button">+ New campaign</button></div>
         <div class="campaign-list">${state.campaigns.slice(0,8).map((campaign) => `<div><span><b>${escapeHtml(campaign.name)}</b><small>${escapeHtml(eventById(campaign.event_id)?.name || "")} · ${escapeHtml(campaign.message_type)}</small></span><span>${campaign.recipient_count} recipients</span><span><b class="campaign-status">${escapeHtml(campaign.status)}</b><small>${campaign.sent_count} sent · ${campaign.failed_count} failed</small></span></div>`).join("") || '<div class="empty-state">No campaigns yet.</div>'}</div>
       </div>
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Audit trail</h2><p>Recent sensitive changes across your events.</p></div></div><div class="audit-list">${state.auditLog.slice(0,15).map((entry)=>`<p><span><b>${escapeHtml(entry.action)} ${escapeHtml(entry.table_name.replace("os_","").replaceAll("_"," "))}</b><small>${escapeHtml(eventById(entry.event_id)?.name || "Event")} · ${new Date(entry.created_at).toLocaleString()}</small></span><code>${escapeHtml(entry.record_id?.slice(0,8) || "system")}</code></p>`).join("") || '<div class="empty-state">No audited changes yet.</div>'}</div></div>
       <div id="roster-slot"></div>
     </section>`;
 }
@@ -256,6 +269,7 @@ function renderRunnerDashboard() {
       </div>
       ${state.volunteerSignups.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My volunteer shifts</h2><p>Upcoming assignments and service history.</p></div></div>${state.volunteerSignups.map((signup)=>{const shift=signup.os_volunteer_shifts;const role=shift?.os_volunteer_roles;return `<article><h3>${escapeHtml(role?.name || "Volunteer")} <small>${escapeHtml(role?.os_events?.name || "")}</small></h3><p><span>${new Date(shift.starts_at).toLocaleString()} · ${escapeHtml(shift.location)}</span><b>${escapeHtml(signup.status)}</b></p>${signup.hours_worked!==null ? `<p><span>Recorded service</span><b>${signup.hours_worked} hours</b></p>` : ""}</article>`;}).join("")}</div>` : ""}
       ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
+      <div class="privacy-card"><div><h2>Your data</h2><p>Download a portable copy of your OpenStart information or permanently delete a runner-only account.</p></div><span><button class="subtle-button" data-export-account type="button">Export my data</button><button class="danger-button" data-delete-account type="button">Delete account</button></span></div>
     </section>`;
 }
 
@@ -651,6 +665,7 @@ function eventForm() {
 function openDialog(content) {
   dialogContent.innerHTML = content;
   dialog.showModal();
+  requestAnimationFrame(()=>(dialog.querySelector("input:not([type='hidden']),select,textarea") || dialog.querySelector("button"))?.focus());
 }
 function stopScanner() {
   const video = document.querySelector("#qr-scanner");
@@ -719,10 +734,11 @@ async function loadDashboard() {
     getOrganizerProfile(userId),
   ]);
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
-  [state.orderItems,state.campaigns,state.emailTemplates] = await Promise.all([
+  [state.orderItems,state.campaigns,state.emailTemplates,state.auditLog] = await Promise.all([
     listOrganizerOrderItems(state.events.map((event) => event.id)),
     listOrganizerCampaigns(state.events.map((event) => event.id)),
     listEmailTemplates(userId),
+    listAuditLog(state.events.map((event)=>event.id)),
   ]);
 }
 
@@ -779,6 +795,20 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-remove-participant]")) target.closest(".participant-block").remove();
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
+  if (target.matches("[data-export-account]")) {
+    const accountExport=await accountAction("export");
+    downloadJson(`openstart-data-${new Date().toISOString().slice(0,10)}.json`,accountExport);
+    showNotice("Your OpenStart data export was downloaded.");
+  }
+  if (target.matches("[data-delete-account]")) {
+    if(!confirm("Permanently delete your OpenStart account and anonymize your runner data? This cannot be undone.")) return;
+    if(!confirm("Final confirmation: delete this account now?")) return;
+    await accountAction("delete");
+    state.session=null;
+    await go("discover");
+    showNotice("Your account was deleted and participant data was anonymized.");
+  }
   if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
   if (target.dataset.siteEditor) openDialog(siteEditorForm(eventById(target.dataset.siteEditor)));
   if (target.dataset.waveManager) openDialog(waveManagerForm(eventById(target.dataset.waveManager)));

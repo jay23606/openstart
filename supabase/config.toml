@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.os-waves]
 verify_jwt = false
+
+[functions.os-account]
+verify_jwt = false

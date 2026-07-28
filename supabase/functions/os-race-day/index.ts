@@ -1,5 +1,5 @@
 import QRCode from "npm:qrcode@1.5.4";
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "../_shared/common.ts";
 
 const signingSecret = Deno.env.get("RACE_DAY_SIGNING_SECRET");
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
@@ -26,6 +26,7 @@ const verifyToken = async (token: string) => {
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
+  if(!await enforceRateLimit(request,"race-day",240,300)) return json(request,{error:"Too many race-day requests. Try again shortly."},429);
   if (!signingSecret) return json(request, { error: "Race-day signing is not configured" }, 503);
   try {
     const user = await requiredUser(request);

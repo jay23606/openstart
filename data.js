@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=20";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=20";
+import { configured, supabase } from "./core.js?v=21";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=21";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -277,6 +277,18 @@ export async function resultsAction(action, payload) {
 
 export async function wavesAction(action,payload) {
   return functionResult("os-waves",{action,...payload});
+}
+
+export async function accountAction(action,payload={}) {
+  return functionResult("os-account",{action,...payload});
+}
+
+export async function listAuditLog(eventIds) {
+  if(!configured || !eventIds.length) return [];
+  const {data,error}=await supabase.from("os_audit_log").select("*").in("event_id",eventIds)
+    .order("created_at",{ascending:false}).limit(100);
+  if(error) throw error;
+  return data;
 }
 
 export async function createWave(wave) {

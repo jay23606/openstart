@@ -55,3 +55,13 @@ export async function requiredUser(request: Request) {
   return error ? null : data.user;
 }
 
+export async function enforceRateLimit(request: Request, scope: string, limit: number, windowSeconds: number) {
+  const forwarded=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const bytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(forwarded)));
+  const fingerprint=Array.from(bytes.slice(0,12)).map((byte)=>byte.toString(16).padStart(2,"0")).join("");
+  const {data,error}=await adminClient().rpc("os_check_rate_limit",{
+    p_scope_key:`${scope}:${fingerprint}`,p_limit:limit,p_window_seconds:windowSeconds,
+  });
+  if(error) throw error;
+  return data===true;
+}

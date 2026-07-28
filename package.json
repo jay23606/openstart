@@ -3,6 +3,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --check app.js && node --check core.js && node --check data.js && node --test tests/*.test.mjs"
+    "test": "node --check app.js && node --check core.js && node --check data.js && node --test tests/*.test.mjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0"
   }
 }

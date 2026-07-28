@@ -399,6 +399,21 @@ footer b { color: white; }
 .wave-admin-list p, .wave-admin-list small { color: var(--muted); font-size: 10px; margin: 0; }
 .wave-admin-list article > span { align-items: center; display: flex; gap: 7px; }
 .wave-admin-list article > span > button:last-child { background: none; border: 0; color: #a33; cursor: pointer; font-weight: 800; }
+.audit-list { border-top: 1px solid var(--line); }
+.audit-list p { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; margin: 0; padding: 11px 0; }
+.audit-list b, .audit-list small { display: block; text-transform: capitalize; }
+.audit-list small { color: var(--muted); margin-top: 3px; }
+.audit-list code { color: var(--muted); }
+.privacy-card { align-items: center; background: var(--green-dark); color: white; display: flex; gap: 20px; justify-content: space-between; margin-top: 24px; padding: 24px; }
+.privacy-card h2 { font-family: Georgia,serif; margin: 0 0 6px; }
+.privacy-card p { color: #cbd8d3; font-size: 11px; margin: 0; }
+.privacy-card > span { display: flex; gap: 8px; }
+.health-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+.health-grid span { background: var(--cream); color: var(--muted); font-size: 10px; padding: 16px; }
+.health-grid b { color: var(--ink); display: block; font-size: 15px; margin-bottom: 5px; }
+.health-grid .health-ok { color: var(--green); }
+.health-grid .health-bad { color: #a33; }
+.health-checked { color: var(--muted); font-size: 10px; margin-top: 15px; }
 
 @media (max-width: 620px) {
   .runner-entry { align-items: start; grid-template-columns: 1fr; }
@@ -448,6 +463,8 @@ footer b { color: white; }
   .event-banner { height: 230px; }
   .public-start-list > div { grid-template-columns: 1fr; }
   .wave-admin-list article { align-items: stretch; flex-direction: column; }
+  .privacy-card { align-items: stretch; flex-direction: column; }
+  .privacy-card > span { flex-direction: column; }
   .scheduled-price-form, .finance-grid > div { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 8px; }
 }

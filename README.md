@@ -32,6 +32,8 @@ There is no frontend framework, bundler, or build step.
   sections, sponsors, draft previews, publishing controls, and social metadata
 - Start waves and corrals with runner selection, capacity enforcement, pace
   guidance, bulk assignment, bib ranges, start controls, and targeted messaging
+- Production safeguards including immutable audit history, server-side rate
+  limits, health checks, account export/deletion, CSP, and Playwright smoke tests
 - Device-local demo mode when Supabase has not been configured
 
 ## Files

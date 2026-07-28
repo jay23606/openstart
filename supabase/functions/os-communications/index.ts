@@ -1,4 +1,4 @@
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "../_shared/common.ts";
 
 const resendKey = Deno.env.get("RESEND_API_KEY");
 const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
@@ -100,6 +100,7 @@ const sendCampaign = async (admin: ReturnType<typeof adminClient>, campaignId: s
 Deno.serve(async (request)=>{
   if(request.method==="OPTIONS") return new Response("ok",{headers:corsHeaders(request)});
   if(request.method!=="POST") return json(request,{error:"Method not allowed"},405);
+  if(!await enforceRateLimit(request,"communications",120,300)) return json(request,{error:"Too many communication requests. Try again shortly."},429);
   try{
     const body=await request.json();
     const admin=adminClient();

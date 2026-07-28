@@ -1,8 +1,9 @@
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "../_shared/common.ts";
 
 Deno.serve(async(request)=>{
   if(request.method==="OPTIONS") return new Response("ok",{headers:corsHeaders(request)});
   if(request.method!=="POST") return json(request,{error:"Method not allowed"},405);
+  if(!await enforceRateLimit(request,"waves",120,300)) return json(request,{error:"Too many wave requests. Try again shortly."},429);
   try{
     const user=await requiredUser(request);
     if(!user) return json(request,{error:"Sign in is required"},401);

@@ -1,5 +1,5 @@
 import Stripe from "npm:stripe@18.5.0";
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, corsHeaders, enforceRateLimit, json, requiredUser } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const resendKey = Deno.env.get("RESEND_API_KEY");
@@ -27,6 +27,7 @@ const inviteNext = async (admin: ReturnType<typeof adminClient>, tierId: string,
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "Method not allowed" }, 405);
+  if(!await enforceRateLimit(request,"registration-action",60,300)) return json(request,{error:"Too many requests. Try again shortly."},429);
   try {
     const user = await requiredUser(request);
     if (!user) return json(request, { error: "Sign in is required" }, 401);
