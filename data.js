@@ -1,4 +1,5 @@
 import { configured, supabase } from "./core.js";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -88,17 +89,19 @@ function saveDemo(state) {
 }
 
 async function functionResult(name, body) {
-  const { data, error } = await supabase.functions.invoke(name, { body });
-  if (error) {
-    try {
-      const details = await error.context?.json();
-      throw new Error(details?.error || error.message);
-    } catch (contextError) {
-      if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") {
-        throw contextError;
-      }
-      throw error;
-    }
+  const { data: { session } } = await supabase.auth.getSession();
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `The ${name} service returned ${response.status}`);
   }
   if (data?.error) throw new Error(data.error);
   return data;
