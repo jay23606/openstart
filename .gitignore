@@ -3,6 +3,7 @@
 /.vinext
 /.wrangler
 /dist
+/supabase/.temp
 .DS_Store
 npm-debug.log*
 .env*

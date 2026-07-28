@@ -22,12 +22,13 @@ There is no frontend framework, bundler, or build step.
 design. `app.js` owns UI state and events. `data.js` is the only persistence
 layer. `core.js` configures Supabase and shared helpers. `payments.js` is the
 payment-provider boundary. `service-worker.js` and `manifest.json` provide PWA
-support. `supabase/schema.sql` creates the database and RLS policies.
+support. `supabase/migrations/20260728150000_initial_openstart.sql` creates the
+database and RLS policies.
 
 ## Supabase setup
 
 1. Create a Supabase project.
-2. Run `supabase/schema.sql` in the SQL editor.
+2. Run `supabase db push` or apply the SQL migration in the SQL editor.
 3. Copy `config.example.js` to `config.js` and add the project URL and
    publishable key. Never put a service-role key in browser code.
 4. Add the local and GitHub Pages URLs to the Supabase Auth redirect allow-list.

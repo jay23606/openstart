@@ -1,4 +1,3 @@
-// The publishable key is safe in a browser when every table has correct RLS.
-// Never place a Supabase service-role key in this file.
-export const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-export const SUPABASE_ANON_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
+// Replace these two public values with your Supabase project settings.
+export const SUPABASE_URL = "https://zbtgonklxweikgukzukg.supabase.co";
+export const SUPABASE_ANON_KEY = "sb_publishable_Tpkd3FzWhsfldMll-gIqfg_74YVroef";
