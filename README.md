@@ -11,6 +11,8 @@ There is no frontend framework, bundler, or build step.
 - Registration tiers, prices, capacity, and participant registration
 - Supabase email/password authentication for organizers
 - Organizer event creation, metrics, and participant rosters
+- Searchable registration management, custom questions, waivers, and CSV exports
+- Scheduled pricing, promotion codes, waitlists, and financial reporting
 - Row-level security for organizer and participant data
 - A provider-neutral payment boundary that leaves paid entries pending
 - Installable PWA shell with an offline cache
@@ -60,6 +62,8 @@ Connect destination charges in sandbox mode:
 5. `os-stripe-connect` sends signed-in organizers through Stripe-hosted onboarding.
 
 The browser must never be allowed to mark its own registration as paid.
+The browser also never calculates an authoritative discount or scheduled price;
+the atomic reservation function validates those values before Checkout is created.
 
 ### Stripe sandbox setup
 

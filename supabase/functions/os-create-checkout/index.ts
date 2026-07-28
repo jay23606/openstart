@@ -20,9 +20,10 @@ Deno.serve(async (request) => {
 
   const admin = adminClient();
   let registrationId: string | null = null;
+  let body: Record<string, unknown> = {};
 
   try {
-    const body = await request.json();
+    body = await request.json();
     const idempotencyKey = String(body.idempotencyKey || "");
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
       return json(request, { error: "A valid idempotency key is required" }, 400);
@@ -38,6 +39,7 @@ Deno.serve(async (request) => {
       p_emergency_contact: body.emergencyContact,
       p_participant_user_id: userId,
       p_idempotency_key: idempotencyKey,
+      p_promo_code: body.promoCode || null,
     });
     if (error) throw error;
 
@@ -108,6 +110,21 @@ Deno.serve(async (request) => {
         .eq("id", registrationId)
         .eq("status", "reserved");
     }
-    return json(request, { error: error instanceof Error ? error.message : "Checkout failed" }, 400);
+    const message = error instanceof Error ? error.message : "Checkout failed";
+    if (message.includes("SOLD_OUT")) {
+      if (body?.joinWaitlist === true) {
+        const { data: waitlistId, error: waitlistError } = await admin.rpc("os_join_waitlist", {
+          p_event_id: body.eventId,
+          p_tier_id: body.tierId,
+          p_first_name: body.firstName,
+          p_last_name: body.lastName,
+          p_email: body.email,
+        });
+        if (!waitlistError) return json(request, { status: "waitlisted", waitlistId });
+        return json(request, { error: waitlistError.message }, 400);
+      }
+      return json(request, { error: "This registration option is sold out", soldOut: true }, 409);
+    }
+    return json(request, { error: message }, 400);
   }
 });

@@ -3,10 +3,11 @@ import {
 } from "./core.js";
 import {
   beginRegistration, beginStripeOnboarding, createEvent, createEventQuestion,
-  createManualRegistration, deleteEventQuestion, DEMO_ORGANIZER_ID,
+  createManualRegistration, createPromoCode, createScheduledPrice,
+  deleteEventQuestion, deleteScheduledPrice, DEMO_ORGANIZER_ID,
   getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations,
   listRunnerRegistrations, resendConfirmation, resetDemo, updateEventSettings,
-  updateRegistration,
+  updateRegistration, updateWaitlist,
 } from "./data.js";
 
 const page = document.querySelector("#page-content");
@@ -31,6 +32,12 @@ const state = {
 const eventById = (id) => state.events.find((event) => event.id === id);
 const tierById = (event, id) => event?.os_event_tiers?.find((tier) => tier.id === id);
 const eventRegistrations = (id) => state.registrations.filter((registration) => registration.event_id === id);
+const effectivePrice = (tier) => {
+  const now = Date.now();
+  const active = (tier.os_tier_prices || []).filter((price) => new Date(price.starts_at).getTime() <= now)
+    .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+  return active[0]?.price_cents ?? tier.price_cents;
+};
 
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
@@ -72,7 +79,7 @@ function renderDiscover() {
       <div class="hero-card">
         <div class="route-line"><span>START</span><i></i><span>FINISH</span></div>
         <p>Up next</p><strong>${escapeHtml(published[0]?.name || "Your next race")}</strong>
-        <div class="hero-meta"><span><b>${published.length}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> distances</span><span><b>${money(Math.min(...published.flatMap((event) => event.os_event_tiers.map((tier) => tier.price_cents))))}</b> from</span></div>
+        <div class="hero-meta"><span><b>${published.length}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> distances</span><span><b>${money(Math.min(...published.flatMap((event) => event.os_event_tiers.map(effectivePrice))))}</b> from</span></div>
       </div>
     </section>
     <section class="events-section" id="events">
@@ -104,7 +111,7 @@ function renderEvent(event) {
           <div class="tier-list">
             ${event.os_event_tiers.map((tier) => {
               const used = registrations.filter((item) => item.tier_id === tier.id).length;
-              return `<div class="tier-row"><div><h3>${escapeHtml(tier.name)}</h3><p>${escapeHtml(tier.distance_label)} · ${tier.capacity - used} spots available</p></div><strong>${money(tier.price_cents)}</strong></div>`;
+              return `<div class="tier-row"><div><h3>${escapeHtml(tier.name)}</h3><p>${escapeHtml(tier.distance_label)} · capacity ${tier.capacity}${used ? ` · ${used} registered` : ""}</p></div><strong>${money(effectivePrice(tier))}</strong></div>`;
             }).join("")}
           </div>
           <div class="detail-note"><b>Simple for now, extensible later.</b><p>Registration is connected. Paid entries remain pending until a payment provider confirms them server-side.</p></div>
@@ -122,6 +129,11 @@ function renderDashboard() {
   const published = state.events.filter((event) => event.status === "published");
   const confirmed = state.registrations.filter((registration) => registration.status === "confirmed");
   const gross = confirmed.reduce((sum, registration) => sum + registration.amount_cents, 0);
+  const discounts = confirmed.reduce((sum, registration) => sum + (registration.discount_cents || 0), 0);
+  const platformFees = confirmed.reduce((sum, registration) => {
+    const race = eventById(registration.event_id);
+    return sum + Math.round(registration.amount_cents * (race?.platform_fee_bps || 500) / 10000);
+  }, 0);
   const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
   const stripeStarted = Boolean(state.profile?.stripe_account_id);
   page.innerHTML = `
@@ -137,6 +149,7 @@ function renderDashboard() {
         <div><p>Confirmed registrations</p><strong>${confirmed.length}</strong><span>Across all events</span></div>
         <div><p>Published events</p><strong>${published.length}</strong><span>${state.events.length - published.length} draft</span></div>
         <div><p>Confirmed registration value</p><strong>${money(gross)}</strong><span>Paid and free confirmed entries</span></div>
+        <div><p>Estimated organizer net</p><strong>${money(gross - platformFees)}</strong><span>${money(discounts)} discounts · before Stripe fees</span></div>
       </div>
       <div class="dashboard-card">
         <div class="card-heading"><div><h2>Your events</h2><p>Manage details and monitor signups.</p></div>${configured ? "" : '<button class="subtle-button" data-reset-demo type="button">Reset demo</button>'}</div>
@@ -150,6 +163,15 @@ function renderDashboard() {
               <span>${displayDate(event.starts_at)} <b>›</b></span>
             </button>`).join("")}
         </div>
+      </div>
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Financial overview</h2><p>Confirmed registration revenue and OpenStart application fees.</p></div><button class="subtle-button" data-export-finance type="button">Export financial CSV</button></div>
+        <div class="finance-grid">${state.events.map((event) => {
+          const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
+          const revenue = entries.reduce((sum, item) => sum + item.amount_cents, 0);
+          const fees = entries.reduce((sum, item) => sum + Math.round(item.amount_cents * (event.platform_fee_bps || 500) / 10000), 0);
+          return `<div><span>${escapeHtml(event.name)}</span><b>${money(revenue)}</b><small>${entries.length} entries · ${money(revenue - fees)} estimated net</small></div>`;
+        }).join("")}</div>
       </div>
       <div id="roster-slot"></div>
     </section>`;
@@ -191,6 +213,7 @@ function renderRoster(event) {
         <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
         <button class="subtle-button" data-add-participant="${event.id}" type="button">+ Manual entry</button>
         <button class="subtle-button" data-export-roster="${event.id}" type="button">Export CSV</button>
+        <button class="subtle-button" data-pricing-settings="${event.id}" type="button">Pricing</button>
         <button class="subtle-button" data-registration-settings="${event.id}" type="button">Form settings</button>
       </div>
       ${registrations.length ? `<div class="roster roster-manage">${registrations.map((item) => `
@@ -199,6 +222,7 @@ function renderRoster(event) {
         <span>${escapeHtml(tierById(event, item.tier_id)?.name || "Entry")}<small>${item.bib_number ? `Bib ${escapeHtml(item.bib_number)}` : "No bib assigned"}</small></span><span>${item.status}</span></button>`).join("")}</div>`
         : '<div class="empty-state">No registrations yet. Share the published event to get the first runner on the list.</div>'}
       <div class="form-summary"><strong>${event.os_event_questions?.length || 0} custom questions</strong><span>${event.waiver_text ? "Waiver enabled" : "No waiver configured"}</span></div>
+      ${(event.os_waitlist || []).length ? `<div class="waitlist-list"><h3>Waitlist</h3>${event.os_waitlist.map((item) => `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(tierById(event, item.tier_id)?.name || "")}</small></span><select data-waitlist-id="${item.id}"><option ${item.status === "waiting" ? "selected" : ""}>waiting</option><option ${item.status === "invited" ? "selected" : ""}>invited</option><option ${item.status === "registered" ? "selected" : ""}>registered</option><option ${item.status === "removed" ? "selected" : ""}>removed</option></select></div>`).join("")}</div>` : ""}
     </div>`;
   document.querySelector("#roster-slot").scrollIntoView({ behavior: "smooth" });
 }
@@ -232,6 +256,8 @@ function registrationForm(event) {
             ? `<label class="check-label"><input name="question_${question.id}" type="checkbox" value="Yes" ${question.required ? "required" : ""}> ${escapeHtml(question.label)}</label>`
             : `<label>${escapeHtml(question.label)}<input name="question_${question.id}" ${question.required ? "required" : ""}></label>`).join("")}
         <label>Emergency contact<input name="emergency_contact" placeholder="Name · phone" required></label>
+        <label>Promo code <span class="optional-label">Optional</span><input name="promo_code" autocomplete="off"></label>
+        <label class="check-label"><input name="join_waitlist" type="checkbox" checked> Join the waitlist automatically if this option sells out.</label>
         ${event.waiver_text ? `<div class="waiver-box"><strong>Participant waiver</strong><p>${escapeHtml(event.waiver_text)}</p></div><label class="check-label"><input name="waiver" type="checkbox" required> I have read and accept this waiver.</label>` : ""}
         <button class="primary-button" type="submit">Complete registration</button>
       </form>
@@ -271,6 +297,19 @@ function registrationSettingsForm(event) {
   </section>`;
 }
 
+function pricingSettingsForm(event) {
+  const promos = event.os_promo_codes || [];
+  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Pricing & capacity</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
+    <div class="pricing-tier-list">${event.os_event_tiers.map((tier) => `<div><div><b>${escapeHtml(tier.name)}</b><small>Base ${money(tier.price_cents)} · Current ${money(effectivePrice(tier))} · Capacity ${tier.capacity}</small></div>
+      <form class="scheduled-price-form" data-tier-id="${tier.id}" data-event-id="${event.id}"><input name="name" placeholder="Fall price" required><input name="price" type="number" min="0" step=".01" placeholder="Price" required><input name="starts_at" type="datetime-local" required><button class="subtle-button" type="submit">Schedule</button></form>
+      <div class="price-schedule">${(tier.os_tier_prices || []).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at)).map((price) => `<span>${escapeHtml(price.name)} · ${money(price.price_cents)} · ${displayDate(price.starts_at)} <button data-delete-price="${price.id}" data-event-id="${event.id}" type="button">×</button></span>`).join("") || "<small>No scheduled changes.</small>"}</div>
+    </div>`).join("")}</div>
+    <h3>Promo codes</h3>
+    <div class="promo-list">${promos.map((promo) => `<span><b>${escapeHtml(promo.code)}</b> · ${promo.discount_type === "percent" ? `${promo.discount_value / 100}%` : money(promo.discount_value)}${promo.max_redemptions ? ` · limit ${promo.max_redemptions}` : ""}</span>`).join("") || "<p>No promo codes yet.</p>"}</div>
+    <form id="promo-form" data-event-id="${event.id}"><div class="split-fields"><label>Code<input name="code" required></label><label>Type<select name="discount_type"><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></label></div><div class="split-fields"><label>Value<input name="value" type="number" min=".01" step=".01" required></label><label>Usage limit<input name="max_redemptions" type="number" min="1"></label></div><div class="split-fields"><label>Starts<input name="starts_at" type="datetime-local"></label><label>Expires<input name="expires_at" type="datetime-local"></label></div><button class="primary-button" type="submit">Create promo code</button></form>
+  </section>`;
+}
+
 function eventForm() {
   return `
     <section class="modal">
@@ -306,6 +345,24 @@ function exportRoster(event) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `${event.slug}-registrations.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportFinancials() {
+  const headers = ["Event", "Participant", "Email", "Status", "Payment", "Base amount", "Discount", "Collected", "OpenStart fee", "Estimated organizer net", "Created"];
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const rows = state.registrations.map((item) => {
+    const race = eventById(item.event_id);
+    const fee = Math.round(item.amount_cents * (race?.platform_fee_bps || 500) / 10000);
+    return [race?.name, `${item.first_name} ${item.last_name}`, item.email, item.status, item.payment_status,
+      ((item.base_amount_cents || item.amount_cents) / 100).toFixed(2), ((item.discount_cents || 0) / 100).toFixed(2),
+      (item.amount_cents / 100).toFixed(2), (fee / 100).toFixed(2), ((item.amount_cents - fee) / 100).toFixed(2), item.created_at];
+  });
+  const blob = new Blob([[headers, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `openstart-financials-${new Date().toISOString().slice(0,10)}.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -386,7 +443,9 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.roster) renderRoster(eventById(target.dataset.roster));
   if (target.dataset.addParticipant) openDialog(manualRegistrationForm(eventById(target.dataset.addParticipant)));
   if (target.dataset.registrationSettings) openDialog(registrationSettingsForm(eventById(target.dataset.registrationSettings)));
+  if (target.dataset.pricingSettings) openDialog(pricingSettingsForm(eventById(target.dataset.pricingSettings)));
   if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
+  if (target.matches("[data-export-finance]")) exportFinancials();
   if (target.dataset.editRegistration) {
     const item = state.registrations.find((registration) => registration.id === target.dataset.editRegistration);
     openDialog(editRegistrationForm(item));
@@ -408,6 +467,12 @@ document.addEventListener("click", async (event) => {
     openDialog(registrationSettingsForm(eventById(target.dataset.eventId)));
     showNotice("Question removed.");
   }
+  if (target.dataset.deletePrice) {
+    await deleteScheduledPrice(target.dataset.deletePrice);
+    await loadDashboard();
+    openDialog(pricingSettingsForm(eventById(target.dataset.eventId)));
+    showNotice("Scheduled price removed.");
+  }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-close-dialog]")) dialog.close();
   if (target.matches("[data-reset-demo]")) {
@@ -422,6 +487,12 @@ document.addEventListener("input", (event) => {
 });
 document.addEventListener("change", (event) => {
   if (event.target.dataset.rosterStatus) filterRoster(event.target.dataset.rosterStatus);
+  if (event.target.dataset.waitlistId) {
+    updateWaitlist(event.target.dataset.waitlistId, {
+      status: event.target.value,
+      invited_at: event.target.value === "invited" ? new Date().toISOString() : null,
+    }).then(() => showNotice("Waitlist status updated.")).catch((error) => showNotice(error.message));
+  }
 });
 
 document.addEventListener("submit", async (event) => {
@@ -462,6 +533,8 @@ document.addEventListener("submit", async (event) => {
         answers,
         waiverAccepted: data.get("waiver") === "on",
         waiverVersion: race.waiver_text ? String(race.updated_at || race.id) : null,
+        promoCode: data.get("promo_code") || null,
+        joinWaitlist: data.get("join_waitlist") === "on",
         idempotencyKey: crypto.randomUUID(),
         successUrl: `${location.origin}${location.pathname}`,
         cancelUrl: `${location.origin}${location.pathname}`,
@@ -471,6 +544,10 @@ document.addEventListener("submit", async (event) => {
         return;
       }
       dialog.close();
+      if (result.status === "waitlisted") {
+        showNotice("This option is full. You have been added to the waitlist.");
+        return;
+      }
       await loadPublic();
       state.selectedEvent = eventById(race.id);
       renderEvent(state.selectedEvent);
@@ -534,6 +611,34 @@ document.addEventListener("submit", async (event) => {
       await loadDashboard();
       openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
       showNotice("Registration question added.");
+    }
+
+    if (form.matches(".scheduled-price-form")) {
+      await createScheduledPrice({
+        tier_id: form.dataset.tierId,
+        name: data.get("name"),
+        price_cents: Math.round(Number(data.get("price")) * 100),
+        starts_at: new Date(data.get("starts_at")).toISOString(),
+      });
+      await loadDashboard();
+      openDialog(pricingSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Price change scheduled.");
+    }
+
+    if (form.id === "promo-form") {
+      const percent = data.get("discount_type") === "percent";
+      await createPromoCode({
+        event_id: form.dataset.eventId,
+        code: String(data.get("code")).trim().toUpperCase(),
+        discount_type: data.get("discount_type"),
+        discount_value: percent ? Math.round(Number(data.get("value")) * 100) : Math.round(Number(data.get("value")) * 100),
+        max_redemptions: data.get("max_redemptions") ? Number(data.get("max_redemptions")) : null,
+        starts_at: data.get("starts_at") ? new Date(data.get("starts_at")).toISOString() : null,
+        expires_at: data.get("expires_at") ? new Date(data.get("expires_at")).toISOString() : null,
+      });
+      await loadDashboard();
+      openDialog(pricingSettingsForm(eventById(form.dataset.eventId)));
+      showNotice("Promo code created.");
     }
 
     if (form.id === "event-form") {

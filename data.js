@@ -111,7 +111,7 @@ export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*), os_event_questions(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*)")
     .eq("status", "published")
     .order("starts_at");
   if (error) throw error;
@@ -122,7 +122,7 @@ export async function listOrganizerEvents(userId) {
   if (!configured) return demoState().events;
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*), os_event_questions(*)")
+    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_promo_codes(*), os_waitlist(*)")
     .eq("organizer_id", userId)
     .order("starts_at");
   if (error) throw error;
@@ -206,6 +206,28 @@ export async function deleteEventQuestion(id) {
 export async function updateEventSettings(eventId, changes) {
   if (!configured) throw new Error("Event settings require Supabase");
   const { error } = await supabase.from("os_events").update(changes).eq("id", eventId);
+  if (error) throw error;
+}
+
+export async function createScheduledPrice(price) {
+  const { data, error } = await supabase.from("os_tier_prices").insert(price).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteScheduledPrice(id) {
+  const { error } = await supabase.from("os_tier_prices").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function createPromoCode(promo) {
+  const { data, error } = await supabase.from("os_promo_codes").insert(promo).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateWaitlist(id, changes) {
+  const { error } = await supabase.from("os_waitlist").update(changes).eq("id", id);
   if (error) throw error;
 }
 
