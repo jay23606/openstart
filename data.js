@@ -121,6 +121,25 @@ export async function listRegistrations(eventIds) {
   return data;
 }
 
+export async function getOrganizerProfile(userId) {
+  if (!configured) {
+    return {
+      id: DEMO_ORGANIZER_ID,
+      stripe_account_id: null,
+      stripe_details_submitted: false,
+      stripe_charges_enabled: false,
+      stripe_payouts_enabled: false,
+    };
+  }
+  const { data, error } = await supabase
+    .from("os_profiles")
+    .select("id, display_name, stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_payouts_enabled")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function createEvent(event, tier) {
   if (!configured) {
     const state = demoState();
@@ -154,17 +173,45 @@ export async function createEvent(event, tier) {
   return { ...created, os_event_tiers: [createdTier] };
 }
 
-export async function createRegistration(registration) {
+async function createDemoRegistration(registration) {
+  const state = demoState();
+  const created = { ...registration, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+  state.registrations.push(created);
+  saveDemo(state);
+  return created;
+}
+
+export async function beginRegistration(payload) {
   if (!configured) {
-    const state = demoState();
-    const created = { ...registration, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-    state.registrations.push(created);
-    saveDemo(state);
-    return created;
+    const event = demoState().events.find((item) => item.id === payload.eventId);
+    const tier = event?.os_event_tiers.find((item) => item.id === payload.tierId);
+    if (!event || !tier) throw new Error("Registration option was not found");
+    const registration = await createDemoRegistration({
+      event_id: event.id,
+      tier_id: tier.id,
+      participant_user_id: null,
+      first_name: payload.firstName,
+      last_name: payload.lastName,
+      email: payload.email,
+      emergency_contact: payload.emergencyContact,
+      status: tier.price_cents === 0 ? "confirmed" : "pending",
+      payment_status: tier.price_cents === 0 ? "not_required" : "pending",
+      amount_cents: tier.price_cents,
+    });
+    return { status: registration.status, registrationId: registration.id };
   }
-  const { error } = await supabase
-    .from("os_registrations")
-    .insert(registration);
+  const { data, error } = await supabase.functions.invoke("os-create-checkout", { body: payload });
   if (error) throw error;
-  return registration;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function beginStripeOnboarding(returnUrl) {
+  if (!configured) throw new Error("Supabase must be configured first");
+  const { data, error } = await supabase.functions.invoke("os-stripe-connect", {
+    body: { returnUrl },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data.url;
 }

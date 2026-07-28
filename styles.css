@@ -130,6 +130,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 
 .dashboard { background: #f6f7f3; max-width: none; min-height: calc(100vh - 72px); padding-left: max(24px, calc((100vw - 1264px) / 2)); padding-right: max(24px, calc((100vw - 1264px) / 2)); }
 .dashboard-header { align-items: end; display: flex; justify-content: space-between; margin-bottom: 44px; }
+.dashboard-actions { align-items: center; display: flex; gap: 10px; }
+.stripe-button { background: white; border: 1px solid #635bff; border-radius: 6px; color: #4f46d8; cursor: pointer; font-size: 13px; font-weight: 800; padding: 15px 18px; }
+.stripe-button:hover { background: #f3f2ff; }
+.stripe-button.ready { border-color: var(--green); color: var(--green); }
+.stripe-button:disabled { cursor: wait; opacity: .65; }
 .dashboard h1 { font-size: clamp(44px, 5vw, 67px); margin-bottom: 14px; }
 .dashboard-header > div > p:last-child { color: var(--muted); margin: 0; }
 .metric-grid { display: grid; gap: 18px; grid-template-columns: repeat(3, 1fr); margin-bottom: 24px; }
@@ -198,6 +203,7 @@ footer b { color: white; }
   .hero { min-height: 0; padding-bottom: 75px; }
   .hero-card { box-shadow: 10px 12px 0 var(--lime); min-height: 280px; padding: 30px; }
   .hero-actions, .section-heading, .dashboard-header, .detail-hero { align-items: flex-start; flex-direction: column; }
+  .dashboard-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .event-card { grid-template-columns: 80px 1fr; }
   .event-card-content { padding: 25px; }
   .open-promise { padding-bottom: 70px; }

@@ -2,10 +2,9 @@ import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
 } from "./core.js";
 import {
-  createEvent, createRegistration, DEMO_ORGANIZER_ID, listOrganizerEvents,
-  listPublishedEvents, listRegistrations, resetDemo,
+  beginRegistration, beginStripeOnboarding, createEvent, DEMO_ORGANIZER_ID,
+  getOrganizerProfile, listOrganizerEvents, listPublishedEvents, listRegistrations, resetDemo,
 } from "./data.js";
-import { paymentProvider } from "./payments.js";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -21,6 +20,7 @@ const state = {
   registrations: [],
   selectedEvent: null,
   session: null,
+  profile: null,
 };
 
 const eventById = (id) => state.events.find((event) => event.id === id);
@@ -116,11 +116,16 @@ function renderEvent(event) {
 function renderDashboard() {
   const published = state.events.filter((event) => event.status === "published");
   const gross = state.registrations.reduce((sum, registration) => sum + registration.amount_cents, 0);
+  const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
+  const stripeStarted = Boolean(state.profile?.stripe_account_id);
   page.innerHTML = `
     <section class="dashboard">
       <div class="dashboard-header">
         <div><p class="eyebrow">Organizer workspace</p><h1>Good morning, race director.</h1><p>Here’s what’s happening across your starting lines.</p></div>
-        <button class="primary-button" data-create-event type="button">+ Create event</button>
+        <div class="dashboard-actions">
+          ${configured ? `<button class="stripe-button ${stripeReady ? "ready" : ""}" data-connect-stripe type="button">${stripeReady ? "✓ Stripe ready" : stripeStarted ? "Finish Stripe setup" : "Connect Stripe sandbox"}</button>` : ""}
+          <button class="primary-button" data-create-event type="button">+ Create event</button>
+        </div>
       </div>
       <div class="metric-grid">
         <div><p>Total registrations</p><strong>${state.registrations.length}</strong><span>Across all events</span></div>
@@ -215,7 +220,10 @@ async function loadPublic() {
 
 async function loadDashboard() {
   const userId = state.session?.user?.id || DEMO_ORGANIZER_ID;
-  state.events = await listOrganizerEvents(userId);
+  [state.events, state.profile] = await Promise.all([
+    listOrganizerEvents(userId),
+    getOrganizerProfile(userId),
+  ]);
   state.registrations = await listRegistrations(state.events.map((event) => event.id));
 }
 
@@ -250,6 +258,18 @@ document.addEventListener("click", async (event) => {
   }
   if (target.dataset.register) openDialog(registrationForm(eventById(target.dataset.register)));
   if (target.matches("[data-create-event]")) openDialog(eventForm());
+  if (target.matches("[data-connect-stripe]")) {
+    target.disabled = true;
+    target.textContent = "Opening Stripe…";
+    try {
+      const url = await beginStripeOnboarding(`${location.origin}${location.pathname}?stripe=return`);
+      location.assign(url);
+    } catch (error) {
+      target.disabled = false;
+      showNotice(error.message || "Stripe onboarding could not start.");
+      await go("dashboard");
+    }
+  }
   if (target.dataset.roster) renderRoster(eventById(target.dataset.roster));
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-close-dialog]")) dialog.close();
@@ -284,25 +304,26 @@ document.addEventListener("submit", async (event) => {
     if (form.id === "registration-form") {
       const race = eventById(form.dataset.eventId);
       const tier = tierById(race, data.get("tier_id"));
-      const checkout = await paymentProvider.createCheckout({ amountCents: tier.price_cents });
-      await createRegistration({
-        event_id: race.id,
-        tier_id: tier.id,
-        participant_user_id: state.session?.user?.id || null,
-        first_name: data.get("first_name"),
-        last_name: data.get("last_name"),
+      const result = await beginRegistration({
+        eventId: race.id,
+        tierId: tier.id,
+        firstName: data.get("first_name"),
+        lastName: data.get("last_name"),
         email: data.get("email"),
-        emergency_contact: data.get("emergency_contact"),
-        status: tier.price_cents === 0 ? "confirmed" : "pending",
-        payment_status: checkout.status,
-        payment_reference: checkout.reference,
-        amount_cents: tier.price_cents,
+        emergencyContact: data.get("emergency_contact"),
+        idempotencyKey: crypto.randomUUID(),
+        successUrl: `${location.origin}${location.pathname}`,
+        cancelUrl: `${location.origin}${location.pathname}`,
       });
+      if (result.checkoutUrl) {
+        location.assign(result.checkoutUrl);
+        return;
+      }
       dialog.close();
       await loadPublic();
       state.selectedEvent = eventById(race.id);
       renderEvent(state.selectedEvent);
-      showNotice(tier.price_cents ? "Registration saved. Payment is pending until a provider is connected." : "Registration confirmed.");
+      showNotice(result.status === "confirmed" ? "Registration confirmed." : "Registration saved.");
     }
 
     if (form.id === "event-form") {
@@ -352,6 +373,18 @@ async function boot() {
     });
   }
   await go("discover");
+  const params = new URLSearchParams(location.search);
+  if (params.get("payment") === "success") {
+    showNotice("Payment received. Stripe is confirming your registration.");
+    history.replaceState({}, "", location.pathname);
+  } else if (params.get("payment") === "cancelled") {
+    showNotice("Checkout was cancelled. Your temporary spot will be released.");
+    history.replaceState({}, "", location.pathname);
+  } else if (params.get("stripe") === "return" && state.session) {
+    await go("dashboard");
+    showNotice("Stripe setup was saved. Status updates arrive automatically.");
+    history.replaceState({}, "", location.pathname);
+  }
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js");
 }
 

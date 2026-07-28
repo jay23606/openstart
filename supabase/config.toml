@@ -1,0 +1,11 @@
+project_id = "zbtgonklxweikgukzukg"
+
+[functions.os-create-checkout]
+verify_jwt = false
+
+[functions.os-stripe-connect]
+verify_jwt = false
+
+[functions.os-stripe-webhook]
+verify_jwt = false
+
