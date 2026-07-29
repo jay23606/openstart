@@ -237,11 +237,12 @@ test("public athlete profiles aggregate published results behind a security-defi
 });
 
 test("the embeddable registration widget stays within the OpenStart origin and payment boundary", async () => {
-  const [loader, frame, ret, app] = await Promise.all([
+  const [loader, frame, ret, app, accountViews] = await Promise.all([
     read("embed.js"),
     read("embed.html"),
     read("embed-return.html"),
     read("app.js"),
+    read("modules/account-views.js"),
   ]);
   // The frame calls the same server-authoritative checkout function, with a UUID idempotency key.
   assert.match(frame, /functions\/v1\/os-create-checkout/);
@@ -254,7 +255,7 @@ test("the embeddable registration widget stays within the OpenStart origin and p
   assert.match(loader, /event\.origin !== origin/);
   // Organizers can copy the snippet from the roster.
   assert.match(app, /embedSnippetForm/);
-  assert.match(app, /data-openstart-embed/);
+  assert.match(accountViews, /data-openstart-embed/);
 });
 
 test("no framework runtime is referenced by the application", async () => {

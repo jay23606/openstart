@@ -44,6 +44,8 @@ Its `views.js` contains the public leaderboard and organizer dialog markup.
 `modules/render.js` supplies the intentionally small, framework-free rendering
 layer: target replacement, list rendering, escaped empty states, and modal
 shells. Feature views remain plain functions with explicit escaping.
+`modules/account-views.js` owns sign-in, athlete-profile, and embeddable-widget
+dialogs that are shared across runner and organizer routes.
 `features/volunteers/controller.js` owns public shift signup and waitlisting,
 organizer role creation, roster updates, and volunteer exports. Its `views.js`
 owns the public opportunities/signup dialogs and organizer volunteer workspace.
