@@ -49,12 +49,13 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, registrationViews, organizerController, lotteryViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, registrationViews, organizerController, lotteryViews, platformViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("features/registration/controller.js"),
     read("features/registration/views.js"),
     read("features/organizer/controller.js"),
     read("features/lottery/views.js"),
+    read("features/platform/views.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
@@ -107,7 +108,10 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /waveManagerForm/);
   assert.match(app, /runnerWaveForm/);
   assert.match(data, /wavesAction/);
-  assert.match(app, /System health/);
+  assert.match(platformViews, /System health/);
+  assert.match(platformViews, /function consolePage\(data\)/);
+  assert.match(platformViews, /Reconciliation alerts/);
+  assert.match(platformViews, /function health\(healthData\)/);
   assert.match(app, /Export my data/);
   assert.match(data, /accountAction/);
   assert.match(app, /seriesSettingsForm/);
@@ -191,14 +195,14 @@ test("the lottery lifecycle is immutable, auditable, and payment verified", asyn
 });
 
 test("platform operations stay behind a server-authoritative owner boundary", async () => {
-  const [app,data,migration,operator,webhook] = await Promise.all([
-    read("app.js"),read("data.js"),
+  const [platformViews,data,migration,operator,webhook] = await Promise.all([
+    read("features/platform/views.js"),read("data.js"),
     read("supabase/migrations/20260729160000_platform_operations.sql"),
     read("supabase/functions/os-platform-admin/index.ts"),
     read("supabase/functions/os-stripe-webhook/index.ts"),
   ]);
-  assert.match(app,/PRIVATE OPERATOR CONSOLE/);
-  assert.match(app,/data-platform-suspend/);
+  assert.match(platformViews,/PRIVATE OPERATOR CONSOLE/);
+  assert.match(platformViews,/data-platform-suspend/);
   assert.match(data,/os-platform-admin/);
   assert.match(migration,/os_platform_admins/);
   assert.match(migration,/os_block_suspended_event_registration/);

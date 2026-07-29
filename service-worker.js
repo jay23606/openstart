@@ -1,4 +1,4 @@
-const CACHE = "openstart-v68";
+const CACHE = "openstart-v69";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./theme.js", "./config.js", "./manifest.json", "./favicon.svg",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./features/registration/views.js",
   "./features/organizer/controller.js",
   "./features/platform/controller.js",
+  "./features/platform/views.js",
   "./features/series/controller.js",
   "./features/series/views.js",
   "./features/lottery/controller.js",

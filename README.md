@@ -24,6 +24,8 @@ publishing, core organizer navigation, and operational checklists through the
 same dependency-driven boundary.
 `features/platform/controller.js` isolates platform search, fee controls,
 event suspension, and private support notes from the public application shell.
+Its `views.js` owns the operations console, reconciliation/provider reporting,
+system health, event safety, fee, and support-note surfaces.
 `features/series/controller.js` owns championship creation, configuration,
 calendar membership, public standings navigation, and standings exports.
 Its `views.js` owns the series manager and calendar/settings dialogs.
