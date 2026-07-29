@@ -1,4 +1,4 @@
-import { displayDate, escapeHtml } from "../core.js?v=36";
+import { displayDate, escapeHtml, money } from "../core.js?v=36";
 import { modalShell } from "./render.js?v=62";
 import { contentHtml, ordinal, resultTime } from "./ui.js?v=40";
 
@@ -15,7 +15,7 @@ function athletePrs(results) {
   return [...best.entries()].map(([label, info]) => ({ label, ...info }));
 }
 
-export function createAccountViews({ getBaseUri }) {
+export function createAccountViews({ getBaseUri, lotteryRunnerCard }) {
   function auth() {
     const body = `<form id="auth-form"><label>Email<input name="email" type="email" autocomplete="email" autofocus required></label><label>Password<input name="password" type="password" autocomplete="current-password" minlength="8" required></label><button class="primary-button" name="intent" value="signin" type="submit">Sign in</button><button class="subtle-button" name="intent" value="signup" type="submit">Create account</button><p class="form-message" aria-live="polite"></p></form>`;
     return modalShell({ eyebrow: "OpenStart account", title: "Sign in to OpenStart", body, className: "auth-modal" }, escapeHtml);
@@ -96,5 +96,37 @@ export function createAccountViews({ getBaseUri }) {
       </section>`;
   }
 
-  return { auth, athleteProfile, embed, publicAthlete };
+  function runnerDashboard(state) {
+    const confirmed = state.runnerRegistrations.filter((registration) => registration.status === "confirmed");
+    return `
+      <section class="dashboard">
+        <div class="dashboard-header">
+          <div><p class="eyebrow">Runner account</p><h1>My races</h1><p>Entries connected to ${escapeHtml(state.session?.user?.email || "your account")}.</p></div>
+        </div>
+        <div class="metric-grid">
+          <div><p>Confirmed races</p><strong>${confirmed.length}</strong><span>Your paid and free entries</span></div>
+          <div><p>All attempts</p><strong>${state.runnerRegistrations.length}</strong><span>Includes cancelled checkouts</span></div>
+          <div><p>Confirmed value</p><strong>${money(confirmed.reduce((sum, item) => sum + item.amount_cents, 0))}</strong><span>Registration total</span></div>
+        </div>
+        <div class="runner-list">
+          ${state.runnerRegistrations.length ? state.runnerRegistrations.map((item) => `
+            <article class="runner-entry">
+              <div>
+                <p>${escapeHtml(item.os_events?.location_name || "")} · ${displayDate(item.os_events?.starts_at)}</p>
+                <h2>${escapeHtml(item.os_events?.name || "Race registration")}</h2>
+                <small>${escapeHtml(item.os_event_tiers?.name || "Entry")} · ${escapeHtml(item.os_event_tiers?.distance_label || "")}${item.os_teams?.name ? ` · Team ${escapeHtml(item.os_teams.name)}` : ""}</small>
+                ${item.os_results ? `<div class="runner-result"><b>${item.os_results.status === "finisher" ? resultTime(item.os_results.chip_time_ms ?? item.os_results.gun_time_ms) : item.os_results.status.toUpperCase()}</b><span>Official result${item.os_results.division ? ` · ${escapeHtml(item.os_results.division)}` : ""}</span></div>` : ""}
+              </div>
+              <div class="runner-entry-meta"><strong>${escapeHtml(item.status)}</strong><span>${money(item.amount_cents)}</span><button class="subtle-button" data-manage-runner="${item.id}" type="button">Manage</button></div>
+            </article>`).join("") : '<div class="empty-state">No registrations are linked to this email yet.</div>'}
+        </div>
+        ${state.lotteryApplications.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My lottery applications</h2><p>Qualification review, draw results, waitlist position, and payment deadlines.</p></div></div>${state.lotteryApplications.map(lotteryRunnerCard).join("")}</div>` : ""}
+        ${state.volunteerSignups.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>My volunteer shifts</h2><p>Upcoming assignments and service history.</p></div></div>${state.volunteerSignups.map((signup) => { const shift = signup.os_volunteer_shifts; const role = shift?.os_volunteer_roles; return `<article><h3>${escapeHtml(role?.name || "Volunteer")} <small>${escapeHtml(role?.os_events?.name || "")}</small></h3><p><span>${new Date(shift.starts_at).toLocaleString()} · ${escapeHtml(shift.location)}</span><b>${escapeHtml(signup.status)}</b></p>${signup.hours_worked !== null ? `<p><span>Recorded service</span><b>${signup.hours_worked} hours</b></p>` : ""}</article>`; }).join("")}</div>` : ""}
+        ${state.captainTeams.length ? `<div class="captain-dashboard"><div class="card-heading"><div><h2>Teams I captain</h2><p>Member status and relay assignments.</p></div></div>${state.captainTeams.map((team) => `<article><h3>${escapeHtml(team.name)} <small>${escapeHtml(team.category)} · ${escapeHtml(team.os_events?.name || "")}</small></h3>${(team.os_registrations || []).map((member) => `<p><span>${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}${member.relay_leg ? ` · ${escapeHtml(member.relay_leg)}` : ""}</span><b>${escapeHtml(member.status)}</b></p>`).join("")}</article>`).join("")}</div>` : ""}
+        <div class="athlete-cta-card"><div><h2>Athlete profile</h2><p>${state.athleteProfile ? `Your public race history lives at <code>?athlete=${escapeHtml(state.athleteProfile.handle)}</code>${state.athleteProfile.is_public ? "" : " — currently private"}.` : "Create a shareable page that gathers your published results and personal bests across every OpenStart event."}</p></div><span>${state.athleteProfile && state.athleteProfile.is_public ? `<button class="subtle-button" data-view-athlete="${escapeHtml(state.athleteProfile.handle)}" type="button">View public page</button>` : ""}<button class="primary-button" data-edit-athlete type="button">${state.athleteProfile ? "Edit profile" : "Create profile"}</button></span></div>
+        <div class="privacy-card"><div><h2>Your data</h2><p>Download a portable copy of your OpenStart information or permanently delete a runner-only account.</p></div><span><button class="subtle-button" data-export-account type="button">Export my data</button><button class="danger-button" data-delete-account type="button">Delete account</button></span></div>
+      </section>`;
+  }
+
+  return { auth, athleteProfile, embed, publicAthlete, runnerDashboard };
 }

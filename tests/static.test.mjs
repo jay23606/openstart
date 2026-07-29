@@ -52,8 +52,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, seriesViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, accountViews, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, seriesViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
+    read("modules/account-views.js"),
     read("features/registration/controller.js"),
     read("features/registration/views.js"),
     read("features/organizer/controller.js"),
@@ -117,7 +118,9 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(platformViews, /function consolePage\(data\)/);
   assert.match(platformViews, /Reconciliation alerts/);
   assert.match(platformViews, /function health\(healthData\)/);
-  assert.match(app, /Export my data/);
+  assert.match(accountViews, /Export my data/);
+  assert.match(app, /accountViews\.runnerDashboard\(state\)/);
+  assert.match(accountViews, /function runnerDashboard\(state\)/);
   assert.match(data, /accountAction/);
   assert.match(app, /seriesSettingsForm/);
   assert.match(app, /renderSeries/);
