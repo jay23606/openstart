@@ -48,6 +48,7 @@ questions, scheduled pricing, promotions, merchandise, and donations.
 `features/event-site/controller.js` owns event branding, content sections,
 sponsors, publishing previews, and asset uploads. `features/waves/controller.js`
 owns wave creation, assignments, runner selection, starts, and bib allocation.
+Its `views.js` owns the organizer corral manager and runner wave picker.
 
 `modules/dispatcher.js` composes feature controllers for click and form
 submission handling. It processes handlers in explicit order and stops after

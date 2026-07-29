@@ -26,6 +26,7 @@ import { createRaceDayViews } from "./features/race-day/views.js?v=61";
 import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
 import { createEventSiteController } from "./features/event-site/controller.js?v=57";
 import { createWavesController } from "./features/waves/controller.js?v=57";
+import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -925,19 +926,9 @@ function siteEditorForm(event) {
   </section>`;
 }
 
-function waveManagerForm(event) {
-  const waves=[...(event.os_waves || [])].sort((a,b)=>a.sort_order-b.sort_order);
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Starts & corrals</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="wave-admin-list">${waves.map((wave)=>{const assigned=eventRegistrations(event.id).filter((registration)=>registration.wave_id===wave.id);return `<article><div><p>${new Date(wave.starts_at).toLocaleString()}</p><h3>${escapeHtml(wave.name)}</h3><small>${escapeHtml(tierById(event,wave.tier_id)?.name || "")} · ${assigned.length}/${wave.capacity} assigned${wave.bib_start ? ` · bibs ${wave.bib_start}–${wave.bib_end}` : ""}</small></div><span>${wave.gun_started_at ? `<b>Started ${new Date(wave.gun_started_at).toLocaleTimeString()}</b>` : `<button class="subtle-button" data-start-wave="${wave.id}" data-event="${event.id}" type="button">Start now</button>`}<button class="subtle-button" data-wave-bibs="${wave.id}" data-event="${event.id}" type="button">Assign bibs</button><button data-delete-wave="${wave.id}" data-event="${event.id}" type="button">Delete</button></span></article>`;}).join("") || '<div class="empty-state">Create the first start wave below.</div>'}</div>
-    <h3>Create wave or corral</h3><form id="wave-form" data-event-id="${event.id}"><div class="split-fields"><label>Name<input name="name" placeholder="Wave 1 · Under 8:00 pace" required></label><label>Distance<select name="tier_id">${event.os_event_tiers.map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label></div><div class="split-fields"><label>Start time<input name="starts_at" type="datetime-local" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div><div class="split-fields"><label>Minimum pace <span class="optional-label">MM:SS</span><input name="min_pace" placeholder="6:00"></label><label>Maximum pace <span class="optional-label">MM:SS</span><input name="max_pace" placeholder="8:00"></label></div><div class="split-fields"><label>First bib<input name="bib_start" type="number" min="1"></label><label>Last bib<input name="bib_end" type="number" min="1"></label></div><label>Runner selection closes<input name="selection_closes_at" type="datetime-local"></label><label class="check-label"><input name="self_select" type="checkbox" checked> Let runners choose this wave</label><button class="primary-button" type="submit">Create wave</button></form>
-    <h3>Bulk assignment</h3><form id="wave-assignment-form" data-event-id="${event.id}"><label>Wave<select name="wave_id">${waves.map((wave)=>`<option value="${wave.id}">${escapeHtml(wave.name)}</option>`).join("")}</select></label><label>Unassigned participants<select name="registration_ids" multiple size="8">${eventRegistrations(event.id).filter((item)=>item.status==="confirmed" && !item.wave_id).map((item)=>`<option value="${item.id}">${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}</option>`).join("")}</select></label><button class="subtle-button" type="submit">Assign selected runners</button></form>
-  </section>`;
-}
-
-function runnerWaveForm(item) {
-  const waves=(item.os_events?.os_waves || []).filter((wave)=>wave.tier_id===item.tier_id && wave.self_select && (!wave.selection_closes_at || new Date(wave.selection_closes_at)>new Date())).sort((a,b)=>a.sort_order-b.sort_order);
-  return `<section class="modal"><div class="form-heading"><div><p>Start assignment</p><h2>Choose your wave</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><form id="runner-wave-form" data-event-id="${item.event_id}" data-registration-id="${item.id}"><label>Wave<select name="wave_id" required>${waves.map((wave)=>`<option value="${wave.id}" ${item.wave_id===wave.id ? "selected" : ""}>${escapeHtml(wave.name)} · ${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</option>`).join("")}</select></label><label>Estimated pace per mile<input name="estimated_pace" value="${item.estimated_pace_seconds ? resultTime(item.estimated_pace_seconds*1000) : ""}" placeholder="9:30"></label><button class="primary-button" type="submit">Save start wave</button></form></section>`;
-}
+const waveViews = createWaveViews({ eventRegistrations, tierById, resultTime });
+const waveManagerForm = waveViews.manager;
+const runnerWaveForm = waveViews.runner;
 
 const volunteerViews = createVolunteerViews({ getSessionEmail: () => state.session?.user?.email });
 const volunteerOpportunitiesForm = volunteerViews.opportunities;
