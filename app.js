@@ -27,6 +27,7 @@ import { createRaceDayViews } from "./features/race-day/views.js?v=61";
 import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
 import { createEventCommerceViews } from "./features/event-commerce/views.js?v=65";
 import { createEventSiteController } from "./features/event-site/controller.js?v=57";
+import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
@@ -877,18 +878,8 @@ const registrationSettingsForm = eventCommerceViews.registrationSettings;
 const pricingSettingsForm = eventCommerceViews.pricingSettings;
 const productSettingsForm = eventCommerceViews.productSettings;
 
-function siteEditorForm(event) {
-  const sections=[...(event.os_event_sections || [])].sort((a,b)=>a.sort_order-b.sort_order);
-  const sponsors=[...(event.os_event_sponsors || [])].sort((a,b)=>a.sort_order-b.sort_order);
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Event website</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="site-publish-state"><span><b>${event.website_published ? "Published" : "Draft"}</b>${event.website_published ? "Custom event content is public." : "Only the standard registration page is public."}</span><button class="subtle-button" data-preview-site="${event.id}" type="button">Preview site</button></div>
-    <form id="site-branding-form" data-event-id="${event.id}"><div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(event.primary_color)}"></label><label>Contact email<input name="contact_email" type="email" value="${escapeHtml(event.contact_email || "")}"></label></div><div class="split-fields"><label>Logo image<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label><label>Banner image<input name="banner" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label class="check-label"><input name="website_published" type="checkbox" ${event.website_published ? "checked" : ""}> Publish custom website content</label><button class="primary-button" type="submit">Save branding & publishing</button></form>
-    <h3>Page sections <small>Drag to reorder</small></h3><div id="site-section-list" class="site-section-list">${sections.map((section)=>`<article draggable="true" data-site-section-id="${section.id}"><span class="drag-handle">⋮⋮</span><div><b>${escapeHtml(section.title)}</b><small>${escapeHtml(section.section_type)} · ${section.published ? "visible" : "hidden"}</small></div><button data-delete-site-section="${section.id}" data-event="${event.id}" type="button">Delete</button></article>`).join("") || '<div class="empty-state">Add schedule, parking, course, FAQ, or other race information.</div>'}</div>
-    <form id="site-section-form" data-event-id="${event.id}"><div class="split-fields"><label>Section type<select name="section_type"><option value="text">General text</option><option value="schedule">Schedule</option><option value="location">Parking & location</option><option value="course">Course details</option><option value="packet_pickup">Packet pickup</option><option value="faq">FAQ</option><option value="downloads">Downloads</option></select></label><label>Heading<input name="title" required></label></div><label>Content<textarea name="content" rows="5" required></textarea></label><div class="split-fields"><label>Optional link<input name="link_url" type="url" placeholder="https://…"></label><label>Link label<input name="link_label" placeholder="Download course map"></label></div><label class="check-label"><input name="published" type="checkbox" checked> Show this section</label><button class="subtle-button" type="submit">Add section</button></form>
-    <h3>Sponsors</h3><div class="site-sponsor-list">${sponsors.map((sponsor)=>`<span>${sponsor.logo_url ? `<img src="${escapeHtml(sponsor.logo_url)}" alt="">` : ""}<b>${escapeHtml(sponsor.name)}</b><small>${escapeHtml(sponsor.sponsor_level)}</small><button data-delete-sponsor="${sponsor.id}" data-event="${event.id}" type="button">×</button></span>`).join("") || "<p>No sponsors added.</p>"}</div>
-    <form id="site-sponsor-form" data-event-id="${event.id}"><div class="split-fields"><label>Sponsor name<input name="name" required></label><label>Level<input name="sponsor_level" placeholder="Presenting sponsor"></label></div><div class="split-fields"><label>Website<input name="website_url" type="url"></label><label>Logo<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label></div><button class="subtle-button" type="submit">Add sponsor</button></form>
-  </section>`;
-}
+const eventSiteViews = createEventSiteViews();
+const siteEditorForm = eventSiteViews.editor;
 
 const waveViews = createWaveViews({ eventRegistrations, tierById, resultTime });
 const waveManagerForm = waveViews.manager;

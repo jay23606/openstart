@@ -50,7 +50,8 @@ questions, scheduled pricing, promotions, merchandise, and donations.
 Its `views.js` owns the registration settings, pricing, promotion, product,
 inventory, and fundraising dialogs.
 `features/event-site/controller.js` owns event branding, content sections,
-sponsors, publishing previews, and asset uploads. `features/waves/controller.js`
+sponsors, publishing previews, and asset uploads. Its `views.js` owns the
+branding, publishing, section, and sponsor editor. `features/waves/controller.js`
 owns wave creation, assignments, runner selection, starts, and bib allocation.
 Its `views.js` owns the organizer corral manager and runner wave picker.
 

@@ -1,0 +1,21 @@
+import { escapeHtml } from "../../core.js?v=36";
+import { modalShell, renderList } from "../../modules/render.js?v=62";
+import { safeColor } from "../../modules/ui.js?v=40";
+
+export function createEventSiteViews() {
+  function editor(event) {
+    const sections = [...(event.os_event_sections || [])].sort((a, b) => a.sort_order - b.sort_order);
+    const sponsors = [...(event.os_event_sponsors || [])].sort((a, b) => a.sort_order - b.sort_order);
+    const sectionCards = renderList(sections, (section) => `<article draggable="true" data-site-section-id="${section.id}"><span class="drag-handle">⋮⋮</span><div><b>${escapeHtml(section.title)}</b><small>${escapeHtml(section.section_type)} · ${section.published ? "visible" : "hidden"}</small></div><button data-delete-site-section="${section.id}" data-event="${event.id}" type="button">Delete</button></article>`) || '<div class="empty-state">Add schedule, parking, course, FAQ, or other race information.</div>';
+    const sponsorCards = renderList(sponsors, (sponsor) => `<span>${sponsor.logo_url ? `<img src="${escapeHtml(sponsor.logo_url)}" alt="">` : ""}<b>${escapeHtml(sponsor.name)}</b><small>${escapeHtml(sponsor.sponsor_level)}</small><button data-delete-sponsor="${sponsor.id}" data-event="${event.id}" type="button">×</button></span>`) || "<p>No sponsors added.</p>";
+    const body = `<div class="site-publish-state"><span><b>${event.website_published ? "Published" : "Draft"}</b>${event.website_published ? "Custom event content is public." : "Only the standard registration page is public."}</span><button class="subtle-button" data-preview-site="${event.id}" type="button">Preview site</button></div>
+      <form id="site-branding-form" data-event-id="${event.id}"><div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(event.primary_color)}"></label><label>Contact email<input name="contact_email" type="email" value="${escapeHtml(event.contact_email || "")}"></label></div><div class="split-fields"><label>Logo image<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label><label>Banner image<input name="banner" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label class="check-label"><input name="website_published" type="checkbox" ${event.website_published ? "checked" : ""}> Publish custom website content</label><button class="primary-button" type="submit">Save branding & publishing</button></form>
+      <h3>Page sections <small>Drag to reorder</small></h3><div id="site-section-list" class="site-section-list">${sectionCards}</div>
+      <form id="site-section-form" data-event-id="${event.id}"><div class="split-fields"><label>Section type<select name="section_type"><option value="text">General text</option><option value="schedule">Schedule</option><option value="location">Parking & location</option><option value="course">Course details</option><option value="packet_pickup">Packet pickup</option><option value="faq">FAQ</option><option value="downloads">Downloads</option></select></label><label>Heading<input name="title" required></label></div><label>Content<textarea name="content" rows="5" required></textarea></label><div class="split-fields"><label>Optional link<input name="link_url" type="url" placeholder="https://…"></label><label>Link label<input name="link_label" placeholder="Download course map"></label></div><label class="check-label"><input name="published" type="checkbox" checked> Show this section</label><button class="subtle-button" type="submit">Add section</button></form>
+      <h3>Sponsors</h3><div class="site-sponsor-list">${sponsorCards}</div>
+      <form id="site-sponsor-form" data-event-id="${event.id}"><div class="split-fields"><label>Sponsor name<input name="name" required></label><label>Level<input name="sponsor_level" placeholder="Presenting sponsor"></label></div><div class="split-fields"><label>Website<input name="website_url" type="url"></label><label>Logo<input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label></div><button class="subtle-button" type="submit">Add sponsor</button></form>`;
+    return modalShell({ eyebrow: "Event website", title: event.name, body, wide: true }, escapeHtml);
+  }
+
+  return { editor };
+}
