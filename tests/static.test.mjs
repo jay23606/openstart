@@ -49,8 +49,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
+    read("features/registration/controller.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
@@ -60,7 +61,7 @@ test("all persisted features use the repository and server-side payment boundari
     read("supabase/migrations/20260729110000_registration_integrity.sql"),
   ]);
   assert.match(app, /createEvent\(/);
-  assert.match(app, /beginRegistration\(/);
+  assert.match(`${app}\n${registrationController}`, /beginRegistration\(/);
   assert.match(data, /\.from\("os_events"\)/);
   assert.match(data, /\.from\("os_registrations"\)/);
   assert.match(checkout, /os_reserve_registration/);

@@ -13,6 +13,11 @@ utilities, discovery rules, and content catalogs. This keeps the static
 deployment inspectable while avoiding repeated helpers and cross-feature
 dependencies.
 
+Larger product areas live under `features/`. For example,
+`features/registration/controller.js` owns registration checkout, lottery
+entry, participant management, transfers, cancellations, refunds, and
+confirmation actions while receiving its data and UI dependencies explicitly.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

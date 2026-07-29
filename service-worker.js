@@ -1,8 +1,9 @@
-const CACHE = "openstart-v43";
+const CACHE = "openstart-v44";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./theme.js", "./config.js", "./manifest.json", "./favicon.svg",
   "./assets/openstart-race-hero.png",
+  "./features/registration/controller.js",
   "./modules/app-state.js", "./modules/content-data.js",
   "./modules/content-views.js", "./modules/discovery.js", "./modules/results.js",
   "./modules/router.js", "./modules/ui.js",
