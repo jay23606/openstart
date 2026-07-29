@@ -11,6 +11,7 @@ import {
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createOrganizerController } from "./features/organizer/controller.js?v=45";
+import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -1436,7 +1437,22 @@ const organizerController = createOrganizerController({
   },
 });
 
-const featureControllers = [organizerController, registrationController];
+const platformController = createPlatformController({
+  state,
+  openDialog,
+  platformAdminAction,
+  loadPlatformOverview,
+  renderPlatformAdmin,
+  dialog,
+  showNotice,
+  forms: {
+    suspension: platformSuspensionForm,
+    fee: platformFeeForm,
+    note: platformNoteForm,
+  },
+});
+
+const featureControllers = [platformController, organizerController, registrationController];
 const busyController = createBusyController();
 const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
 const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
@@ -1587,29 +1603,6 @@ document.addEventListener("click", async (event) => {
     showNotice("Event removed from series.");
   }
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
-  if(target.dataset.platformSuspend){
-    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformSuspend);
-    if(item) openDialog(platformSuspensionForm(item));
-  }
-  if(target.dataset.platformRestore){
-    if(!confirm("Restore this event to its previous public availability?")) return;
-    await platformAdminAction("restore_event",{eventId:target.dataset.platformRestore});
-    await loadPlatformOverview();
-    renderPlatformAdmin();
-    showNotice("Event restored.");
-  }
-  if(target.dataset.platformEventFee){
-    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformEventFee);
-    if(item) openDialog(platformFeeForm(item));
-  }
-  if(target.dataset.platformEventNote){
-    const item=state.platformData.events.find((entry)=>entry.id===target.dataset.platformEventNote);
-    if(item) openDialog(platformNoteForm({eventId:item.id,label:item.name}));
-  }
-  if(target.dataset.platformOrganizerNote){
-    const item=state.platformData.organizers.find((entry)=>entry.id===target.dataset.platformOrganizerNote);
-    if(item) openDialog(platformNoteForm({organizerId:item.id,label:item.display_name || item.email}));
-  }
   if (target.matches("[data-export-account]")) {
     const accountExport=await accountAction("export");
     downloadJson(`openstart-data-${new Date().toISOString().slice(0,10)}.json`,accountExport);
@@ -1827,43 +1820,6 @@ document.addEventListener("submit", async (event) => {
           ? "That handle is already taken. Try another."
           : (error.message || "The profile could not be saved.");
       }
-      return;
-    }
-
-    if(form.id==="platform-search-form"){
-      await loadPlatformOverview(String(data.get("query") || ""));
-      renderPlatformAdmin();
-      return;
-    }
-    if(form.id==="platform-default-fee-form"){
-      await platformAdminAction("update_fees",{feeBps:Math.round(Number(data.get("fee_percent"))*100)});
-      await loadPlatformOverview();
-      renderPlatformAdmin();
-      showNotice("Default platform fee updated.");
-      return;
-    }
-    if(form.id==="platform-event-fee-form"){
-      await platformAdminAction("update_fees",{eventId:form.dataset.eventId,feeBps:Math.round(Number(data.get("fee_percent"))*100)});
-      dialog.close();
-      await loadPlatformOverview();
-      renderPlatformAdmin();
-      showNotice("Event fee updated.");
-      return;
-    }
-    if(form.id==="platform-suspend-form"){
-      await platformAdminAction("suspend_event",{eventId:form.dataset.eventId,reason:data.get("reason")});
-      dialog.close();
-      await loadPlatformOverview();
-      renderPlatformAdmin();
-      showNotice("Event suspended and new registrations blocked.");
-      return;
-    }
-    if(form.id==="platform-note-form"){
-      await platformAdminAction("add_note",{eventId:data.get("event_id") || null,organizerId:data.get("organizer_id") || null,note:data.get("note")});
-      dialog.close();
-      await loadPlatformOverview();
-      renderPlatformAdmin();
-      showNotice("Private support note saved.");
       return;
     }
 

@@ -20,6 +20,8 @@ confirmation actions while receiving its data and UI dependencies explicitly.
 `features/organizer/controller.js` owns event creation, guided setup,
 publishing, organizer tools, waves, site content, pricing, and operational
 checklists through the same dependency-driven boundary.
+`features/platform/controller.js` isolates platform search, fee controls,
+event suspension, and private support notes from the public application shell.
 
 `modules/dispatcher.js` composes feature controllers for click and form
 submission handling. It processes handlers in explicit order and stops after
