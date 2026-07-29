@@ -18,3 +18,17 @@ export function modalShell({ eyebrow, title, body, wide = false }, escapeHtml) {
     ${body}
   </section>`;
 }
+
+export function summaryMetrics(items, escapeHtml, className = "metric-summary") {
+  return `<div class="${className}">${renderList(items, ({ label, value }) =>
+    `<span><b>${escapeHtml(value)}</b>${escapeHtml(label)}</span>`)}</div>`;
+}
+
+export function statusBadge(label, escapeHtml, tone = "") {
+  return `<b class="status-badge${tone ? ` ${escapeHtml(tone)}` : ""}">${escapeHtml(label)}</b>`;
+}
+
+export function actionToolbar(actions, className = "dialog-actions") {
+  return `<div class="${className}">${renderList(actions, ({ label, attributes = "", primary = false }) =>
+    `<button class="${primary ? "primary-button" : "subtle-button"}" ${attributes} type="button">${label}</button>`)}</div>`;
+}

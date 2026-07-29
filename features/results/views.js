@@ -1,5 +1,5 @@
 import { displayDate, escapeHtml } from "../../core.js?v=36";
-import { emptyState, modalShell, renderList, renderMarkup } from "../../modules/render.js?v=58";
+import { actionToolbar, emptyState, modalShell, renderList, renderMarkup, statusBadge, summaryMetrics } from "../../modules/render.js?v=59";
 import { rankResults } from "../../modules/results.js?v=43";
 import { resultTime } from "../../modules/ui.js?v=40";
 
@@ -15,7 +15,7 @@ export function createResultsViews({ page, eventRegistrations, tierById }) {
     </div>`);
     return `<section class="results-page">
       <button class="back-button" data-event-id="${event.id}" type="button">\u2190 Event details</button>
-      <div class="results-hero"><div><p class="eyebrow">Official results</p><h1>${escapeHtml(event.name)}</h1><p>${displayDate(event.starts_at)} \u00b7 ${escapeHtml(event.location_name)}</p></div><strong>${rows.filter((item) => item.status === "finisher").length}<span>finishers</span></strong></div>
+      <div class="results-hero"><div><p class="eyebrow">Official results</p><h1>${escapeHtml(event.name)}</h1><p>${displayDate(event.starts_at)} \u00b7 ${escapeHtml(event.location_name)}</p></div>${summaryMetrics([{ value: rows.filter((item) => item.status === "finisher").length, label: "finishers" }], escapeHtml, "results-summary")}</div>
       <div class="results-toolbar"><input data-results-search type="search" placeholder="Search name or bib"><select data-results-tier><option value="">All distances</option>${renderList(event.os_event_tiers, (tier) => `<option value="${tier.id}">${escapeHtml(tier.name)}</option>`)}</select></div>
       <div class="results-table"><div class="results-header"><span>Place</span><span>Runner</span><span>Division</span><span>Chip time</span><span>Gun time</span></div>
         ${resultRows || emptyState("No published results yet.", escapeHtml)}
@@ -31,13 +31,17 @@ export function createResultsViews({ page, eventRegistrations, tierById }) {
       return `<div class="result-entry" data-registration-id="${registration.id}"><span><b>${escapeHtml(registration.first_name)} ${escapeHtml(registration.last_name)}</b><small>Bib ${escapeHtml(registration.bib_number || "\u2014")} \u00b7 ${escapeHtml(tierById(event, registration.tier_id)?.name || "")}</small></span><label>Chip time<input name="chip_time" value="${resultTime(result?.chip_time_ms).replace("\u2014", "")}" placeholder="24:31"></label><label>Gun time<input name="gun_time" value="${resultTime(result?.gun_time_ms).replace("\u2014", "")}" placeholder="25:02"></label><label>Status<select name="result_status">${renderList(["finisher", "dnf", "dns", "dq"], (status) => `<option ${result?.status === status ? "selected" : ""}>${status}</option>`)}</select></label><label>Division<input name="division" value="${escapeHtml(result?.division || "")}" placeholder="M30-39"></label></div>`;
     });
     const body = `
-      <div class="result-publish-state"><b>${event.results_published_at ? "Results are public" : "Results are not published"}</b><span>${(event.os_results || []).length} saved results</span></div>
+      <div class="result-publish-state">${statusBadge(event.results_published_at ? "Results are public" : "Results are not published", escapeHtml, event.results_published_at ? "published" : "draft")}<span>${(event.os_results || []).length} saved results</span></div>
       <details class="csv-import"><summary>Import timing CSV</summary><p>Columns: <code>bib,chip_time,gun_time,status,division</code>. Times accept <code>MM:SS</code> or <code>HH:MM:SS</code>.</p><input id="results-csv-file" type="file" accept=".csv,text/csv"><textarea id="results-csv" rows="6" placeholder="bib,chip_time,gun_time,status,division&#10;101,24:31,25:02,finisher,M30-39"></textarea><button class="subtle-button" data-import-results="${event.id}" type="button">Import CSV</button></details>
       <form id="results-form" data-event-id="${event.id}">
         <div class="result-entry-list">${entries || emptyState("There are no confirmed participants.", escapeHtml)}</div>
         <button class="primary-button" type="submit">Save corrections</button>
       </form>
-      <div class="dialog-actions"><button class="subtle-button" data-unpublish-results="${event.id}" type="button">Unpublish</button><button class="subtle-button" data-notify-results="${event.id}" type="button">Email unnotified runners</button><button class="primary-button" data-publish-results="${event.id}" type="button">Publish results</button></div>`;
+      ${actionToolbar([
+        { label: "Unpublish", attributes: `data-unpublish-results="${event.id}"` },
+        { label: "Email unnotified runners", attributes: `data-notify-results="${event.id}"` },
+        { label: "Publish results", attributes: `data-publish-results="${event.id}"`, primary: true },
+      ])}`;
     return modalShell({
       eyebrow: "Timing & scoring",
       title: `${event.name} results`,

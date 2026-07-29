@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyState, modalShell, renderList, renderMarkup } from "../modules/render.js";
+import { actionToolbar, emptyState, modalShell, renderList, renderMarkup, statusBadge, summaryMetrics } from "../modules/render.js";
 
 const escapeHtml = (value) => String(value).replaceAll("<", "&lt;");
 
@@ -16,4 +16,7 @@ test("render primitives stay explicit and framework-free", () => {
     body: "<form></form>",
     wide: true,
   }, escapeHtml), /&lt;Race>/);
+  assert.match(summaryMetrics([{ value: 12, label: "finishers" }], escapeHtml), /12/);
+  assert.match(statusBadge("Published", escapeHtml, "ready"), /status-badge ready/);
+  assert.match(actionToolbar([{ label: "Publish", attributes: "data-publish", primary: true }]), /primary-button/);
 });
