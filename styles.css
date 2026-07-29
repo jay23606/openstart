@@ -181,6 +181,8 @@ footer button { background: none; border: 0; color: inherit; cursor: pointer; fo
 
 .notice { align-items: center; background: var(--green-dark); border-radius: 10px; color: white; display: flex; gap: 24px; justify-content: space-between; left: 50%; max-width: calc(100% - 32px); padding: 14px 18px; position: fixed; top: 86px; transform: translateX(-50%); width: 620px; z-index: 50; box-shadow: 0 12px 40px #17211d33; }
 .notice button { background: none; border: 0; color: white; cursor: pointer; font-size: 22px; }
+.notice[data-type="error"] { background: #7f1d1d; border-color: #b91c1c; color: #fff; }
+.notice[data-type="error"] button { color: #fff; }
 
 .hero { background: var(--cream); display: grid; gap: clamp(40px, 7vw, 110px); grid-template-columns: 1.15fr .85fr; min-height: 620px; padding: 96px clamp(24px, 8vw, 130px); position: relative; overflow: hidden; }
 .hero::after { border: 70px solid var(--lime); border-radius: 50%; content: ""; height: 360px; opacity: .28; position: absolute; right: -190px; top: -210px; width: 360px; }

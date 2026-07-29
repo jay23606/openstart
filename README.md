@@ -26,6 +26,9 @@ submission handling. It processes handlers in explicit order and stops after
 the first feature accepts an action, keeping the application shell independent
 from feature-specific `data-*` attributes.
 
+`modules/ui-feedback.js` owns modal focus, focus restoration, keyboard trapping,
+backdrop/close behavior, cleanup hooks, and accessible status/error notices.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

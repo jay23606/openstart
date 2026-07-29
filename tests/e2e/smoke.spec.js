@@ -21,6 +21,7 @@ test("protected organizer navigation opens an accessible sign-in dialog", async 
   await expect(dialog.getByLabel("Email")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("button",{name:"Organizer"})).toBeFocused();
 });
 
 test("mobile navigation and content fit the viewport", async ({ page }) => {

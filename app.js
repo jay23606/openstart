@@ -17,6 +17,7 @@ import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords }
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { parseResultsCsv as parseResultRows, rankResults } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
+import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
 import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
@@ -48,7 +49,7 @@ const hydrateEvent = async (id) => {
     if (index >= 0) state.events[index] = full; else state.events.push(full);
     return full;
   } catch (error) {
-    showNotice(error.message);
+    showNotice(error.message, { type: "error", duration: 0 });
     return existing;
   }
 };
@@ -233,10 +234,9 @@ const effectivePrice = (tier) => {
     .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   return active[0]?.price_cents ?? tier.price_cents;
 };
-function showNotice(message) {
-  notice.querySelector("span").textContent = message;
-  notice.classList.remove("hidden");
-}
+const noticeController = createNoticeController({ notice });
+const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
+function showNotice(message, options) { noticeController.show(message, options); }
 
 function healthForm(health) {
   return `<section class="modal"><div class="form-heading"><div><p>Platform status</p><h2>System health</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="health-grid"><span><b class="${health.database ? "health-ok" : "health-bad"}">${health.database ? "Operational" : "Degraded"}</b>Database</span><span><b class="${health.stripeConfigured ? "health-ok" : "health-bad"}">${health.stripeConfigured ? "Configured" : "Missing"}</b>Stripe</span><span><b class="${health.emailConfigured ? "health-ok" : "health-bad"}">${health.emailConfigured ? "Configured" : "Missing"}</b>Email</span><span><b>${health.responseMs} ms</b>Health response</span></div><p class="health-checked">Checked ${new Date(health.checkedAt).toLocaleString()}</p></section>`;
@@ -756,7 +756,7 @@ function authForm() {
     <section class="modal auth-modal">
       <div class="form-heading"><div><p>OpenStart account</p><h2>Sign in to OpenStart</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
       <form id="auth-form">
-        <label>Email<input name="email" type="email" autocomplete="email" required></label>
+        <label>Email<input name="email" type="email" autocomplete="email" autofocus required></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" minlength="8" required></label>
         <button class="primary-button" name="intent" value="signin" type="submit">Sign in</button>
         <button class="subtle-button" name="intent" value="signup" type="submit">Create account</button>
@@ -1207,9 +1207,7 @@ function checklistForm(event) {
 }
 
 function openDialog(content) {
-  dialogContent.innerHTML = content;
-  dialog.showModal();
-  requestAnimationFrame(()=>(dialog.querySelector("input:not([type='hidden']),select,textarea") || dialog.querySelector("button"))?.focus());
+  dialogController.open(content);
 }
 function stopScanner() {
   const video = document.querySelector("#qr-scanner");
@@ -1514,7 +1512,7 @@ document.addEventListener("click", async (event) => {
       renderDemo();
       showNotice("Your private showcase is ready.");
     } catch (error) {
-      showNotice(error.message || "The showcase could not be created.");
+      showNotice(error.message || "The showcase could not be created.", { type: "error", duration: 0 });
     }
   }
   if (target.dataset.deleteShowcase) {
@@ -1568,7 +1566,7 @@ document.addEventListener("click", async (event) => {
       showNotice(`Draw finalized: ${result.selected} selected · ${emailSummary}.`);
     } catch(error) {
       target.disabled=false;
-      showNotice(error.message || "The lottery draw could not be completed.");
+      showNotice(error.message || "The lottery draw could not be completed.", { type: "error", duration: 0 });
     }
   }
   if (target.matches("[data-series-manager]")) openDialog(seriesManagerForm());
@@ -1678,7 +1676,7 @@ document.addEventListener("click", async (event) => {
       location.assign(url);
     } catch (error) {
       target.disabled = false;
-      showNotice(error.message || "Stripe onboarding could not start.");
+      showNotice(error.message || "Stripe onboarding could not start.", { type: "error", duration: 0 });
       await go("dashboard");
     }
   }
@@ -1731,10 +1729,6 @@ document.addEventListener("click", async (event) => {
     showNotice("Question removed.");
   }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
-  if (target.matches("[data-close-dialog]")) {
-    stopScanner();
-    dialog.close();
-  }
   if (target.matches("[data-reset-demo]")) {
     resetDemo();
     await go("dashboard");
@@ -2221,11 +2215,10 @@ document.addEventListener("submit", async (event) => {
     }
 
   } catch (error) {
-    showNotice(error.message || "Something went wrong.");
+    showNotice(error.message || "Something went wrong.", { type: "error", duration: 0 });
   }
 });
 
-notice.querySelector("button").addEventListener("click", () => notice.classList.add("hidden"));
 document.addEventListener("change", (event) => {
   if (event.target.matches("[data-field='tier_id']")) {
     const block=event.target.closest(".participant-block");
@@ -2300,7 +2293,7 @@ document.addEventListener("drop",async(event)=>{
 });
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
-  showNotice(event.reason?.message || "Something went wrong.");
+  showNotice(event.reason?.message || "Something went wrong.", { type: "error", duration: 0 });
 });
 authButton.addEventListener("click", () => {
   state.pendingView="runner";
@@ -2314,13 +2307,6 @@ signOutButton.addEventListener("click", async () => {
   state.loadedRegistrationEvents.clear();
   await go("discover");
 });
-dialog.addEventListener("click", (event) => {
-  if (event.target === dialog) {
-    stopScanner();
-    dialog.close();
-  }
-});
-
 async function boot() {
   setupBanner.classList.toggle("hidden", configured);
   if (configured) {

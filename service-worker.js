@@ -1,4 +1,4 @@
-const CACHE = "openstart-v46";
+const CACHE = "openstart-v47";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./theme.js", "./config.js", "./manifest.json", "./favicon.svg",
@@ -7,7 +7,7 @@ const APP_SHELL = [
   "./features/organizer/controller.js",
   "./modules/app-state.js", "./modules/content-data.js",
   "./modules/content-views.js", "./modules/discovery.js", "./modules/dispatcher.js", "./modules/results.js",
-  "./modules/router.js", "./modules/ui.js",
+  "./modules/router.js", "./modules/ui-feedback.js", "./modules/ui.js",
 ];
 
 self.addEventListener("install", (event) => {
