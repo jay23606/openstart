@@ -132,6 +132,8 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(organizerViews, /function duplicate\(source\)/);
   assert.match(organizerViews, /function checklist\(source\)/);
   assert.match(organizerViews, /function roster\(source\)/);
+  assert.match(app, /organizerViews\.dashboard\(state, configured, eventById\)/);
+  assert.match(organizerViews, /function dashboard\(state, configured, eventById\)/);
   assert.match(data, /os_duplicate_event/);
   assert.match(data, /os_event_checklist_items/);
   assert.match(app, /lotteryApplicationForm/);
@@ -151,13 +153,13 @@ test("all persisted features use the repository and server-side payment boundari
 });
 
 test("the private showcase is isolated, disposable, and server-created", async () => {
-  const [app, data, migration, contentViews] = await Promise.all([
-    read("app.js"),
+  const [organizerViews, data, migration, contentViews] = await Promise.all([
+    read("features/organizer/views.js"),
     read("data.js"),
     read("supabase/migrations/20260729120000_showcase_demo.sql"),
     read("modules/content-views.js"),
   ]);
-  assert.match(app, /const realEvents = state\.events\.filter\(\(event\) => !event\.is_showcase\)/);
+  assert.match(organizerViews, /const realEvents = state\.events\.filter\(\(event\) => !event\.is_showcase\)/);
   assert.match(contentViews, /No real payments/);
   assert.match(contentViews, /No participant emails/);
   assert.match(data, /os_create_showcase_event/);

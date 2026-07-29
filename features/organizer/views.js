@@ -85,5 +85,70 @@ export function createOrganizerViews({ eventRegistrations, tierById }) {
     return `<section class="setup-wizard"><header><button class="back-button" data-exit-setup type="button">← Organizer</button><p class="eyebrow">GUIDED EVENT SETUP</p><h1>${escapeHtml(source.name)}</h1><div><span><b>${completed}/${readiness.items.length}</b> readiness items</span><span><b>${source.status}</b> visibility</span></div></header><nav class="setup-steps" aria-label="Event setup steps">${renderList(setupSteps, (label, index) => `<button class="${index === step ? "active" : ""}" data-setup-step="${index}" data-setup-event="${source.id}" type="button"><i>${index + 1}</i><span>${label}</span></button>`)}</nav><div class="setup-content"><div><p class="eyebrow">STEP ${step + 1} OF ${setupSteps.length}</p><h2>${setupSteps[step]}</h2></div>${content}</div></section>`;
   }
 
-  return { event, duplicate, checklist, roster, setup };
+  function dashboard(state, configured, eventById) {
+  const realEvents = state.events.filter((event) => !event.is_showcase);
+  const realEventIds = new Set(realEvents.map((event) => event.id));
+  const published = realEvents.filter((event) => event.status === "published");
+  const metrics=state.organizerMetrics.filter((item)=>realEventIds.has(item.event_id));
+  const metricByEvent=(id)=>metrics.find((item)=>item.event_id===id) || {};
+  const confirmedCount=metrics.reduce((sum,item)=>sum+Number(item.confirmed_count || 0),0);
+  const gross=metrics.reduce((sum,item)=>sum+Number(item.gross_cents || 0),0);
+  const discounts=metrics.reduce((sum,item)=>sum+Number(item.discount_cents || 0),0);
+  const platformFees=metrics.reduce((sum,item)=>sum+Number(item.platform_fee_cents || 0),0);
+  const merchandiseRevenue=metrics.reduce((sum,item)=>sum+Number(item.merchandise_cents || 0),0);
+  const donationRevenue=metrics.reduce((sum,item)=>sum+Number(item.donation_cents || 0),0);
+  const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
+  const stripeStarted = Boolean(state.profile?.stripe_account_id);
+  return `
+    <section class="dashboard">
+      <div class="dashboard-header">
+        <div><p class="eyebrow">Organizer workspace</p><h1>Good morning, race director.</h1><p>Here’s what’s happening across your starting lines.</p></div>
+        <div class="dashboard-actions">
+          ${configured ? `<button class="stripe-button ${stripeReady ? "ready" : ""}" data-connect-stripe type="button">${stripeReady ? "✓ Stripe ready" : stripeStarted ? "Finish Stripe setup" : "Connect Stripe sandbox"}</button>` : ""}
+          <button class="subtle-button" data-system-health type="button">System health</button>
+          <button class="subtle-button" data-series-manager type="button">Series</button>
+          <button class="subtle-button" data-compose-campaign type="button">Communications</button>
+          <button class="primary-button" data-create-event type="button">+ Create event</button>
+        </div>
+      </div>
+      <div class="metric-grid">
+        <div><p>Confirmed registrations</p><strong>${confirmedCount}</strong><span>Across all events</span></div>
+        <div><p>Published events</p><strong>${published.length}</strong><span>${realEvents.length - published.length} draft</span></div>
+        <div><p>Confirmed registration value</p><strong>${money(gross)}</strong><span>Paid and free confirmed entries</span></div>
+        <div><p>Estimated organizer net</p><strong>${money(gross - platformFees)}</strong><span>${money(discounts)} discounts · before Stripe fees</span></div>
+      </div>
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Your events</h2><p>Manage details and monitor signups.</p></div>${configured ? "" : '<button class="subtle-button" data-reset-demo type="button">Reset demo</button>'}</div>
+        <div class="event-table">
+          <div class="table-header"><span>Event</span><span>Status</span><span>Registrations</span><span>Date</span></div>
+          ${realEvents.map((event) => `
+            <button class="table-row" data-roster="${event.id}" type="button">
+              <span><b>${escapeHtml(event.name)}</b><small>${event.status === "draft" ? "Continue guided setup" : escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
+              <span><i class="status-dot ${event.status}"></i>${event.status}</span>
+              <span>${Number(metricByEvent(event.id).confirmed_count || 0)}</span>
+              <span>${displayDate(event.starts_at)} <b>›</b></span>
+            </button>`).join("")}
+        </div>
+      </div>
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Financial overview</h2><p>Confirmed registration revenue and OpenStart application fees.</p></div><button class="subtle-button" data-export-finance type="button">Export financial CSV</button></div>
+        <div class="revenue-categories"><span><b>${money(gross)}</b>Registrations</span><span><b>${money(merchandiseRevenue)}</b>Merchandise</span><span><b>${money(donationRevenue)}</b>Donations</span></div>
+        <div class="finance-grid">${realEvents.map((event) => {
+          const eventMetric=metricByEvent(event.id);
+          const revenue=Number(eventMetric.gross_cents || 0);
+          const fees=Number(eventMetric.platform_fee_cents || 0);
+          return `<div><span>${escapeHtml(event.name)}</span><b>${money(revenue)}</b><small>${Number(eventMetric.confirmed_count || 0)} entries · ${money(revenue-fees)} estimated net</small></div>`;
+        }).join("")}</div>
+      </div>
+      <div class="dashboard-card">
+        <div class="card-heading"><div><h2>Communications</h2><p>Drafts, scheduled messages, and delivery status.</p></div><button class="subtle-button" data-compose-campaign type="button">+ New campaign</button></div>
+        <div class="campaign-list">${state.campaigns.slice(0,8).map((campaign) => `<div><span><b>${escapeHtml(campaign.name)}</b><small>${escapeHtml(eventById(campaign.event_id)?.name || "")} · ${escapeHtml(campaign.message_type)}</small></span><span>${campaign.recipient_count} recipients</span><span><b class="campaign-status">${escapeHtml(campaign.status)}</b><small>${campaign.sent_count} sent · ${campaign.failed_count} failed</small></span></div>`).join("") || '<div class="empty-state">No campaigns yet.</div>'}</div>
+      </div>
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Race series</h2><p>Championship calendars, points, and eligibility.</p></div><button class="subtle-button" data-series-manager type="button">Manage series</button></div><div class="campaign-list">${state.series.map((series)=>`<div><span><b>${escapeHtml(series.name)}</b><small>${series.os_series_events?.length || 0} events · minimum ${series.minimum_events}</small></span><span>${escapeHtml(series.status)}</span><span><button class="subtle-button" data-configure-series="${series.id}" type="button">Configure</button></span></div>`).join("") || '<div class="empty-state">No race series yet.</div>'}</div></div>
+      <div class="dashboard-card"><div class="card-heading"><div><h2>Audit trail</h2><p>Recent sensitive changes across your events.</p></div></div><div class="audit-list">${state.auditLog.slice(0,15).map((entry)=>`<p><span><b>${escapeHtml(entry.action)} ${escapeHtml(entry.table_name.replace("os_","").replaceAll("_"," "))}</b><small>${escapeHtml(eventById(entry.event_id)?.name || "Event")} · ${new Date(entry.created_at).toLocaleString()}</small></span><code>${escapeHtml(entry.record_id?.slice(0,8) || "system")}</code></p>`).join("") || '<div class="empty-state">No audited changes yet.</div>'}</div></div>
+      <div id="roster-slot"></div>
+    </section>`;
+  }
+
+  return { event, duplicate, checklist, roster, setup, dashboard };
 }
