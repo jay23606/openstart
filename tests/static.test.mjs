@@ -21,6 +21,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(appState, /pendingView:\s*"runner"/);
   assert.match(appState, /createAppStore/);
   assert.match(app, /appStore\.subscribe\(\["view", "session", "platformAdmin"\], syncNavigation\)/);
+  assert.match(app, /appStore\.patch\(\{\s*events,\s*discoverTotal:/);
+  assert.match(app, /loadedRegistrationEvents: new Set\(\[\.\.\.state\.loadedRegistrationEvents, eventId\]\)/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);

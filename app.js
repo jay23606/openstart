@@ -76,8 +76,10 @@ const hydrateEvent = async (id) => {
     const full = await getPublishedEvent(id);
     if (!full) return existing;
     full.detailLoaded = true;
-    const index = state.events.findIndex((event) => event.id === id);
-    if (index >= 0) state.events[index] = full; else state.events.push(full);
+    const events = [...state.events];
+    const index = events.findIndex((event) => event.id === id);
+    if (index >= 0) events[index] = full; else events.push(full);
+    appStore.patch({ events });
     return full;
   } catch (error) {
     showNotice(error.message, { type: "error", duration: 0 });
@@ -189,11 +191,13 @@ const { loadDiscovery, renderDiscover, renderEvent } = publicController;
 publicController.restoreRegion();
 
 async function loadPlatformAccess(){
-  state.platformAdmin=state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
+  const platformAdmin = state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
+  appStore.patch({ platformAdmin });
 }
 
 async function loadPlatformOverview(query=""){
-  state.platformData=await platformAdminAction("overview",{query});
+  const platformData = await platformAdminAction("overview",{query});
+  appStore.patch({ platformData });
 }
 
 function renderPlatformAdmin() {
@@ -205,7 +209,7 @@ function renderPlatformAdmin() {
 
 async function renderSeries(series) {
   const standings=await seriesAction("standings",{seriesId:series.id});
-  state.seriesStandings=standings;
+  appStore.patch({ seriesStandings: standings });
   pageLifecycle.render(seriesViews.publicPage(series, standings), {
     metadata: {
       title: `${series.name} — OpenStart`,
@@ -424,50 +428,64 @@ async function loadPublic() {
     listPublishedEvents({query:state.discoverQuery,region:state.discoverRegion,limit:state.discoverVisible,offset:0}),
     listPublishedSeries(),
   ]);
-  if(Array.isArray(discovery)){
-    state.events=discovery;
-    state.discoverTotal=discovery.length;
-  }else{
-    state.events=discovery.events;
-    state.discoverTotal=discovery.total;
-  }
-  state.series=series;
-  state.registrations = configured ? [] : await listRegistrations(state.events.map((event) => event.id));
+  const events = Array.isArray(discovery) ? discovery : discovery.events;
+  const registrations = configured ? [] : await listRegistrations(events.map((event) => event.id));
+  appStore.patch({
+    events,
+    discoverTotal: Array.isArray(discovery) ? discovery.length : discovery.total,
+    series,
+    registrations,
+  });
 }
 
 async function loadDashboard() {
   const userId = state.session?.user?.id || DEMO_ORGANIZER_ID;
-  [state.events, state.profile, state.organizerMetrics] = await Promise.all([
+  const [events, profile, organizerMetrics, series] = await Promise.all([
     listOrganizerEvents(userId),
     getOrganizerProfile(userId),
     organizerEventMetrics(),
+    listOrganizerSeries(userId),
   ]);
-  state.series=await listOrganizerSeries(userId);
-  const loadedIds=[...state.loadedRegistrationEvents].filter((id)=>state.events.some((event)=>event.id===id));
-  state.registrations=loadedIds.length ? await listRegistrations(loadedIds) : [];
-  state.orderItems=[];
-  [state.campaigns,state.emailTemplates,state.auditLog] = await Promise.all([
-    listOrganizerCampaigns(state.events.map((event) => event.id)),
+  const eventIds = events.map((event) => event.id);
+  const loadedIds=[...state.loadedRegistrationEvents].filter((id)=>eventIds.includes(id));
+  const [registrations, campaigns, emailTemplates, auditLog] = await Promise.all([
+    loadedIds.length ? listRegistrations(loadedIds) : [],
+    listOrganizerCampaigns(eventIds),
     listEmailTemplates(userId),
-    listAuditLog(state.events.map((event)=>event.id)),
+    listAuditLog(eventIds),
   ]);
+  appStore.patch({
+    events,
+    profile,
+    organizerMetrics,
+    series,
+    registrations,
+    orderItems: [],
+    campaigns,
+    emailTemplates,
+    auditLog,
+    loadedRegistrationEvents: new Set(loadedIds),
+  });
 }
 
 async function ensureEventRegistrations(eventId,force=false){
   if(!eventId || (!force && state.loadedRegistrationEvents.has(eventId))) return;
   const rows=await listRegistrations([eventId]);
-  state.registrations=state.registrations.filter((item)=>item.event_id!==eventId).concat(rows);
-  state.loadedRegistrationEvents.add(eventId);
+  appStore.patch({
+    registrations: state.registrations.filter((item)=>item.event_id!==eventId).concat(rows),
+    loadedRegistrationEvents: new Set([...state.loadedRegistrationEvents, eventId]),
+  });
 }
 
 async function loadRunnerDashboard() {
-  [state.runnerRegistrations, state.captainTeams, state.volunteerSignups, state.lotteryApplications, state.athleteProfile] = await Promise.all([
+  const [runnerRegistrations, captainTeams, volunteerSignups, lotteryApplications, athleteProfile] = await Promise.all([
     listRunnerRegistrations(),
     listCaptainTeams(state.session.user.id),
     listMyVolunteerSignups(),
     listMyLotteryApplications(),
     getMyAthleteProfile(),
   ]);
+  appStore.patch({ runnerRegistrations, captainTeams, volunteerSignups, lotteryApplications, athleteProfile });
 }
 
 const { navigate: go } = createRouter({
@@ -691,11 +709,15 @@ const raceDayController = createRaceDayController({
   showNotice,
   loadAndExportFinancials: async () => {
     const eventIds = state.events.filter((item) => !item.is_showcase).map((item) => item.id);
-    [state.registrations, state.orderItems] = await Promise.all([
+    const [registrations, orderItems] = await Promise.all([
       listRegistrations(eventIds),
       listOrganizerOrderItems(eventIds),
     ]);
-    eventIds.forEach((id) => state.loadedRegistrationEvents.add(id));
+    appStore.patch({
+      registrations,
+      orderItems,
+      loadedRegistrationEvents: new Set([...state.loadedRegistrationEvents, ...eventIds]),
+    });
     exportFinancials();
   },
   forms: {
