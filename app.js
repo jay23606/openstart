@@ -16,6 +16,7 @@ import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createCommunicationsController } from "./features/communications/controller.js?v=52";
 import { createResultsController } from "./features/results/controller.js?v=53";
+import { createResultsViews } from "./features/results/views.js?v=58";
 import { createVolunteersController } from "./features/volunteers/controller.js?v=54";
 import { createRaceDayController } from "./features/race-day/controller.js?v=55";
 import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
@@ -26,7 +27,7 @@ import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
-import { parseResultsCsv as parseResultRows, rankResults } from "./modules/results.js?v=43";
+import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
 import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
@@ -979,38 +980,9 @@ function exportVolunteers(event) {
   const link=document.createElement("a"); link.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); link.download=`${event.slug}-volunteers.csv`; link.click(); URL.revokeObjectURL(link.href);
 }
 
-function rankedResults(event) {
-  return rankResults(event.os_results || []);
-}
-
-function renderResults(event) {
-  const rows=rankedResults(event);
-  page.innerHTML=`<section class="results-page">
-    <button class="back-button" data-event-id="${event.id}" type="button">← Event details</button>
-    <div class="results-hero"><div><p class="eyebrow">Official results</p><h1>${escapeHtml(event.name)}</h1><p>${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p></div><strong>${rows.filter((item)=>item.status==="finisher").length}<span>finishers</span></strong></div>
-    <div class="results-toolbar"><input data-results-search type="search" placeholder="Search name or bib"><select data-results-tier><option value="">All distances</option>${event.os_event_tiers.map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></div>
-    <div class="results-table"><div class="results-header"><span>Place</span><span>Runner</span><span>Division</span><span>Chip time</span><span>Gun time</span></div>
-      ${rows.map((item)=>`<div class="result-row" data-result-tier="${item.tier_id}" data-result-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.bib_number || ""}`.toLowerCase())}"><span>${item.overallPlace || "—"}</span><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>Bib ${escapeHtml(item.bib_number || "—")} · ${escapeHtml(tierById(event,item.tier_id)?.name || "")}${item.wave_id ? ` · ${escapeHtml(event.os_waves?.find((wave)=>wave.id===item.wave_id)?.name || "")}` : ""}</small></span><span>${escapeHtml(item.division || "Open")}${item.divisionPlace ? `<small>${item.divisionPlace} in division</small>` : ""}</span><span><b>${item.status==="finisher" ? resultTime(item.chip_time_ms ?? item.gun_time_ms) : item.status.toUpperCase()}</b></span><span>${item.status==="finisher" ? resultTime(item.gun_time_ms) : "—"}</span></div>`).join("") || '<div class="empty-state">No published results yet.</div>'}
-    </div>
-  </section>`;
-}
-
-function resultsManagerForm(event) {
-  const current=new Map((event.os_results || []).map((item)=>[item.registration_id,item]));
-  const participants=eventRegistrations(event.id).filter((item)=>item.status==="confirmed");
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Timing & scoring</p><h2>${escapeHtml(event.name)} results</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="result-publish-state"><b>${event.results_published_at ? "Results are public" : "Results are not published"}</b><span>${(event.os_results || []).length} saved results</span></div>
-    <details class="csv-import"><summary>Import timing CSV</summary><p>Columns: <code>bib,chip_time,gun_time,status,division</code>. Times accept <code>MM:SS</code> or <code>HH:MM:SS</code>.</p><input id="results-csv-file" type="file" accept=".csv,text/csv"><textarea id="results-csv" rows="6" placeholder="bib,chip_time,gun_time,status,division&#10;101,24:31,25:02,finisher,M30-39"></textarea><button class="subtle-button" data-import-results="${event.id}" type="button">Import CSV</button></details>
-    <form id="results-form" data-event-id="${event.id}">
-      <div class="result-entry-list">${participants.map((registration)=>{
-        const result=current.get(registration.id);
-        return `<div class="result-entry" data-registration-id="${registration.id}"><span><b>${escapeHtml(registration.first_name)} ${escapeHtml(registration.last_name)}</b><small>Bib ${escapeHtml(registration.bib_number || "—")} · ${escapeHtml(tierById(event,registration.tier_id)?.name || "")}</small></span><label>Chip time<input name="chip_time" value="${resultTime(result?.chip_time_ms).replace("—","")}" placeholder="24:31"></label><label>Gun time<input name="gun_time" value="${resultTime(result?.gun_time_ms).replace("—","")}" placeholder="25:02"></label><label>Status<select name="result_status">${["finisher","dnf","dns","dq"].map((status)=>`<option ${result?.status===status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Division<input name="division" value="${escapeHtml(result?.division || "")}" placeholder="M30-39"></label></div>`;
-      }).join("") || '<div class="empty-state">There are no confirmed participants.</div>'}</div>
-      <button class="primary-button" type="submit">Save corrections</button>
-    </form>
-    <div class="dialog-actions"><button class="subtle-button" data-unpublish-results="${event.id}" type="button">Unpublish</button><button class="subtle-button" data-notify-results="${event.id}" type="button">Email unnotified runners</button><button class="primary-button" data-publish-results="${event.id}" type="button">Publish results</button></div>
-  </section>`;
-}
+const resultsViews = createResultsViews({ page, eventRegistrations, tierById });
+const renderResults = resultsViews.renderPage;
+const resultsManagerForm = resultsViews.manager;
 
 function parseResultsCsv(text,event) {
   return parseResultRows(text, eventRegistrations(event.id), parseResultTime);

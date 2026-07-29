@@ -30,6 +30,10 @@ application review, irreversible draw confirmation, and invitation summaries.
 previews, test messages, reusable templates, scheduling, drafts, and sends.
 `features/results/controller.js` owns timing imports, manual corrections,
 publication state, runner notifications, and public leaderboard filtering.
+Its `views.js` contains the public leaderboard and organizer dialog markup.
+`modules/render.js` supplies the intentionally small, framework-free rendering
+layer: target replacement, list rendering, escaped empty states, and modal
+shells. Feature views remain plain functions with explicit escaping.
 `features/volunteers/controller.js` owns public shift signup and waitlisting,
 organizer role creation, roster updates, and volunteer exports.
 `features/race-day/controller.js` owns participant lookup, QR passes, packet
