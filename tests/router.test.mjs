@@ -67,3 +67,24 @@ test("router batches view and selection transitions atomically", async () => {
   await navigate("runner", { syncUrl: false });
   assert.deepEqual(transitions, ["start", [1, "runner", null]]);
 });
+
+test("router labels protected and completed transitions", async () => {
+  const state = { navigationId: 0, session: null };
+  const actions = [];
+  const router = createRouter({
+    state,
+    configured: true,
+    routes: { runner: async () => null, discover: async () => null },
+    onAuthRequired: () => {},
+    afterNavigate: () => {},
+    actionState: (name, operation) => {
+      actions.push(name);
+      operation();
+    },
+  });
+
+  await router.navigate("runner", { syncUrl: false });
+  state.session = {};
+  await router.navigate("discover", { syncUrl: false });
+  assert.deepEqual(actions, ["route.auth-required", "route.navigate"]);
+});

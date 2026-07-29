@@ -50,3 +50,30 @@ test("subscriptions can initialize a browser effect and unsubscribe cleanly", ()
   store.state.view = "runner";
   assert.equal(calls, 1);
 });
+
+test("named actions create bounded metadata-only history", () => {
+  let timestamp = 100;
+  const store = createStore({ session: null, view: "discover" }, {
+    historyLimit: 2,
+    now: () => timestamp++,
+  });
+  const metadata = [];
+  store.subscribe(null, (_state, _changes, meta) => metadata.push(meta));
+
+  store.patch({ session: { access_token: "secret" } }, "auth.signed-in");
+  store.patch({ view: "runner" }, "route.navigate");
+  store.patch({ session: null }, "auth.signed-out");
+
+  assert.deepEqual(metadata.map((item) => item.action), [
+    "auth.signed-in",
+    "route.navigate",
+    "auth.signed-out",
+  ]);
+  assert.deepEqual(store.getHistory(), [
+    { at: 101, action: "route.navigate", keys: ["view"] },
+    { at: 102, action: "auth.signed-out", keys: ["session"] },
+  ]);
+  assert.doesNotMatch(JSON.stringify(store.getHistory()), /secret/);
+  store.clearHistory();
+  assert.deepEqual(store.getHistory(), []);
+});

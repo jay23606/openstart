@@ -1,14 +1,21 @@
-export function createStore(initialState = {}) {
+export function createStore(initialState = {}, { historyLimit = 50, now = () => Date.now() } = {}) {
   const listeners = new Set();
+  const history = [];
   let batchDepth = 0;
+  let currentAction = null;
   const pending = new Map();
 
   function publish(changes) {
     if (!changes.length) return;
-    const changedKeys = new Set(changes.map((change) => change.key));
+    const actions = [...new Set(changes.map((change) => change.action).filter(Boolean))];
+    const action = actions.length === 1 ? actions[0] : actions.length ? "batch" : null;
+    const publicChanges = changes.map(({ key, previous, value }) => ({ key, previous, value }));
+    history.push({ at: now(), action, keys: publicChanges.map((change) => change.key) });
+    if (history.length > historyLimit) history.splice(0, history.length - historyLimit);
+    const changedKeys = new Set(publicChanges.map((change) => change.key));
     for (const subscription of [...listeners]) {
       if (!subscription.keys || subscription.keys.some((key) => changedKeys.has(key))) {
-        subscription.listener(state, changes);
+        subscription.listener(state, publicChanges, { action });
       }
     }
   }
@@ -17,10 +24,10 @@ export function createStore(initialState = {}) {
     if (Object.is(previous, value)) return;
     if (batchDepth) {
       const existing = pending.get(key);
-      pending.set(key, { key, previous: existing?.previous ?? previous, value });
+      pending.set(key, { key, previous: existing?.previous ?? previous, value, action: currentAction || existing?.action });
       return;
     }
-    publish([{ key, previous, value }]);
+    publish([{ key, previous, value, action: currentAction }]);
   }
 
   const state = new Proxy({ ...initialState }, {
@@ -42,12 +49,16 @@ export function createStore(initialState = {}) {
     return () => listeners.delete(subscription);
   }
 
-  function patch(values) {
+  function applyPatch(values) {
     batch(() => {
       Object.entries(values).forEach(([key, value]) => {
         state[key] = value;
       });
     });
+  }
+
+  function patch(values, actionName = null) {
+    return actionName ? action(actionName, () => applyPatch(values)) : applyPatch(values);
   }
 
   function batch(action) {
@@ -64,5 +75,18 @@ export function createStore(initialState = {}) {
     }
   }
 
-  return { state, subscribe, patch, batch };
+  function action(name, operation) {
+    const previousAction = currentAction;
+    currentAction = name;
+    try {
+      return batch(operation);
+    } finally {
+      currentAction = previousAction;
+    }
+  }
+
+  const getHistory = () => history.map((entry) => ({ ...entry, keys: [...entry.keys] }));
+  const clearHistory = () => { history.length = 0; };
+
+  return { state, subscribe, patch, batch, action, getHistory, clearHistory };
 }

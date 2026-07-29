@@ -20,19 +20,20 @@ export function createRouter({
   onAuthRequired,
   afterNavigate,
   batchState = (action) => action(),
+  actionState = (_name, action) => batchState(action),
 }) {
   const views = Object.keys(routes);
 
   async function navigate(requestedView, { syncUrl = true } = {}) {
     const view = normalizeView(requestedView, views);
     if (protectedViews.includes(view) && configured && !state.session) {
-      batchState(() => { state.pendingView = view; });
+      actionState("route.auth-required", () => { state.pendingView = view; });
       onAuthRequired(view);
       return false;
     }
 
     let navigationId;
-    batchState(() => {
+    actionState("route.navigate", () => {
       navigationId = state.navigationId + 1;
       state.navigationId = navigationId;
       state.view = view;

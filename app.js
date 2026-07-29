@@ -79,7 +79,7 @@ const hydrateEvent = async (id) => {
     const events = [...state.events];
     const index = events.findIndex((event) => event.id === id);
     if (index >= 0) events[index] = full; else events.push(full);
-    appStore.patch({ events });
+    appStore.patch({ events }, "events.hydrated");
     return full;
   } catch (error) {
     showNotice(error.message, { type: "error", duration: 0 });
@@ -127,7 +127,7 @@ function localReadiness(event) {
 }
 
 async function renderSetupWizard(event, step = 0) {
-  appStore.patch({ setupEventId: event.id });
+  appStore.patch({ setupEventId: event.id }, "setup.opened");
   const readiness = configured ? await eventReadiness(event.id) : localReadiness(event);
   pageLifecycle.render(organizerViews.setup(event, step, readiness, state.session?.user?.email || ""), {
     metadata: { title: `${event.name} setup — OpenStart`, description: "Guided event setup and publishing." },
@@ -193,12 +193,12 @@ publicController.restoreRegion();
 
 async function loadPlatformAccess(){
   const platformAdmin = state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
-  appStore.patch({ platformAdmin });
+  appStore.patch({ platformAdmin }, "platform.access-loaded");
 }
 
 async function loadPlatformOverview(query=""){
   const platformData = await platformAdminAction("overview",{query});
-  appStore.patch({ platformData });
+  appStore.patch({ platformData }, "platform.overview-loaded");
 }
 
 function renderPlatformAdmin() {
@@ -210,7 +210,7 @@ function renderPlatformAdmin() {
 
 async function renderSeries(series) {
   const standings=await seriesAction("standings",{seriesId:series.id});
-  appStore.patch({ seriesStandings: standings });
+  appStore.patch({ seriesStandings: standings }, "series.standings-loaded");
   pageLifecycle.render(seriesViews.publicPage(series, standings), {
     metadata: {
       title: `${series.name} — OpenStart`,
@@ -251,7 +251,7 @@ function renderRunnerDashboard() {
 }
 
 function renderAthlete(data){
-  appStore.patch({ view: "athlete", selectedEvent: null });
+  appStore.patch({ view: "athlete", selectedEvent: null }, "athlete.opened");
   const {profile}=data;
   const name=profile.display_name || `@${profile.handle}`;
   pageLifecycle.render(accountViews.publicAthlete(data), {
@@ -435,7 +435,7 @@ async function loadPublic() {
     discoverTotal: Array.isArray(discovery) ? discovery.length : discovery.total,
     series,
     registrations,
-  });
+  }, "public.loaded");
 }
 
 async function loadDashboard() {
@@ -465,7 +465,7 @@ async function loadDashboard() {
     emailTemplates,
     auditLog,
     loadedRegistrationEvents: new Set(loadedIds),
-  });
+  }, "organizer.loaded");
 }
 
 async function ensureEventRegistrations(eventId,force=false){
@@ -474,7 +474,7 @@ async function ensureEventRegistrations(eventId,force=false){
   appStore.patch({
     registrations: state.registrations.filter((item)=>item.event_id!==eventId).concat(rows),
     loadedRegistrationEvents: new Set([...state.loadedRegistrationEvents, eventId]),
-  });
+  }, "registrations.loaded");
 }
 
 async function loadRunnerDashboard() {
@@ -485,7 +485,7 @@ async function loadRunnerDashboard() {
     listMyLotteryApplications(),
     getMyAthleteProfile(),
   ]);
-  appStore.patch({ runnerRegistrations, captainTeams, volunteerSignups, lotteryApplications, athleteProfile });
+  appStore.patch({ runnerRegistrations, captainTeams, volunteerSignups, lotteryApplications, athleteProfile }, "runner.loaded");
 }
 
 const { navigate: go } = createRouter({
@@ -528,6 +528,7 @@ const { navigate: go } = createRouter({
   },
   afterNavigate: pageLifecycle.afterNavigate,
   batchState: appStore.batch,
+  actionState: appStore.action,
 });
 
 const registrationController = createRegistrationController({
@@ -719,7 +720,7 @@ const raceDayController = createRaceDayController({
       registrations,
       orderItems,
       loadedRegistrationEvents: new Set([...state.loadedRegistrationEvents, ...eventIds]),
-    });
+    }, "financials.loaded");
     exportFinancials();
   },
   forms: {
@@ -935,20 +936,23 @@ async function boot() {
   setupBanner.classList.toggle("hidden", configured);
   if (configured) {
     const { data } = await supabase.auth.getSession();
-    appStore.patch({ session: data.session });
+    appStore.patch({ session: data.session }, "auth.restored");
     await loadPlatformAccess();
     supabase.auth.onAuthStateChange((_event, session) => {
       appStore.patch(session ? { session } : {
         session: null,
         registrations: [],
         loadedRegistrationEvents: new Set(),
-      });
+      }, session ? "auth.changed" : "auth.cleared");
       setTimeout(()=>loadPlatformAccess(),0);
     });
   }
   const params = new URLSearchParams(location.search);
   const pendingTransfer = params.get("transfer");
-  appStore.patch(pendingTransfer ? { pendingTransfer, pendingView: "runner" } : { pendingTransfer: null });
+  appStore.patch(
+    pendingTransfer ? { pendingTransfer, pendingView: "runner" } : { pendingTransfer: null },
+    "bootstrap.transfer",
+  );
   const requestedView = state.pendingTransfer ? "runner" : params.get("view") || "discover";
   await go(requestedView, { syncUrl: false });
   if (params.get("athlete")) {
