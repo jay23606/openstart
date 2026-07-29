@@ -13,7 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
-import { createAccountController } from "./features/account/controller.js?v=87";
+import { createAccountController } from "./features/account/controller.js?v=90";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=88";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -808,6 +808,8 @@ const accountController = createAccountController({
   lotteryApplicationForm,
   saveAthleteProfile,
   renderRunnerDashboard,
+  configured,
+  authForm,
 });
 
 const featureControllers = [
@@ -896,16 +898,10 @@ window.addEventListener("unhandledrejection", (event) => {
   showNotice(event.reason?.message || "Something went wrong.", { type: "error", duration: 0 });
 });
 authButton.addEventListener("click", () => {
-  state.pendingView="runner";
-  configured ? openDialog(authForm()) : showNotice("Add Supabase credentials in config.js to enable accounts.");
+  accountController.requestSignIn();
 });
 signOutButton.addEventListener("click", async () => {
-  await supabase.auth.signOut();
-  state.session = null;
-  state.platformAdmin=null;
-  state.registrations=[];
-  state.loadedRegistrationEvents.clear();
-  await go("discover");
+  await accountController.signOut();
 });
 async function boot() {
   setupBanner.classList.toggle("hidden", configured);

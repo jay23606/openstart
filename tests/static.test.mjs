@@ -64,6 +64,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.doesNotMatch(app, /event\.target\.name !== "template_id"/);
   assert.doesNotMatch(app, /let draggedSectionId/);
   assert.doesNotMatch(app, /ids\.map\(\(id,sort_order\)/);
+  assert.doesNotMatch(app, /state\.pendingView="runner"/);
+  assert.doesNotMatch(app, /await supabase\.auth\.signOut\(\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-view\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-reset-demo\]"\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);

@@ -40,6 +40,7 @@ function fixture(overrides = {}) {
     authApi: {
       signUp: async (credentials) => ({ data: { session: { user: credentials } }, error: null }),
       signInWithPassword: async (credentials) => ({ data: { session: { user: credentials } }, error: null }),
+      signOut: async () => actions.push(["signout"]),
     },
     loadPlatformAccess: async () => actions.push(["platform"]),
     closeDialog: () => actions.push(["close"]),
@@ -50,6 +51,7 @@ function fixture(overrides = {}) {
     lotteryApplicationForm: (race) => `lottery:${race.id}`,
     saveAthleteProfile: async (payload) => payload,
     renderRunnerDashboard: () => actions.push(["runner"]),
+    authForm: () => "auth-form",
     ...overrides,
   });
   return { controller, state, actions, locationRef };
@@ -208,4 +210,33 @@ test("account controller normalizes athlete profiles and explains duplicate hand
   const failedForm = form("athlete-profile-form");
   assert.equal(await failed.controller.handleSubmit(failedForm, formData({ handle: "taken" })), true);
   assert.equal(failedForm.message.textContent, "That handle is already taken. Try another.");
+});
+
+test("account entry and sign-out reset session-owned state", async () => {
+  const { controller, state, actions } = fixture();
+  state.platformAdmin = { id: "admin" };
+  state.registrations = [{ id: "registration" }];
+  state.loadedRegistrationEvents = new Set(["race-1"]);
+
+  controller.requestSignIn();
+  assert.equal(state.pendingView, "runner");
+  assert.deepEqual(actions, [["dialog", "auth-form"]]);
+
+  await controller.signOut();
+  assert.equal(state.session, null);
+  assert.equal(state.platformAdmin, null);
+  assert.deepEqual(state.registrations, []);
+  assert.equal(state.loadedRegistrationEvents.size, 0);
+  assert.deepEqual(actions.slice(1), [
+    ["signout"],
+    ["go", "discover"],
+  ]);
+});
+
+test("account entry explains missing backend configuration", () => {
+  const { controller, actions } = fixture({ configured: false });
+  controller.requestSignIn();
+  assert.deepEqual(actions, [
+    ["notice", "Add Supabase credentials in config.js to enable accounts.", undefined],
+  ]);
 });

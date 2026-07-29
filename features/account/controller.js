@@ -28,6 +28,8 @@ export function createAccountController({
   lotteryApplicationForm,
   saveAthleteProfile,
   renderRunnerDashboard,
+  configured = true,
+  authForm,
 }) {
   async function handleClick(target) {
     if (target.matches("[data-system-health]")) {
@@ -158,5 +160,20 @@ export function createAccountController({
     return false;
   }
 
-  return { handleClick, handleSubmit };
+  function requestSignIn() {
+    state.pendingView = "runner";
+    if (configured) openDialog(authForm());
+    else showNotice("Add Supabase credentials in config.js to enable accounts.");
+  }
+
+  async function signOut() {
+    await authApi.signOut();
+    state.session = null;
+    state.platformAdmin = null;
+    state.registrations = [];
+    state.loadedRegistrationEvents.clear();
+    await go("discover");
+  }
+
+  return { handleClick, handleSubmit, requestSignIn, signOut };
 }
