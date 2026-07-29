@@ -25,6 +25,7 @@ export function createOrganizerController({
   go,
   updateWaitlist,
   documentRef = globalThis.document,
+  patchState = (values) => Object.assign(state, values),
 }) {
   async function refreshDialog(eventId, form) {
     await loadDashboard();
@@ -41,10 +42,10 @@ export function createOrganizerController({
     } else if (target.dataset.openSetup) await renderSetupWizard(eventById(target.dataset.openSetup), 0);
     else if (target.dataset.setupStep) await renderSetupWizard(eventById(target.dataset.setupEvent), Number(target.dataset.setupStep));
     else if (target.matches("[data-exit-setup]")) {
-      state.setupEventId = null;
+      patchState({ setupEventId: null });
       await go("dashboard");
     } else if (target.dataset.setupPreview) {
-      state.setupEventId = target.dataset.setupPreview;
+      patchState({ setupEventId: target.dataset.setupPreview });
       renderEvent(eventById(target.dataset.setupPreview), true);
     } else if (target.dataset.publishEvent) {
       target.disabled = true;

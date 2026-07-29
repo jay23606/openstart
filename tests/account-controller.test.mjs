@@ -228,14 +228,17 @@ test("account entry and sign-out reset session-owned state", async () => {
 
   controller.requestSignIn();
   assert.equal(state.pendingView, "runner");
-  assert.deepEqual(actions, [["dialog", "auth-form"]]);
+  assert.deepEqual(actions, [
+    ["patch", ["pendingView"]],
+    ["dialog", "auth-form"],
+  ]);
 
   await controller.signOut();
   assert.equal(state.session, null);
   assert.equal(state.platformAdmin, null);
   assert.deepEqual(state.registrations, []);
   assert.equal(state.loadedRegistrationEvents.size, 0);
-  assert.deepEqual(actions.slice(1), [
+  assert.deepEqual(actions.slice(2), [
     ["signout"],
     ["patch", ["session", "platformAdmin", "registrations", "loadedRegistrationEvents"]],
     ["go", "discover"],
@@ -246,6 +249,7 @@ test("account entry explains missing backend configuration", () => {
   const { controller, actions } = fixture({ configured: false });
   controller.requestSignIn();
   assert.deepEqual(actions, [
+    ["patch", ["pendingView"]],
     ["notice", "Add Supabase credentials in config.js to enable accounts.", undefined],
   ]);
 });

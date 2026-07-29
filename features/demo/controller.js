@@ -13,10 +13,11 @@ export function createDemoController({
   confirmAction = confirm,
   scrollToBottom = () => scrollTo(0, document.body.scrollHeight),
   launchers,
+  patchState = (values) => Object.assign(state, values),
 }) {
   async function handleClick(target) {
     if (target.matches("[data-demo-sign-in]")) {
-      state.pendingView = "demo";
+      patchState({ pendingView: "demo" });
       openDialog(authForm());
       return true;
     }

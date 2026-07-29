@@ -146,7 +146,7 @@ export function createAccountController({
         is_public: data.get("is_public") === "on",
       };
       try {
-        state.athleteProfile = await saveAthleteProfile(payload);
+        patchState({ athleteProfile: await saveAthleteProfile(payload) });
         closeDialog();
         renderRunnerDashboard();
         showNotice("Athlete profile saved.");
@@ -162,7 +162,7 @@ export function createAccountController({
   }
 
   function requestSignIn() {
-    state.pendingView = "runner";
+    patchState({ pendingView: "runner" });
     if (configured) openDialog(authForm());
     else showNotice("Add Supabase credentials in config.js to enable accounts.");
   }

@@ -26,7 +26,7 @@ export function createRouter({
   async function navigate(requestedView, { syncUrl = true } = {}) {
     const view = normalizeView(requestedView, views);
     if (protectedViews.includes(view) && configured && !state.session) {
-      state.pendingView = view;
+      batchState(() => { state.pendingView = view; });
       onAuthRequired(view);
       return false;
     }

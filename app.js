@@ -9,13 +9,13 @@ import {
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
-import { createRegistrationController } from "./features/registration/controller.js?v=88";
+import { createRegistrationController } from "./features/registration/controller.js?v=95";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
-import { createDemoController } from "./features/demo/controller.js?v=84";
+import { createDemoController } from "./features/demo/controller.js?v=95";
 import { createAccountController } from "./features/account/controller.js?v=92";
 import { createPublicController } from "./features/public/controller.js?v=94";
-import { createOrganizerController } from "./features/organizer/controller.js?v=88";
+import { createOrganizerController } from "./features/organizer/controller.js?v=95";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
@@ -47,7 +47,7 @@ import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createShellController } from "./modules/shell-controller.js?v=86";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
-import { createRouter } from "./modules/router.js?v=92";
+import { createRouter } from "./modules/router.js?v=95";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
 import { localDateTime, parseResultTime, resultTime, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
@@ -127,7 +127,7 @@ function localReadiness(event) {
 }
 
 async function renderSetupWizard(event, step = 0) {
-  state.setupEventId = event.id;
+  appStore.patch({ setupEventId: event.id });
   const readiness = configured ? await eventReadiness(event.id) : localReadiness(event);
   pageLifecycle.render(organizerViews.setup(event, step, readiness, state.session?.user?.email || ""), {
     metadata: { title: `${event.name} setup — OpenStart`, description: "Guided event setup and publishing." },
@@ -251,8 +251,7 @@ function renderRunnerDashboard() {
 }
 
 function renderAthlete(data){
-  state.view="athlete";
-  state.selectedEvent=null;
+  appStore.patch({ view: "athlete", selectedEvent: null });
   const {profile}=data;
   const name=profile.display_name || `@${profile.handle}`;
   pageLifecycle.render(accountViews.publicAthlete(data), {
@@ -563,6 +562,7 @@ const registrationController = createRegistrationController({
     registration: registrationForm,
     runnerRegistration: runnerRegistrationForm,
   },
+  patchState: appStore.patch,
 });
 
 const organizerController = createOrganizerController({
@@ -602,6 +602,7 @@ const organizerController = createOrganizerController({
     volunteerManager: volunteerManagerForm,
     waveManager: waveManagerForm,
   },
+  patchState: appStore.patch,
 });
 
 const platformController = createPlatformController({
@@ -808,6 +809,7 @@ const demoController = createDemoController({
     lottery: (race) => openDialog(lotteryLifecycleForm(race)),
     checklist: (race) => openDialog(checklistForm(race)),
   },
+  patchState: appStore.patch,
 });
 
 const accountController = createAccountController({
@@ -945,8 +947,8 @@ async function boot() {
     });
   }
   const params = new URLSearchParams(location.search);
-  state.pendingTransfer = params.get("transfer");
-  if (state.pendingTransfer) state.pendingView = "runner";
+  const pendingTransfer = params.get("transfer");
+  appStore.patch(pendingTransfer ? { pendingTransfer, pendingView: "runner" } : { pendingTransfer: null });
   const requestedView = state.pendingTransfer ? "runner" : params.get("view") || "discover";
   await go(requestedView, { syncUrl: false });
   if (params.get("athlete")) {
