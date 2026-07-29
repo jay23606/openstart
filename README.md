@@ -18,8 +18,8 @@ Larger product areas live under `features/`. For example,
 entry, participant management, transfers, cancellations, refunds, and
 confirmation actions while receiving its data and UI dependencies explicitly.
 `features/organizer/controller.js` owns event creation, guided setup,
-publishing, organizer tools, waves, site content, pricing, and operational
-checklists through the same dependency-driven boundary.
+publishing, core organizer navigation, and operational checklists through the
+same dependency-driven boundary.
 `features/platform/controller.js` isolates platform search, fee controls,
 event suspension, and private support notes from the public application shell.
 `features/series/controller.js` owns championship creation, configuration,
@@ -30,6 +30,15 @@ application review, irreversible draw confirmation, and invitation summaries.
 previews, test messages, reusable templates, scheduling, drafts, and sends.
 `features/results/controller.js` owns timing imports, manual corrections,
 publication state, runner notifications, and public leaderboard filtering.
+`features/volunteers/controller.js` owns public shift signup and waitlisting,
+organizer role creation, roster updates, and volunteer exports.
+`features/race-day/controller.js` owns participant lookup, QR passes, packet
+pickup, check-in, bibs, walk-ups, staff, fulfillment, and operational exports.
+`features/event-commerce/controller.js` owns waivers, custom registration
+questions, scheduled pricing, promotions, merchandise, and donations.
+`features/event-site/controller.js` owns event branding, content sections,
+sponsors, publishing previews, and asset uploads. `features/waves/controller.js`
+owns wave creation, assignments, runner selection, starts, and bib allocation.
 
 `modules/dispatcher.js` composes feature controllers for click and form
 submission handling. It processes handlers in explicit order and stops after

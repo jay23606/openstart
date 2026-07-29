@@ -10,12 +10,17 @@ import {
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
-import { createOrganizerController } from "./features/organizer/controller.js?v=45";
+import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createCommunicationsController } from "./features/communications/controller.js?v=52";
 import { createResultsController } from "./features/results/controller.js?v=53";
+import { createVolunteersController } from "./features/volunteers/controller.js?v=54";
+import { createRaceDayController } from "./features/race-day/controller.js?v=55";
+import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
+import { createEventSiteController } from "./features/event-site/controller.js?v=57";
+import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -1412,11 +1417,7 @@ const organizerController = createOrganizerController({
   unpublishEvent,
   updateChecklistItem,
   deleteChecklistItem,
-  deleteEventSection,
-  deleteEventSponsor,
   deleteScheduledPrice,
-  deleteWave,
-  wavesAction,
   createEvent,
   duplicateEvent,
   createChecklistItem,
@@ -1517,12 +1518,113 @@ const resultsController = createResultsController({
   documentRoot: document,
 });
 
+const volunteersController = createVolunteersController({
+  eventById,
+  openDialog,
+  exportVolunteers,
+  joinVolunteerShift,
+  createVolunteerRole,
+  updateVolunteerSignup,
+  loadDashboard,
+  dialog,
+  showNotice,
+  forms: {
+    opportunities: volunteerOpportunitiesForm,
+    signup: volunteerSignupForm,
+    manager: volunteerManagerForm,
+  },
+});
+
+const raceDayController = createRaceDayController({
+  state,
+  eventById,
+  openDialog,
+  raceDayAction,
+  updateOrderItem,
+  startQrScanner,
+  exportRoster,
+  raceDayResults,
+  loadDashboard,
+  showNotice,
+  loadAndExportFinancials: async () => {
+    const eventIds = state.events.filter((item) => !item.is_showcase).map((item) => item.id);
+    [state.registrations, state.orderItems] = await Promise.all([
+      listRegistrations(eventIds),
+      listOrganizerOrderItems(eventIds),
+    ]);
+    eventIds.forEach((id) => state.loadedRegistrationEvents.add(id));
+    exportFinancials();
+  },
+  forms: {
+    manager: raceDayForm,
+    pass: passForm,
+  },
+});
+
+const eventCommerceController = createEventCommerceController({
+  eventById,
+  openDialog,
+  updateEventSettings,
+  createEventQuestion,
+  deleteEventQuestion,
+  createScheduledPrice,
+  createPromoCode,
+  createProduct,
+  loadDashboard,
+  showNotice,
+  forms: {
+    registration: registrationSettingsForm,
+    pricing: pricingSettingsForm,
+    products: productSettingsForm,
+  },
+});
+
+const eventSiteController = createEventSiteController({
+  state,
+  eventById,
+  openDialog,
+  siteEditorForm,
+  updateEventSettings,
+  createEventSection,
+  createEventSponsor,
+  deleteEventSection,
+  deleteEventSponsor,
+  uploadEventAsset,
+  loadDashboard,
+  dialog,
+  renderEvent,
+  showNotice,
+});
+
+const wavesController = createWavesController({
+  state,
+  eventById,
+  openDialog,
+  createWave,
+  deleteWave,
+  wavesAction,
+  parseResultTime,
+  loadDashboard,
+  dialog,
+  go,
+  showNotice,
+  forms: {
+    manager: waveManagerForm,
+    runner: runnerWaveForm,
+  },
+});
+
 const featureControllers = [
   platformController,
   seriesController,
   lotteryController,
   communicationsController,
   resultsController,
+  volunteersController,
+  raceDayController,
+  eventCommerceController,
+  eventSiteController,
+  wavesController,
   organizerController,
   registrationController,
 ];
@@ -1659,16 +1761,6 @@ document.addEventListener("click", async (event) => {
     await go("discover");
     showNotice("Your account was deleted and participant data was anonymized.");
   }
-  if (target.dataset.runnerWave) openDialog(runnerWaveForm(state.runnerRegistrations.find((item)=>item.id===target.dataset.runnerWave)));
-  if (target.dataset.previewSite) {
-    const race=eventById(target.dataset.previewSite);
-    dialog.close();
-    renderEvent(race,true);
-    showNotice("Previewing draft website content.");
-  }
-  if (target.dataset.volunteer) openDialog(volunteerOpportunitiesForm(eventById(target.dataset.volunteer)));
-  if (target.dataset.volunteerShift) openDialog(volunteerSignupForm(eventById(target.dataset.event),target.dataset.volunteerShift));
-  if (target.dataset.exportVolunteers) exportVolunteers(eventById(target.dataset.exportVolunteers));
   if (target.dataset.embedCode) openDialog(embedSnippetForm(eventById(target.dataset.embedCode)));
   if (target.matches("[data-copy-embed]")) {
     const textarea = document.querySelector("#embed-snippet");
@@ -1689,17 +1781,6 @@ document.addEventListener("click", async (event) => {
       await go("dashboard");
     }
   }
-  if (target.dataset.raceDay) openDialog(raceDayForm(eventById(target.dataset.raceDay)));
-  if (target.dataset.startScanner) await startQrScanner(target.dataset.startScanner);
-  if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
-  if (target.matches("[data-export-finance]")){
-    const eventIds=state.events.filter((item)=>!item.is_showcase).map((item)=>item.id);
-    [state.registrations,state.orderItems]=await Promise.all([
-      listRegistrations(eventIds),listOrganizerOrderItems(eventIds),
-    ]);
-    eventIds.forEach((id)=>state.loadedRegistrationEvents.add(id));
-    exportFinancials();
-  }
   if (target.matches("[data-edit-athlete]")) openDialog(athleteProfileForm(state.athleteProfile));
   if (target.dataset.viewAthlete) {
     const athlete = await getAthleteProfile(target.dataset.viewAthlete);
@@ -1707,35 +1788,6 @@ document.addEventListener("click", async (event) => {
     history.replaceState({}, "", `${location.pathname}?athlete=${target.dataset.viewAthlete}`);
     renderAthlete(athlete);
     scrollTo(0, 0);
-  }
-  if (target.dataset.viewPass) {
-    const item = state.runnerRegistrations.find((registration) => registration.id === target.dataset.viewPass);
-    const pass = await raceDayAction("get_pass", { registrationId: item.id });
-    openDialog(passForm(item, pass));
-  }
-  if (target.dataset.pickup) {
-    await raceDayAction("pickup", { registrationId: target.dataset.pickup });
-    target.textContent = "✓ Packet";
-    target.disabled = true;
-    showNotice("Packet pickup recorded.");
-  }
-  if (target.dataset.checkin) {
-    await raceDayAction("checkin", { registrationId: target.dataset.checkin });
-    target.textContent = "✓ Checked in";
-    target.disabled = true;
-    showNotice("Participant checked in.");
-  }
-  if (target.dataset.fulfillItem) {
-    await updateOrderItem(target.dataset.fulfillItem, {});
-    target.textContent = "✓ Fulfilled";
-    target.disabled = true;
-    showNotice("Merchandise marked fulfilled.");
-  }
-  if (target.dataset.deleteQuestion) {
-    await deleteEventQuestion(target.dataset.deleteQuestion);
-    await loadDashboard();
-    openDialog(registrationSettingsForm(eventById(target.dataset.eventId)));
-    showNotice("Question removed.");
   }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-reset-demo]")) {
@@ -1835,239 +1887,6 @@ document.addEventListener("submit", async (event) => {
           : (error.message || "The profile could not be saved.");
       }
       return;
-    }
-
-    if (form.id === "registration-settings-form") {
-      const asIso = (name) => data.get(name) ? new Date(data.get(name)).toISOString() : null;
-      await updateEventSettings(form.dataset.eventId, {
-        waiver_text: data.get("waiver_text") || "",
-        participant_edits_close_at: asIso("participant_edits_close_at"),
-        transfers_close_at: asIso("transfers_close_at"),
-        refunds_close_at: asIso("refunds_close_at"),
-        allow_transfers: data.get("allow_transfers") === "on",
-        allow_refund_requests: data.get("allow_refund_requests") === "on",
-      });
-      await loadDashboard();
-      openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Waiver settings saved.");
-    }
-
-    if (form.id === "question-form") {
-      const options = String(data.get("options") || "").split(",").map((item) => item.trim()).filter(Boolean);
-      await createEventQuestion({
-        event_id: form.dataset.eventId,
-        label: data.get("label"),
-        field_type: data.get("field_type"),
-        options,
-        required: data.get("required") === "on",
-        sort_order: eventById(form.dataset.eventId).os_event_questions?.length || 0,
-      });
-      await loadDashboard();
-      openDialog(registrationSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Registration question added.");
-    }
-
-    if (form.matches(".scheduled-price-form")) {
-      await createScheduledPrice({
-        tier_id: form.dataset.tierId,
-        name: data.get("name"),
-        price_cents: Math.round(Number(data.get("price")) * 100),
-        starts_at: new Date(data.get("starts_at")).toISOString(),
-      });
-      await loadDashboard();
-      openDialog(pricingSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Price change scheduled.");
-    }
-
-    if (form.id === "promo-form") {
-      const percent = data.get("discount_type") === "percent";
-      await createPromoCode({
-        event_id: form.dataset.eventId,
-        code: String(data.get("code")).trim().toUpperCase(),
-        discount_type: data.get("discount_type"),
-        discount_value: percent ? Math.round(Number(data.get("value")) * 100) : Math.round(Number(data.get("value")) * 100),
-        max_redemptions: data.get("max_redemptions") ? Number(data.get("max_redemptions")) : null,
-        starts_at: data.get("starts_at") ? new Date(data.get("starts_at")).toISOString() : null,
-        expires_at: data.get("expires_at") ? new Date(data.get("expires_at")).toISOString() : null,
-      });
-      await loadDashboard();
-      openDialog(pricingSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Promo code created.");
-    }
-
-    if (form.id === "race-day-lookup-form") {
-      const result = await raceDayAction("lookup", { eventId: form.dataset.eventId, term: data.get("term") });
-      form.parentElement.querySelector("#race-day-results").innerHTML = raceDayResults(result.registrations || []);
-    }
-
-    if (form.id === "bulk-bib-form") {
-      const result = await raceDayAction("bulk_assign_bibs", {
-        eventId: form.dataset.eventId, tierId: data.get("tier_id") || null,
-        startNumber: Number(data.get("start_number")),
-      });
-      await loadDashboard();
-      openDialog(raceDayForm(eventById(form.dataset.eventId)));
-      showNotice(`${result.assigned} bibs assigned.`);
-    }
-
-    if (form.id === "staff-form") {
-      await raceDayAction("add_staff", {
-        eventId: form.dataset.eventId, email: data.get("email"), role: data.get("role"),
-      });
-      await loadDashboard();
-      openDialog(raceDayForm(eventById(form.dataset.eventId)));
-      showNotice("Race-day staff member added.");
-    }
-
-    if (form.id === "walkup-form") {
-      await raceDayAction("walkup", {
-        eventId: form.dataset.eventId, tierId: data.get("tier_id"),
-        firstName: data.get("first_name"), lastName: data.get("last_name"),
-        email: data.get("email"), emergencyContact: data.get("emergency_contact"),
-        bibNumber: data.get("bib_number") || null,
-      });
-      await loadDashboard();
-      openDialog(raceDayForm(eventById(form.dataset.eventId)));
-      showNotice("Walk-up participant added.");
-    }
-
-    if (form.id === "product-form") {
-      await createProduct({
-        event_id: form.dataset.eventId, name: data.get("name"),
-        description: data.get("description") || "", fulfillment_type: data.get("fulfillment_type"),
-      }, {
-        name: data.get("variant_name"), price_cents: Math.round(Number(data.get("price")) * 100),
-        inventory: data.get("inventory") === "" ? null : Number(data.get("inventory")),
-      });
-      await loadDashboard();
-      openDialog(productSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Product created.");
-    }
-
-    if (form.id === "donation-settings-form") {
-      await updateEventSettings(form.dataset.eventId, {
-        donations_enabled: data.get("donations_enabled") === "on",
-        beneficiary_name: data.get("beneficiary_name") || null,
-        fundraising_goal_cents: data.get("fundraising_goal") ? Math.round(Number(data.get("fundraising_goal")) * 100) : null,
-      });
-      await loadDashboard();
-      openDialog(productSettingsForm(eventById(form.dataset.eventId)));
-      showNotice("Fundraising settings saved.");
-    }
-
-    if (form.id === "volunteer-signup-form") {
-      const signup=await joinVolunteerShift({
-        shiftId:form.dataset.shiftId,firstName:data.get("first_name"),lastName:data.get("last_name"),
-        email:data.get("email"),phone:data.get("phone"),emergencyContact:data.get("emergency_contact"),
-        notes:data.get("notes"),waiverAccepted:data.get("waiver")==="on",
-      });
-      dialog.close();
-      showNotice(signup.status==="waitlisted" ? "That shift is full, so you joined its waitlist." : "Your volunteer shift is confirmed.");
-    }
-
-    if (form.id === "volunteer-role-form") {
-      await createVolunteerRole({
-        event_id:form.dataset.eventId,name:data.get("name"),description:data.get("description"),
-        requirements:data.get("requirements") || "",waiver_text:data.get("waiver_text") || "",
-        minimum_age:data.get("minimum_age") ? Number(data.get("minimum_age")) : null,
-      },{
-        starts_at:new Date(data.get("starts_at")).toISOString(),ends_at:new Date(data.get("ends_at")).toISOString(),
-        location:data.get("location"),capacity:Number(data.get("capacity")),instructions:data.get("instructions") || "",
-      });
-      await loadDashboard();
-      openDialog(volunteerManagerForm(eventById(form.dataset.eventId)));
-      showNotice("Volunteer role and shift created.");
-    }
-
-    if (form.id === "volunteer-roster-form") {
-      const updates=[...form.querySelectorAll("[data-volunteer-signup-id]")].map((row)=>{
-        const checked=row.querySelector('[name="checked_in"]').checked;
-        return updateVolunteerSignup(row.dataset.volunteerSignupId,{
-          status:row.querySelector('[name="status"]').value,
-          checked_in_at:checked ? new Date().toISOString() : null,
-          hours_worked:row.querySelector('[name="hours"]').value==="" ? null : Number(row.querySelector('[name="hours"]').value),
-          checked_out_at:row.querySelector('[name="status"]').value==="completed" ? new Date().toISOString() : null,
-        });
-      });
-      await Promise.all(updates);
-      await loadDashboard();
-      openDialog(volunteerManagerForm(eventById(form.dataset.eventId)));
-      showNotice("Volunteer roster updated.");
-    }
-
-    if (form.id === "site-branding-form") {
-      const changes={
-        primary_color:data.get("primary_color"),contact_email:data.get("contact_email") || null,
-        website_published:data.get("website_published")==="on",
-      };
-      const logo=data.get("logo"); const banner=data.get("banner");
-      if(logo?.size) changes.logo_url=await uploadEventAsset(state.session.user.id,form.dataset.eventId,logo);
-      if(banner?.size) changes.banner_url=await uploadEventAsset(state.session.user.id,form.dataset.eventId,banner);
-      await updateEventSettings(form.dataset.eventId,changes);
-      await loadDashboard();
-      openDialog(siteEditorForm(eventById(form.dataset.eventId)));
-      showNotice(changes.website_published ? "Event website published." : "Website draft saved.");
-    }
-
-    if (form.id === "site-section-form") {
-      const race=eventById(form.dataset.eventId);
-      await createEventSection({
-        event_id:race.id,section_type:data.get("section_type"),title:data.get("title"),content:data.get("content"),
-        link_url:data.get("link_url") || null,link_label:data.get("link_label") || null,
-        published:data.get("published")==="on",sort_order:(race.os_event_sections || []).length,
-      });
-      await loadDashboard();
-      openDialog(siteEditorForm(eventById(race.id)));
-      showNotice("Website section added.");
-    }
-
-    if (form.id === "site-sponsor-form") {
-      const logo=data.get("logo");
-      const logoUrl=logo?.size ? await uploadEventAsset(state.session.user.id,form.dataset.eventId,logo) : null;
-      const race=eventById(form.dataset.eventId);
-      await createEventSponsor({
-        event_id:race.id,name:data.get("name"),sponsor_level:data.get("sponsor_level") || "Sponsor",
-        website_url:data.get("website_url") || null,logo_url:logoUrl,sort_order:(race.os_event_sponsors || []).length,
-      });
-      await loadDashboard();
-      openDialog(siteEditorForm(eventById(race.id)));
-      showNotice("Sponsor added.");
-    }
-
-    if (form.id === "wave-form") {
-      const race=eventById(form.dataset.eventId);
-      await createWave({
-        event_id:race.id,tier_id:data.get("tier_id"),name:data.get("name"),
-        starts_at:new Date(data.get("starts_at")).toISOString(),capacity:Number(data.get("capacity")),
-        min_pace_seconds:data.get("min_pace") ? Math.round(parseResultTime(data.get("min_pace"))/1000) : null,
-        max_pace_seconds:data.get("max_pace") ? Math.round(parseResultTime(data.get("max_pace"))/1000) : null,
-        bib_start:data.get("bib_start") ? Number(data.get("bib_start")) : null,
-        bib_end:data.get("bib_end") ? Number(data.get("bib_end")) : null,
-        selection_closes_at:data.get("selection_closes_at") ? new Date(data.get("selection_closes_at")).toISOString() : null,
-        self_select:data.get("self_select")==="on",sort_order:(race.os_waves || []).length,
-      });
-      await loadDashboard();
-      openDialog(waveManagerForm(eventById(race.id)));
-      showNotice("Start wave created.");
-    }
-
-    if (form.id === "wave-assignment-form") {
-      const ids=[...form.elements.registration_ids.selectedOptions].map((option)=>option.value);
-      if(!ids.length) throw new Error("Select at least one participant");
-      const result=await wavesAction("assign",{eventId:form.dataset.eventId,waveId:data.get("wave_id"),registrationIds:ids});
-      await loadDashboard();
-      openDialog(waveManagerForm(eventById(form.dataset.eventId)));
-      showNotice(`${result.assigned} runners assigned.`);
-    }
-
-    if (form.id === "runner-wave-form") {
-      await wavesAction("assign_self",{
-        eventId:form.dataset.eventId,registrationId:form.dataset.registrationId,waveId:data.get("wave_id"),
-        estimatedPaceSeconds:data.get("estimated_pace") ? Math.round(parseResultTime(data.get("estimated_pace"))/1000) : null,
-      });
-      dialog.close();
-      await go("runner");
-      showNotice("Your start wave was updated.");
     }
 
   } catch (error) {

@@ -12,11 +12,7 @@ export function createOrganizerController({
   unpublishEvent,
   updateChecklistItem,
   deleteChecklistItem,
-  deleteEventSection,
-  deleteEventSponsor,
   deleteScheduledPrice,
-  deleteWave,
-  wavesAction,
   createEvent,
   duplicateEvent,
   createChecklistItem,
@@ -68,8 +64,6 @@ export function createOrganizerController({
     else if (target.dataset.registrationSettings) openDialog(forms.registrationSettings(eventById(target.dataset.registrationSettings)));
     else if (target.dataset.pricingSettings) openDialog(forms.pricingSettings(eventById(target.dataset.pricingSettings)));
     else if (target.dataset.productSettings) openDialog(forms.productSettings(eventById(target.dataset.productSettings)));
-    else if (target.dataset.siteEditor) openDialog(forms.siteEditor(eventById(target.dataset.siteEditor)));
-    else if (target.dataset.waveManager) openDialog(forms.waveManager(eventById(target.dataset.waveManager)));
     else if (target.dataset.volunteerManager) openDialog(forms.volunteerManager(eventById(target.dataset.volunteerManager)));
     else if (target.dataset.checklist) openDialog(forms.checklist(eventById(target.dataset.checklist)));
     else if (target.dataset.toggleChecklist) {
@@ -82,26 +76,6 @@ export function createOrganizerController({
       await deleteChecklistItem(target.dataset.deleteChecklist);
       await refreshDialog(target.dataset.event, forms.checklist);
       showNotice("Checklist task deleted.");
-    } else if (target.dataset.deleteWave) {
-      await deleteWave(target.dataset.deleteWave);
-      await refreshDialog(target.dataset.event, forms.waveManager);
-      showNotice("Wave deleted.");
-    } else if (target.dataset.startWave) {
-      await wavesAction("start", { eventId: target.dataset.event, waveId: target.dataset.startWave });
-      await refreshDialog(target.dataset.event, forms.waveManager);
-      showNotice("Wave start time recorded.");
-    } else if (target.dataset.waveBibs) {
-      const result = await wavesAction("assign_bibs", { eventId: target.dataset.event, waveId: target.dataset.waveBibs });
-      await refreshDialog(target.dataset.event, forms.waveManager);
-      showNotice(`${result.assigned} bibs assigned.`);
-    } else if (target.dataset.deleteSiteSection) {
-      await deleteEventSection(target.dataset.deleteSiteSection);
-      await refreshDialog(target.dataset.event, forms.siteEditor);
-      showNotice("Section deleted.");
-    } else if (target.dataset.deleteSponsor) {
-      await deleteEventSponsor(target.dataset.deleteSponsor);
-      await refreshDialog(target.dataset.event, forms.siteEditor);
-      showNotice("Sponsor deleted.");
     } else if (target.dataset.deletePrice) {
       await deleteScheduledPrice(target.dataset.deletePrice);
       await refreshDialog(target.dataset.eventId, forms.pricingSettings);
