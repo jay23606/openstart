@@ -11,6 +11,7 @@ import {
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
+import { createContentController } from "./features/content/controller.js?v=83";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -179,6 +180,7 @@ const publicController = createPublicController({
   showNotice,
   scrollToTop: () => scrollTo(0, 0),
 });
+const contentController = createContentController({ documentRef: document });
 const { loadDiscovery, renderDiscover, renderEvent } = publicController;
 publicController.restoreRegion();
 
@@ -760,6 +762,7 @@ const wavesController = createWavesController({
 
 const featureControllers = [
   publicController,
+  contentController,
   platformController,
   seriesController,
   lotteryController,
@@ -787,17 +790,6 @@ document.addEventListener("click", async (event) => {
     if(eventId) await ensureEventRegistrations(eventId);
   }
   if (target.matches("[data-view]")) await go(target.dataset.view);
-  if (target.matches("[data-help-filter]")) {
-    const searchInput = document.querySelector("[data-help-search]");
-    if (searchInput) searchInput.value = "";
-    document.querySelectorAll("[data-help-filter]").forEach((button) => button.classList.toggle("active", button === target));
-    const audience = target.dataset.helpFilter;
-    document.querySelectorAll("[data-help-article]").forEach((article) => {
-      article.classList.toggle("hidden", audience !== "All" && article.dataset.helpAudience !== audience);
-    });
-    const visible = document.querySelectorAll("[data-help-article]:not(.hidden)").length;
-    document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
-  }
   if (target.matches("[data-action='discover'], [data-back]")) {
     if (state.setupEventId) {
       const setupEvent=eventById(state.setupEventId);
@@ -1011,16 +1003,6 @@ document.addEventListener("change", async (event) => {
 });
 document.addEventListener("input", async (event) => {
   if (await dispatchFeatureInput(event.target)) return;
-  if (event.target.matches("[data-help-search]")) {
-    const search = event.target.value.trim().toLowerCase();
-    document.querySelectorAll("[data-help-filter]").forEach((button) => button.classList.toggle("active", button.dataset.helpFilter === "All"));
-    document.querySelectorAll("[data-help-article]").forEach((article) => {
-      article.classList.toggle("hidden", Boolean(search && !article.dataset.helpSearchable.includes(search)));
-    });
-    const visible = document.querySelectorAll("[data-help-article]:not(.hidden)").length;
-    document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
-    return;
-  }
 });
 document.addEventListener("dragstart",(event)=>{
   const row=event.target.closest("[data-site-section-id]");

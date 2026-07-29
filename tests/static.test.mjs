@@ -41,12 +41,15 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /pageLifecycle\.afterNavigate/);
   assert.doesNotMatch(app, /page\.innerHTML\s*=/);
   assert.match(app, /createPublicController/);
-  assert.match(app, /publicController,\s+platformController/);
+  assert.match(app, /createContentController/);
+  assert.match(app, /publicController,\s+contentController,\s+platformController/);
   assert.match(publicController, /publicViews\.discoveryPage\(discoveryModel\(\)\)/);
   assert.match(publicController, /publicViews\.eventPage\(model\)/);
   assert.match(publicController, /async function handleClick\(target\)/);
   assert.match(publicController, /function handleInput\(target\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-show-more\]"\)/);
+  assert.doesNotMatch(app, /target\.matches\("\[data-help-filter\]"\)/);
+  assert.doesNotMatch(app, /target\.matches\("\[data-help-search\]"\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);
   assert.match(publicViews, /function discoveryPage\(model\)/);
   assert.match(publicViews, /function eventPage\(model\)/);
