@@ -13,7 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
-import { createAccountController } from "./features/account/controller.js?v=90";
+import { createAccountController } from "./features/account/controller.js?v=92";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=88";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -47,7 +47,7 @@ import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createShellController } from "./modules/shell-controller.js?v=86";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
-import { createRouter } from "./modules/router.js?v=43";
+import { createRouter } from "./modules/router.js?v=92";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
 import { localDateTime, parseResultTime, resultTime, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
@@ -509,6 +509,7 @@ const { navigate: go } = createRouter({
     },
   },
   afterNavigate: pageLifecycle.afterNavigate,
+  batchState: appStore.batch,
 });
 
 const registrationController = createRegistrationController({
@@ -761,6 +762,7 @@ const demoController = createDemoController({
   state,
   openDialog,
   authForm,
+  patchState: appStore.patch,
   createShowcaseEvent,
   deleteShowcaseEvent,
   loadDashboard,
@@ -908,14 +910,14 @@ async function boot() {
   setupBanner.classList.toggle("hidden", configured);
   if (configured) {
     const { data } = await supabase.auth.getSession();
-    state.session = data.session;
+    appStore.patch({ session: data.session });
     await loadPlatformAccess();
     supabase.auth.onAuthStateChange((_event, session) => {
-      state.session = session;
-      if(!session){
-        state.registrations=[];
-        state.loadedRegistrationEvents.clear();
-      }
+      appStore.patch(session ? { session } : {
+        session: null,
+        registrations: [],
+        loadedRegistrationEvents: new Set(),
+      });
       setTimeout(()=>loadPlatformAccess(),0);
     });
   }

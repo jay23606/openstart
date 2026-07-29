@@ -46,3 +46,24 @@ test("createRouter never commits a stale asynchronous route", async () => {
 
   assert.deepEqual(rendered, ["discover"]);
 });
+
+test("router batches view and selection transitions atomically", async () => {
+  const state = { navigationId: 0, session: {}, selectedEvent: { id: "old" }, view: "discover" };
+  const transitions = [];
+  const { navigate } = createRouter({
+    state,
+    configured: true,
+    routes: { runner: async () => null },
+    protectedViews: [],
+    onAuthRequired: () => {},
+    afterNavigate: () => {},
+    batchState: (action) => {
+      transitions.push("start");
+      action();
+      transitions.push([state.navigationId, state.view, state.selectedEvent]);
+    },
+  });
+
+  await navigate("runner", { syncUrl: false });
+  assert.deepEqual(transitions, ["start", [1, "runner", null]]);
+});

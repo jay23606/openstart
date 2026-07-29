@@ -19,6 +19,7 @@ export function createRouter({
   protectedViews = ["dashboard", "runner", "platform"],
   onAuthRequired,
   afterNavigate,
+  batchState = (action) => action(),
 }) {
   const views = Object.keys(routes);
 
@@ -30,9 +31,13 @@ export function createRouter({
       return false;
     }
 
-    const navigationId = ++state.navigationId;
-    state.view = view;
-    state.selectedEvent = null;
+    let navigationId;
+    batchState(() => {
+      navigationId = state.navigationId + 1;
+      state.navigationId = navigationId;
+      state.view = view;
+      state.selectedEvent = null;
+    });
     const commit = await routes[view]({ navigationId, navigate });
     if (navigationId !== state.navigationId) return false;
 

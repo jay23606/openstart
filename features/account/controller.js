@@ -30,6 +30,7 @@ export function createAccountController({
   renderRunnerDashboard,
   configured = true,
   authForm,
+  patchState = (values) => Object.assign(state, values),
 }) {
   async function handleClick(target) {
     if (target.matches("[data-system-health]")) {
@@ -48,7 +49,7 @@ export function createAccountController({
       if (!confirmAction("Permanently delete your OpenStart account and anonymize your runner data? This cannot be undone.")) return true;
       if (!confirmAction("Final confirmation: delete this account now?")) return true;
       await accountAction("delete");
-      state.session = null;
+      patchState({ session: null });
       await go("discover");
       showNotice("Your account was deleted and participant data was anonymized.");
       return true;
@@ -119,14 +120,14 @@ export function createAccountController({
         return true;
       }
 
-      state.session = result.data.session;
+      patchState({ session: result.data.session });
       await loadPlatformAccess();
       closeDialog();
       if (state.pendingLotteryEvent) {
         const lotteryEventId = state.pendingLotteryEvent;
-        state.pendingLotteryEvent = null;
         await loadPublic();
-        state.selectedEvent = await hydrateEvent(lotteryEventId);
+        const selectedEvent = await hydrateEvent(lotteryEventId);
+        patchState({ pendingLotteryEvent: null, selectedEvent });
         renderEvent(state.selectedEvent);
         afterNavigate();
         openDialog(lotteryApplicationForm(state.selectedEvent));
@@ -168,10 +169,12 @@ export function createAccountController({
 
   async function signOut() {
     await authApi.signOut();
-    state.session = null;
-    state.platformAdmin = null;
-    state.registrations = [];
-    state.loadedRegistrationEvents.clear();
+    patchState({
+      session: null,
+      platformAdmin: null,
+      registrations: [],
+      loadedRegistrationEvents: new Set(),
+    });
     await go("discover");
   }
 

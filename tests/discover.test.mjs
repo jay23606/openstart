@@ -71,7 +71,7 @@ test("the discovery list stays light and detail data is fetched per event", asyn
   assert.ok(!/matching\.slice\(0, state\.discoverVisible\)/.test(app),
     "discovery paging must happen in Postgres, not after downloading the catalogue");
   const detailFlows = `${app}\n${accountController}\n${registration}\n${publicController}`;
-  assert.equal((detailFlows.match(/state\.selectedEvent = await hydrateEvent\(/g) || []).length, 3);
+  assert.equal((detailFlows.match(/await hydrateEvent\(/g) || []).length, 3);
   assert.ok(!/state\.selectedEvent = eventById\(/.test(detailFlows),
     "selectedEvent must come from hydrateEvent, not the light list record");
 });

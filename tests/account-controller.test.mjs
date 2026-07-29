@@ -52,6 +52,10 @@ function fixture(overrides = {}) {
     saveAthleteProfile: async (payload) => payload,
     renderRunnerDashboard: () => actions.push(["runner"]),
     authForm: () => "auth-form",
+    patchState: (values) => {
+      actions.push(["patch", Object.keys(values)]);
+      Object.assign(state, values);
+    },
     ...overrides,
   });
   return { controller, state, actions, locationRef };
@@ -76,6 +80,7 @@ test("account controller exports and deletes account data through explicit confi
     ["download", "openstart-data-2026-07-29.json", { profile: true }],
     ["notice", "Your OpenStart data export was downloaded.", undefined],
     ["account", "delete"],
+    ["patch", ["session"]],
     ["go", "discover"],
     ["notice", "Your account was deleted and participant data was anonymized.", undefined],
   ]);
@@ -151,6 +156,7 @@ test("account controller signs in and returns to the pending runner view", async
   ), true);
   assert.equal(state.session.user.email, "runner@example.com");
   assert.deepEqual(actions, [
+    ["patch", ["session"]],
     ["platform"],
     ["close"],
     ["go", "runner"],
@@ -169,9 +175,11 @@ test("account controller resumes a pending lottery after authentication", async 
   assert.equal(state.pendingLotteryEvent, null);
   assert.equal(state.selectedEvent.id, "race-1");
   assert.deepEqual(actions, [
+    ["patch", ["session"]],
     ["platform"],
     ["close"],
     ["public"],
+    ["patch", ["pendingLotteryEvent", "selectedEvent"]],
     ["event", "race-1"],
     ["navigate"],
     ["dialog", "lottery:race-1"],
@@ -229,6 +237,7 @@ test("account entry and sign-out reset session-owned state", async () => {
   assert.equal(state.loadedRegistrationEvents.size, 0);
   assert.deepEqual(actions.slice(1), [
     ["signout"],
+    ["patch", ["session", "platformAdmin", "registrations", "loadedRegistrationEvents"]],
     ["go", "discover"],
   ]);
 });
