@@ -247,6 +247,16 @@ dialog::backdrop { background: #071b1488; }
 footer { background: var(--ink); color: #b9c3be; display: flex; font-size: 11px; justify-content: space-between; padding: 28px clamp(24px, 6vw, 88px); }
 footer b { color: white; }
 
+.discover-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+.discover-controls input { border: 1px solid var(--line); border-radius: 999px; font: inherit; font-size: 14px; padding: 11px 16px; }
+#discover-search { flex: 1 1 240px; max-width: 340px; }
+#discover-place { flex: 0 1 200px; }
+.discover-location { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.location-chip { align-items: center; background: #e8f3ee; border: 1px solid #bcdccd; border-radius: 999px; color: var(--green); display: inline-flex; font-size: 13px; font-weight: 700; gap: 6px; padding: 8px 10px 8px 14px; }
+.location-chip button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+.discover-more { display: flex; justify-content: center; margin-top: 26px; }
+.discover-empty { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
 @media (max-width: 900px) {
   .site-header { grid-template-columns: 1fr auto; }
   /* One row, always. A fixed 3-column grid wrapped the 5-6 items onto a second

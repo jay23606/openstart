@@ -22,6 +22,9 @@ let draggedSectionId=null;
 
 const state = {
   view: "discover",
+  discoverQuery: "",
+  discoverRegion: null,
+  discoverVisible: 12,
   events: [],
   registrations: [],
   selectedEvent: null,
@@ -329,6 +332,134 @@ function renderPlatformAdmin(){
   </section>`;
 }
 
+// Discovery: region matching, search, and paging.
+//
+// Events store only free-text location_name, so there are no coordinates to
+// measure true distance against. Instead we extract a city/state from that text
+// and rank same-city above same-state above everything else. Browser geolocation
+// returns coordinates, so a compact bounding-box table maps them back to a state
+// offline — no geocoding service, no API key, and nothing added to connect-src.
+const STATE_BOXES = `AL 30.2 35.0 -88.5 -84.9|AK 51.2 71.4 -179.1 -129.9|AZ 31.3 37.0 -114.8 -109.0|AR 33.0 36.5 -94.6 -89.6|CA 32.5 42.0 -124.4 -114.1|CO 37.0 41.0 -109.1 -102.0|CT 40.9 42.1 -73.7 -71.8|DE 38.4 39.8 -75.8 -75.0|DC 38.8 39.0 -77.1 -76.9|FL 24.5 31.0 -87.6 -80.0|GA 30.4 35.0 -85.6 -80.8|HI 18.9 22.2 -160.2 -154.8|ID 42.0 49.0 -117.2 -111.0|IL 36.9 42.5 -91.5 -87.5|IN 37.8 41.8 -88.1 -84.8|IA 40.4 43.5 -96.6 -90.1|KS 37.0 40.0 -102.1 -94.6|KY 36.5 39.1 -89.6 -81.9|LA 28.9 33.0 -94.0 -88.8|ME 43.1 47.5 -71.1 -66.9|MD 37.9 39.7 -79.5 -75.0|MA 41.2 42.9 -73.5 -69.9|MI 41.7 48.3 -90.4 -82.4|MN 43.5 49.4 -97.2 -89.5|MS 30.2 35.0 -91.7 -88.1|MO 36.0 40.6 -95.8 -89.1|MT 44.4 49.0 -116.1 -104.0|NE 40.0 43.0 -104.1 -95.3|NV 35.0 42.0 -120.0 -114.0|NH 42.7 45.3 -72.6 -70.7|NJ 38.9 41.4 -75.6 -73.9|NM 31.3 37.0 -109.1 -103.0|NY 40.5 45.0 -79.8 -71.9|NC 33.8 36.6 -84.3 -75.5|ND 45.9 49.0 -104.1 -96.6|OH 38.4 42.0 -84.8 -80.5|OK 33.6 37.0 -103.0 -94.4|OR 42.0 46.3 -124.6 -116.5|PA 39.7 42.3 -80.5 -74.7|RI 41.1 42.0 -71.9 -71.1|SC 32.0 35.2 -83.4 -78.5|SD 42.5 45.9 -104.1 -96.4|TN 35.0 36.7 -90.3 -81.6|TX 25.8 36.5 -106.6 -93.5|UT 37.0 42.0 -114.1 -109.0|VT 42.7 45.0 -73.4 -71.5|VA 36.5 39.5 -83.7 -75.2|WA 45.5 49.0 -124.8 -116.9|WV 37.2 40.6 -82.6 -77.7|WI 42.5 47.1 -92.9 -86.8|WY 41.0 45.0 -111.1 -104.1`
+  .split("|").map((row) => {
+    const [code, minLat, maxLat, minLng, maxLng] = row.split(" ");
+    return { code, minLat: +minLat, maxLat: +maxLat, minLng: +minLng, maxLng: +maxLng };
+  });
+
+const STATE_NAMES = {
+  alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",
+  delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",
+  indiana:"IN",iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",
+  massachusetts:"MA",michigan:"MI",minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",
+  nebraska:"NE",nevada:"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY",
+  "north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",oregon:"OR",pennsylvania:"PA",
+  "rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",utah:"UT",
+  vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY",
+};
+const STATE_CODES = new Set(STATE_BOXES.map((box) => box.code));
+
+const stateFromCoords = (latitude, longitude) => {
+  const inside = STATE_BOXES.filter((box) =>
+    latitude >= box.minLat && latitude <= box.maxLat && longitude >= box.minLng && longitude <= box.maxLng);
+  if (inside.length === 1) return inside[0].code;
+  // Boxes overlap around irregular borders; fall back to the nearest centre.
+  const candidates = inside.length ? inside : STATE_BOXES;
+  let best = null;
+  let bestDistance = Infinity;
+  for (const box of candidates) {
+    const dLat = latitude - (box.minLat + box.maxLat) / 2;
+    const dLng = (longitude - (box.minLng + box.maxLng) / 2) * Math.cos(latitude * Math.PI / 180);
+    const distance = dLat * dLat + dLng * dLng;
+    if (distance < bestDistance) { bestDistance = distance; best = box.code; }
+  }
+  return best;
+};
+
+// "Boulder, CO" / "Central Park, New York, NY" / "Austin, Texas" -> { city, state }
+const parseRegion = (value) => {
+  const parts = String(value || "").split(",").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return { city: "", state: "" };
+  let state = "";
+  let cityIndex = parts.length - 1;
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    // A trailing ZIP ("Beverly Hills, CA 90210") still carries the state code.
+    const token = parts[index].replace(/\s+\d{5}(-\d{4})?$/, "").trim();
+    const upper = token.toUpperCase();
+    if (STATE_CODES.has(upper)) { state = upper; cityIndex = index - 1; break; }
+    if (STATE_NAMES[token.toLowerCase()]) { state = STATE_NAMES[token.toLowerCase()]; cityIndex = index - 1; break; }
+  }
+  return { city: (parts[cityIndex] || "").toLowerCase(), state };
+};
+
+const regionLabel = (region) =>
+  [region.city ? region.city.replace(/\b\w/g, (character) => character.toUpperCase()) : "", region.state]
+    .filter(Boolean).join(", ");
+
+// 0 = same city and state, 1 = same state, 2 = elsewhere.
+const proximityRank = (event, region) => {
+  if (!region || !region.state) return 2;
+  const eventRegion = parseRegion(event.location_name);
+  if (!eventRegion.state || eventRegion.state !== region.state) return 2;
+  return region.city && eventRegion.city === region.city ? 0 : 1;
+};
+
+const DISCOVER_PAGE_SIZE = 12;
+
+const discoverEvents = () => {
+  const query = state.discoverQuery.trim().toLowerCase();
+  const matches = state.events.filter((event) => event.status === "published")
+    .filter((event) => !query
+      || event.name.toLowerCase().includes(query)
+      || String(event.location_name || "").toLowerCase().includes(query));
+  const region = state.discoverRegion;
+  return matches.map((event) => ({ event, rank: proximityRank(event, region) }))
+    .sort((a, b) => a.rank - b.rank || new Date(a.event.starts_at) - new Date(b.event.starts_at))
+    .map((entry) => entry.event);
+};
+
+const discoverCountLabel = () => {
+  const total = discoverEvents().length;
+  const filtered = state.discoverQuery || (state.discoverRegion && state.discoverRegion.state);
+  return `${total} ${total === 1 ? "event" : "events"}${filtered ? " found" : " open"}`;
+};
+
+const discoverResults = () => {
+  const matching = discoverEvents();
+  const visible = matching.slice(0, state.discoverVisible);
+  const region = state.discoverRegion;
+  const nearby = Boolean(region && region.state);
+  const noneNearby = nearby && !matching.some((event) => proximityRank(event, region) < 2);
+  return `
+    ${noneNearby ? `<p class="discover-empty">No events near ${escapeHtml(regionLabel(region))} yet — showing the soonest events everywhere.</p>` : ""}
+    <div class="event-grid">${visible.map(publicEventCard).join("")}</div>
+    ${matching.length > visible.length
+      ? `<div class="discover-more"><button class="subtle-button" data-show-more type="button">Show more events (${matching.length - visible.length} remaining)</button></div>` : ""}
+    ${matching.length === 0 ? `<p class="discover-empty">No events match that search.</p>` : ""}`;
+};
+
+// Repaint only the results so typing never steals focus from the search field.
+const refreshDiscover = () => {
+  const results = document.querySelector("#discover-results");
+  if (!results) return;
+  results.innerHTML = discoverResults();
+  const count = document.querySelector("#discover-count");
+  if (count) count.textContent = discoverCountLabel();
+};
+
+const setDiscoverRegion = (region) => {
+  state.discoverRegion = region;
+  state.discoverVisible = DISCOVER_PAGE_SIZE;
+  try {
+    if (region) localStorage.setItem("openstart-region", JSON.stringify(region));
+    else localStorage.removeItem("openstart-region");
+  } catch { /* private browsing — the region simply will not persist */ }
+  renderDiscover();
+};
+
+try {
+  const savedRegion = JSON.parse(localStorage.getItem("openstart-region") || "null");
+  if (savedRegion && savedRegion.state) state.discoverRegion = savedRegion;
+} catch { /* ignore unreadable storage */ }
+
 function publicEventCard(event, index) {
   const tiers = event.os_event_tiers || [];
   return `
@@ -346,6 +477,9 @@ function publicEventCard(event, index) {
 function renderDiscover() {
   setPageMetadata();
   const published = state.events.filter((event) => event.status === "published");
+  const matching = discoverEvents();
+  const visible = matching.slice(0, state.discoverVisible);
+  const nearby = Boolean(state.discoverRegion && state.discoverRegion.state);
   page.innerHTML = `
     <section class="hero">
       <div class="hero-copy">
@@ -361,8 +495,17 @@ function renderDiscover() {
       </div>
     </section>
     <section class="events-section" id="events">
-      <div class="section-heading"><div><p class="eyebrow">On the calendar</p><h2>Find your next starting line</h2></div><span>${published.length} open events</span></div>
-      <div class="event-grid">${published.map(publicEventCard).join("")}</div>
+      <div class="section-heading"><div><p class="eyebrow">On the calendar</p><h2>Find your next starting line</h2></div><span id="discover-count">${discoverCountLabel()}</span></div>
+      <div class="discover-controls">
+        <input id="discover-search" type="search" placeholder="Search races or places" value="${escapeHtml(state.discoverQuery)}" aria-label="Search events by name or location">
+        <div class="discover-location">
+          ${nearby
+            ? `<span class="location-chip">Near ${escapeHtml(regionLabel(state.discoverRegion))}<button data-clear-location type="button" aria-label="Clear location">×</button></span>`
+            : `<button class="subtle-button" data-use-location type="button">Use my location</button>
+               <input id="discover-place" placeholder="or enter a city or state" aria-label="Enter your city or state">`}
+        </div>
+      </div>
+      <div id="discover-results">${discoverResults()}</div>
     </section>
     ${state.series.length ? `<section class="series-section"><div class="section-heading"><div><p class="eyebrow">Race more</p><h2>Series & championships</h2></div><span>${state.series.length} active series</span></div><div class="series-grid">${state.series.map((series)=>`<article style="--series-color:${safeColor(series.primary_color)}">${safeUrl(series.banner_url) ? `<img src="${escapeHtml(safeUrl(series.banner_url))}" alt="">` : ""}<div><p>${series.os_series_events?.length || 0} events</p><h3>${escapeHtml(series.name)}</h3><span>${escapeHtml(series.description)}</span><button data-view-series="${series.id}" type="button">View series standings →</button></div></article>`).join("")}</div></section>` : ""}
     <section class="open-promise">
@@ -1306,6 +1449,35 @@ document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
   if (target.matches("[data-view]")) await go(target.dataset.view);
+  if (target.matches("[data-show-more]")) {
+    state.discoverVisible += DISCOVER_PAGE_SIZE;
+    refreshDiscover();
+  }
+  if (target.matches("[data-clear-location]")) setDiscoverRegion(null);
+  if (target.matches("[data-use-location]")) {
+    if (!navigator.geolocation) {
+      showNotice("This browser cannot share a location. Enter a city instead.");
+      return;
+    }
+    target.disabled = true;
+    target.textContent = "Locating…";
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const code = stateFromCoords(position.coords.latitude, position.coords.longitude);
+        if (!code) {
+          showNotice("We could not match that location. Enter a city instead.");
+          renderDiscover();
+          return;
+        }
+        setDiscoverRegion({ city: "", state: code });
+      },
+      () => {
+        showNotice("Location permission was declined. Enter a city instead.");
+        renderDiscover();
+      },
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  }
   if (target.matches("[data-help-filter]")) {
     const searchInput = document.querySelector("[data-help-search]");
     if (searchInput) searchInput.value = "";
@@ -1728,6 +1900,24 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.dataset.rosterSearch) filterRoster(event.target.dataset.rosterSearch);
+  if (event.target.id === "discover-search") {
+    state.discoverQuery = event.target.value;
+    state.discoverVisible = DISCOVER_PAGE_SIZE;
+    refreshDiscover();
+  }
+});
+
+// Enter (or blur) on the manual place field resolves a typed city/state.
+document.addEventListener("keydown", (event) => {
+  if (event.target.id === "discover-place" && event.key === "Enter") {
+    event.preventDefault();
+    const typed = parseRegion(event.target.value);
+    if (!typed.state) {
+      showNotice("Enter a city and state, for example \"Boulder, CO\".");
+      return;
+    }
+    setDiscoverRegion(typed);
+  }
 });
 document.addEventListener("change", (event) => {
   if (event.target.dataset.rosterStatus) filterRoster(event.target.dataset.rosterStatus);
