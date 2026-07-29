@@ -49,9 +49,10 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, organizerController, lotteryViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, registrationViews, organizerController, lotteryViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("features/registration/controller.js"),
+    read("features/registration/views.js"),
     read("features/organizer/controller.js"),
     read("features/lottery/views.js"),
     read("data.js"),
@@ -86,6 +87,9 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /runnerRegistrationForm/);
   assert.match(app, /acceptTransferForm/);
   assert.match(app, /participantFields/);
+  assert.match(registrationViews, /function participantFields\(event, index\)/);
+  assert.match(registrationViews, /function registration\(event\)/);
+  assert.match(registrationViews, /function runner\(item\)/);
   assert.match(app, /raceDayForm/);
   assert.match(app, /startQrScanner/);
   assert.match(app, /productSettingsForm/);

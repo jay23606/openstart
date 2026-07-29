@@ -10,6 +10,7 @@ import {
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
+import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -777,101 +778,17 @@ function authForm() {
     </section>`;
 }
 
-function participantFields(event, index) {
-  const questions = [...(event.os_event_questions || [])].sort((a, b) => a.sort_order - b.sort_order);
-  const waves=[...(event.os_waves || [])].filter((wave)=>wave.published && wave.self_select && (!wave.selection_closes_at || new Date(wave.selection_closes_at)>new Date())).sort((a,b)=>a.sort_order-b.sort_order);
-  const defaultTier=event.os_event_tiers[0]?.id;
-  return `<fieldset class="participant-block" data-participant-index="${index}"><legend>Participant ${index + 1}</legend>
-        <label>Event<select data-field="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)} · ${money(effectivePrice(tier))}</option>`).join("")}</select></label>
-        ${waves.length ? `<div class="split-fields"><label>Start wave<select data-field="wave_id"><option value="">Assign me automatically</option>${waves.map((wave)=>`<option value="${wave.id}" data-tier="${wave.tier_id}" ${wave.tier_id!==defaultTier ? "hidden" : ""}>${escapeHtml(wave.name)} · ${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</option>`).join("")}</select></label><label>Estimated pace per mile<input data-field="estimated_pace" placeholder="9:30"></label></div>` : ""}
-        <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
-        <label>Email<input name="email" type="email" required></label>
-        ${questions.map((question) => question.field_type === "select"
-          ? `<label>${escapeHtml(question.label)}<select data-question-id="${question.id}" ${question.required ? "required" : ""}><option value="">Choose one</option>${(question.options || []).map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`
-          : question.field_type === "checkbox"
-            ? `<label class="check-label"><input data-question-id="${question.id}" type="checkbox" value="Yes" ${question.required ? "required" : ""}> ${escapeHtml(question.label)}</label>`
-            : `<label>${escapeHtml(question.label)}<input data-question-id="${question.id}" ${question.required ? "required" : ""}></label>`).join("")}
-        <label>Emergency contact<input name="emergency_contact" placeholder="Name · phone" required></label>
-        <label>Relay leg <span class="optional-label">Optional</span><input name="relay_leg" placeholder="Leg 1"></label>
-        ${event.waiver_text ? `<div class="waiver-box"><strong>Participant waiver</strong><p>${escapeHtml(event.waiver_text)}</p></div><label class="check-label"><input name="waiver" type="checkbox" required> This participant accepts the waiver.</label>` : ""}
-        ${index ? '<button class="remove-participant" data-remove-participant type="button">Remove participant</button>' : ""}
-      </fieldset>`;
-}
-
-function registrationForm(event) {
-  const teams = event.os_teams || [];
-  return `
-    <section class="modal wide-modal">
-      <div class="form-heading"><div><p>Group registration</p><h2>Register your crew</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-      <form id="registration-form" data-event-id="${event.id}">
-        <label>Purchaser email<input name="purchaser_email" type="email" value="${escapeHtml(state.session?.user?.email || "")}" required></label>
-        <div id="participant-fields">${participantFields(event, 0)}</div>
-        <button class="subtle-button" data-add-participant-field type="button">+ Add another participant</button>
-        <label>Promo code <span class="optional-label">Optional</span><input name="promo_code" autocomplete="off"></label>
-        <label class="check-label"><input name="join_waitlist" type="checkbox" checked> Join the waitlist automatically if this option sells out.</label>
-        <h3>Team</h3>
-        <label>Team option<select name="team_mode"><option value="">No team</option><option value="join">Join an existing team</option><option value="create">Create a team</option></select></label>
-        <div class="team-fields">
-          <label>Existing team<select name="team_id"><option value="">Choose a team</option>${teams.map((team) => `<option value="${team.id}">${escapeHtml(team.name)} · ${escapeHtml(team.category)}</option>`).join("")}</select></label>
-          <label>Team name<input name="team_name"></label>
-          <div class="split-fields"><label>Category<select name="team_category"><option>club</option><option>corporate</option><option>family</option><option>relay</option></select></label><label>Access code<input name="team_code" autocomplete="off"></label></div>
-        </div>
-        ${(event.os_products || []).length ? `<h3>Add-ons</h3><div class="product-options">${event.os_products.filter((product) => product.active).map((product) => `<div><span><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.description)}</small></span><select data-product-variant><option value="">No thanks</option>${product.os_product_variants.map((variant) => `<option value="${variant.id}">${escapeHtml(variant.name)} · ${money(variant.price_cents)}${variant.inventory !== null ? ` · ${variant.inventory} total` : ""}</option>`).join("")}</select><input data-product-quantity type="number" min="1" max="10" value="1" aria-label="${escapeHtml(product.name)} quantity"></div>`).join("")}</div>` : ""}
-        ${event.donations_enabled ? `<h3>Support ${escapeHtml(event.beneficiary_name || event.name)}</h3><div class="donation-fields"><label>Donation amount<input name="donation_amount" type="number" min="0" step=".01" placeholder="0.00"></label><label>Dedication or message<input name="dedication" maxlength="300"></label><label class="check-label"><input name="anonymous_donation" type="checkbox"> Make this donation anonymous</label></div>` : ""}
-        <button class="primary-button" type="submit">Continue to group checkout</button>
-      </form>
-    </section>`;
-}
-
-function manualRegistrationForm(event) {
-  return `<section class="modal"><div class="form-heading"><div><p>Organizer entry</p><h2>Add participant</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="manual-registration-form" data-event-id="${event.id}">
-      <label>Registration option<select name="tier_id" required>${event.os_event_tiers.map((tier) => `<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label>
-      <div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div>
-      <label>Email<input name="email" type="email" required></label><label>Emergency contact<input name="emergency_contact" required></label>
-      <label>Bib number<input name="bib_number"></label><label>Organizer notes<textarea name="organizer_notes" rows="3"></textarea></label>
-      <button class="primary-button" type="submit">Add confirmed entry</button>
-    </form></section>`;
-}
-
-function editRegistrationForm(item) {
-  return `<section class="modal"><div class="form-heading"><div><p>Registration</p><h2>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="edit-registration-form" data-registration-id="${item.id}">
-      <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
-      <label>Email<input name="email" type="email" value="${escapeHtml(item.email)}" required></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
-      <div class="split-fields"><label>Bib number<input name="bib_number" value="${escapeHtml(item.bib_number || "")}"></label><label>Status<select name="status">${["confirmed", "pending", "cancel_requested", "cancelled", "expired"].map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div>
-      <label>Organizer notes<textarea name="organizer_notes" rows="3">${escapeHtml(item.organizer_notes || "")}</textarea></label>
-      ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Registration answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
-      <div class="dialog-actions"><button class="primary-button" type="submit">Save changes</button><button class="subtle-button" data-resend-confirmation="${item.id}" type="button">Resend confirmation</button>${item.payment_status === "paid" ? `<button class="danger-button" data-organizer-refund="${item.id}" type="button">Refund & cancel</button>` : `<button class="danger-button" data-organizer-cancel="${item.id}" type="button">Cancel entry</button>`}</div>
-    </form></section>`;
-}
-
-function runnerRegistrationForm(item) {
-  const activity = [...(item.os_registration_activity || [])].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-  return `<section class="modal"><div class="form-heading"><div><p>My registration</p><h2>${escapeHtml(item.os_events?.name || "Race")}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="runner-registration-form" data-registration-id="${item.id}">
-      <div class="split-fields"><label>First name<input name="first_name" value="${escapeHtml(item.first_name)}" required></label><label>Last name<input name="last_name" value="${escapeHtml(item.last_name)}" required></label></div>
-      <label>Email<input value="${escapeHtml(item.email)}" disabled></label><label>Emergency contact<input name="emergency_contact" value="${escapeHtml(item.emergency_contact)}" required></label>
-      <div class="registration-facts"><span><b>Status</b>${escapeHtml(item.status)}</span><span><b>Payment</b>${escapeHtml(item.payment_status)}</span><span><b>Bib</b>${escapeHtml(item.bib_number || "Not assigned")}</span><span><b>Wave</b>${escapeHtml(item.os_waves?.name || "Not assigned")}</span></div>
-      ${item.os_registration_answers?.length ? `<div class="answer-list"><strong>Your answers</strong>${item.os_registration_answers.map((answer) => `<p><b>${escapeHtml(answer.os_event_questions?.label || "Question")}</b><span>${escapeHtml(answer.answer)}</span></p>`).join("")}</div>` : ""}
-      <button class="primary-button" type="submit">Save participant details</button>
-    </form>
-    <div class="self-service-actions">
-      ${item.status === "confirmed" ? `<button class="primary-button" data-view-pass="${item.id}" type="button">View QR pass</button>` : ""}
-      ${item.status === "confirmed" && item.os_events?.os_waves?.some((wave)=>wave.tier_id===item.tier_id && wave.self_select) ? `<button class="subtle-button" data-runner-wave="${item.id}" type="button">Choose start wave</button>` : ""}
-      ${item.status === "confirmed" && item.os_events?.allow_transfers ? `<button class="subtle-button" data-create-transfer="${item.id}" type="button">Create transfer link</button>` : ""}
-      ${item.status === "confirmed" && item.os_events?.allow_refund_requests ? `<button class="danger-button" data-request-cancel="${item.id}" type="button">Request cancellation</button>` : ""}
-    </div>
-    ${item.transfer_token ? `<div class="transfer-link"><b>Active transfer link</b><input readonly value="${location.origin}${location.pathname}?transfer=${item.transfer_token}"><small>Expires ${displayDate(item.transfer_expires_at)}</small></div>` : ""}
-    <div class="activity-list"><h3>Activity</h3>${activity.map((entry) => `<p><span>${escapeHtml(entry.action.replaceAll("_"," "))}</span><small>${new Date(entry.created_at).toLocaleString()}</small></p>`).join("") || "<p>No changes recorded yet.</p>"}</div>
-  </section>`;
-}
-
-function acceptTransferForm(token) {
-  return `<section class="modal"><div class="form-heading"><div><p>Registration transfer</p><h2>Accept this entry</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="accept-transfer-form" data-token="${escapeHtml(token)}"><div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div><label>Emergency contact<input name="emergency_contact" required></label><label class="check-label"><input type="checkbox" required> I accept the event waiver and this transferred registration.</label><button class="primary-button" type="submit">Accept transfer</button></form>
-  </section>`;
-}
+const registrationViews = createRegistrationViews({
+  effectivePrice,
+  getLocation: () => location,
+  getSessionEmail: () => state.session?.user?.email,
+});
+const participantFields = registrationViews.participantFields;
+const registrationForm = registrationViews.registration;
+const manualRegistrationForm = registrationViews.manual;
+const editRegistrationForm = registrationViews.edit;
+const runnerRegistrationForm = registrationViews.runner;
+const acceptTransferForm = registrationViews.transfer;
 
 const eventCommerceViews = createEventCommerceViews({ effectivePrice });
 const registrationSettingsForm = eventCommerceViews.registrationSettings;
