@@ -13,7 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
-import { createAccountController } from "./features/account/controller.js?v=85";
+import { createAccountController } from "./features/account/controller.js?v=87";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -805,6 +805,16 @@ const accountController = createAccountController({
   showNotice,
   go,
   renderAthlete,
+  authApi: supabase.auth,
+  loadPlatformAccess,
+  closeDialog: () => dialog.close(),
+  loadPublic,
+  hydrateEvent,
+  renderEvent,
+  afterNavigate: () => pageLifecycle.afterNavigate(),
+  lotteryApplicationForm,
+  saveAthleteProfile,
+  renderRunnerDashboard,
 });
 
 const featureControllers = [
@@ -873,56 +883,7 @@ document.addEventListener("submit", async (event) => {
   const releaseBusy = busyController.begin(form, event.submitter);
   if (!releaseBusy) return;
   try {
-    if (form.id === "auth-form") {
-      const intent = event.submitter?.value || "signin";
-      const credentials = { email: data.get("email"), password: data.get("password") };
-      const result = intent === "signup"
-        ? await supabase.auth.signUp(credentials)
-        : await supabase.auth.signInWithPassword(credentials);
-      if (result.error) throw result.error;
-      if (!result.data.session) {
-        form.querySelector(".form-message").textContent = "Check your email to confirm your account.";
-        return;
-      }
-      state.session = result.data.session;
-      await loadPlatformAccess();
-      dialog.close();
-      if (state.pendingLotteryEvent) {
-        const lotteryEventId = state.pendingLotteryEvent;
-        state.pendingLotteryEvent = null;
-        await loadPublic();
-        state.selectedEvent = await hydrateEvent(lotteryEventId);
-        renderEvent(state.selectedEvent);
-        pageLifecycle.afterNavigate();
-        openDialog(lotteryApplicationForm(state.selectedEvent));
-      } else {
-        await go(state.pendingView || "runner");
-      }
-    }
-
     if (await dispatchFeatureSubmit(form, data, event.submitter)) return;
-
-    if(form.id==="athlete-profile-form"){
-      const payload={
-        handle:String(data.get("handle")||"").trim().toLowerCase(),
-        display_name:String(data.get("display_name")||"").trim(),
-        location:String(data.get("location")||"").trim(),
-        bio:String(data.get("bio")||"").trim(),
-        is_public:data.get("is_public")==="on",
-      };
-      try{
-        state.athleteProfile=await saveAthleteProfile(payload);
-        dialog.close();
-        renderRunnerDashboard();
-        showNotice("Athlete profile saved.");
-      }catch(error){
-        form.querySelector(".form-message").textContent=/duplicate|unique/i.test(error.message||"")
-          ? "That handle is already taken. Try another."
-          : (error.message || "The profile could not be saved.");
-      }
-      return;
-    }
-
   } catch (error) {
     const message = error.message || "Something went wrong.";
     const formMessage = form.querySelector(".form-message");

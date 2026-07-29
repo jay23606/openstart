@@ -37,9 +37,31 @@ function fixture(overrides = {}) {
     locationRef,
     historyRef: { replaceState: (...values) => actions.push(["history", ...values]) },
     today: () => "2026-07-29",
+    authApi: {
+      signUp: async (credentials) => ({ data: { session: { user: credentials } }, error: null }),
+      signInWithPassword: async (credentials) => ({ data: { session: { user: credentials } }, error: null }),
+    },
+    loadPlatformAccess: async () => actions.push(["platform"]),
+    closeDialog: () => actions.push(["close"]),
+    loadPublic: async () => actions.push(["public"]),
+    hydrateEvent: async (id) => ({ id }),
+    renderEvent: (race) => actions.push(["event", race.id]),
+    afterNavigate: () => actions.push(["navigate"]),
+    lotteryApplicationForm: (race) => `lottery:${race.id}`,
+    saveAthleteProfile: async (payload) => payload,
+    renderRunnerDashboard: () => actions.push(["runner"]),
     ...overrides,
   });
   return { controller, state, actions, locationRef };
+}
+
+function form(id) {
+  const message = { textContent: "" };
+  return { id, message, querySelector: () => message };
+}
+
+function formData(values) {
+  return { get: (name) => values[name] ?? null };
 }
 
 test("account controller exports and deletes account data through explicit confirmations", async () => {
@@ -114,4 +136,76 @@ test("account controller restores Stripe controls after provider failures", asyn
     ["notice", "Stripe unavailable", { type: "error", duration: 0 }],
     ["go", "dashboard"],
   ]);
+});
+
+test("account controller signs in and returns to the pending runner view", async () => {
+  const { controller, state, actions } = fixture();
+  state.pendingView = "runner";
+
+  assert.equal(await controller.handleSubmit(
+    form("auth-form"),
+    formData({ email: "runner@example.com", password: "secret" }),
+    { value: "signin" },
+  ), true);
+  assert.equal(state.session.user.email, "runner@example.com");
+  assert.deepEqual(actions, [
+    ["platform"],
+    ["close"],
+    ["go", "runner"],
+  ]);
+});
+
+test("account controller resumes a pending lottery after authentication", async () => {
+  const { controller, state, actions } = fixture();
+  state.pendingLotteryEvent = "race-1";
+
+  assert.equal(await controller.handleSubmit(
+    form("auth-form"),
+    formData({ email: "runner@example.com", password: "secret" }),
+    { value: "signin" },
+  ), true);
+  assert.equal(state.pendingLotteryEvent, null);
+  assert.equal(state.selectedEvent.id, "race-1");
+  assert.deepEqual(actions, [
+    ["platform"],
+    ["close"],
+    ["public"],
+    ["event", "race-1"],
+    ["navigate"],
+    ["dialog", "lottery:race-1"],
+  ]);
+});
+
+test("account controller normalizes athlete profiles and explains duplicate handles", async () => {
+  const saved = [];
+  const success = fixture({
+    saveAthleteProfile: async (payload) => {
+      saved.push(payload);
+      return payload;
+    },
+  });
+  assert.equal(await success.controller.handleSubmit(
+    form("athlete-profile-form"),
+    formData({
+      handle: "  TrailRunner ",
+      display_name: " Runner ",
+      location: " Richmond ",
+      bio: " Bio ",
+      is_public: "on",
+    }),
+  ), true);
+  assert.deepEqual(saved, [{
+    handle: "trailrunner",
+    display_name: "Runner",
+    location: "Richmond",
+    bio: "Bio",
+    is_public: true,
+  }]);
+
+  const failed = fixture({
+    saveAthleteProfile: async () => { throw new Error("unique constraint"); },
+  });
+  const failedForm = form("athlete-profile-form");
+  assert.equal(await failed.controller.handleSubmit(failedForm, formData({ handle: "taken" })), true);
+  assert.equal(failedForm.message.textContent, "That handle is already taken. Try another.");
 });

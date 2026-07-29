@@ -18,6 +18,16 @@ export function createAccountController({
   locationRef = location,
   historyRef = history,
   today = () => new Date().toISOString().slice(0, 10),
+  authApi,
+  loadPlatformAccess,
+  closeDialog,
+  loadPublic,
+  hydrateEvent,
+  renderEvent,
+  afterNavigate,
+  lotteryApplicationForm,
+  saveAthleteProfile,
+  renderRunnerDashboard,
 }) {
   async function handleClick(target) {
     if (target.matches("[data-system-health]")) {
@@ -94,5 +104,59 @@ export function createAccountController({
     return false;
   }
 
-  return { handleClick };
+  async function handleSubmit(form, data, submitter) {
+    if (form.id === "auth-form") {
+      const intent = submitter?.value || "signin";
+      const credentials = { email: data.get("email"), password: data.get("password") };
+      const result = intent === "signup"
+        ? await authApi.signUp(credentials)
+        : await authApi.signInWithPassword(credentials);
+      if (result.error) throw result.error;
+      if (!result.data.session) {
+        form.querySelector(".form-message").textContent = "Check your email to confirm your account.";
+        return true;
+      }
+
+      state.session = result.data.session;
+      await loadPlatformAccess();
+      closeDialog();
+      if (state.pendingLotteryEvent) {
+        const lotteryEventId = state.pendingLotteryEvent;
+        state.pendingLotteryEvent = null;
+        await loadPublic();
+        state.selectedEvent = await hydrateEvent(lotteryEventId);
+        renderEvent(state.selectedEvent);
+        afterNavigate();
+        openDialog(lotteryApplicationForm(state.selectedEvent));
+      } else {
+        await go(state.pendingView || "runner");
+      }
+      return true;
+    }
+
+    if (form.id === "athlete-profile-form") {
+      const payload = {
+        handle: String(data.get("handle") || "").trim().toLowerCase(),
+        display_name: String(data.get("display_name") || "").trim(),
+        location: String(data.get("location") || "").trim(),
+        bio: String(data.get("bio") || "").trim(),
+        is_public: data.get("is_public") === "on",
+      };
+      try {
+        state.athleteProfile = await saveAthleteProfile(payload);
+        closeDialog();
+        renderRunnerDashboard();
+        showNotice("Athlete profile saved.");
+      } catch (error) {
+        form.querySelector(".form-message").textContent = /duplicate|unique/i.test(error.message || "")
+          ? "That handle is already taken. Try another."
+          : (error.message || "The profile could not be saved.");
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  return { handleClick, handleSubmit };
 }
