@@ -12,6 +12,8 @@ import {
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
+import { parseResultsCsv as parseResultRows, rankResults } from "./modules/results.js?v=43";
+import { createRouter } from "./modules/router.js?v=43";
 import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
@@ -964,21 +966,7 @@ function exportVolunteers(event) {
 }
 
 function rankedResults(event) {
-  const tierPlaces=new Map();
-  const divisionPlaces=new Map();
-  return (event.os_results || []).filter((item)=>item.published).sort((a,b)=>{
-    if(a.status==="finisher" && b.status!=="finisher") return -1;
-    if(a.status!=="finisher" && b.status==="finisher") return 1;
-    return (a.chip_time_ms ?? a.gun_time_ms ?? Infinity)-(b.chip_time_ms ?? b.gun_time_ms ?? Infinity);
-  }).map((item)=>{
-    if(item.status!=="finisher") return {...item,overallPlace:null,tierPlace:null,divisionPlace:null};
-    const tierPlace=(tierPlaces.get(item.tier_id) || 0)+1;
-    tierPlaces.set(item.tier_id,tierPlace);
-    const divisionKey=`${item.tier_id}:${item.division || ""}`;
-    const divisionPlace=(divisionPlaces.get(divisionKey) || 0)+1;
-    divisionPlaces.set(divisionKey,divisionPlace);
-    return {...item,overallPlace:tierPlace,tierPlace,divisionPlace:item.division ? divisionPlace : null};
-  });
+  return rankResults(event.os_results || []);
 }
 
 function renderResults(event) {
@@ -1011,21 +999,7 @@ function resultsManagerForm(event) {
 }
 
 function parseResultsCsv(text,event) {
-  const lines=String(text).trim().split(/\r?\n/).filter(Boolean);
-  if(lines.length<2) throw new Error("The CSV has no result rows");
-  const parseLine=(line)=>{
-    const cells=[]; let value=""; let quoted=false;
-    for(let index=0;index<line.length;index++){const character=line[index];if(character==='"'){if(quoted && line[index+1]==='"'){value+='"';index++;}else quoted=!quoted;}else if(character==="," && !quoted){cells.push(value.trim());value="";}else value+=character;}
-    cells.push(value.trim()); return cells;
-  };
-  const headers=parseLine(lines[0]).map((item)=>item.toLowerCase());
-  if(!headers.includes("bib") || !headers.includes("chip_time")) throw new Error("CSV must include bib and chip_time columns");
-  return lines.slice(1).map((line)=>{
-    const values=parseLine(line); const row=Object.fromEntries(headers.map((header,index)=>[header,values[index] || ""]));
-    const registration=eventRegistrations(event.id).find((item)=>String(item.bib_number)===row.bib);
-    if(!registration) throw new Error(`Bib ${row.bib} was not found`);
-    return {registrationId:registration.id,chipTimeMs:parseResultTime(row.chip_time),gunTimeMs:parseResultTime(row.gun_time),status:(row.status || "finisher").toLowerCase(),division:row.division || null};
-  });
+  return parseResultRows(text, eventRegistrations(event.id), parseResultTime);
 }
 
 function campaignForm() {
@@ -1340,64 +1314,47 @@ async function loadRunnerDashboard() {
   ]);
 }
 
-const topLevelViews = new Set(["discover", "demo", "runner", "dashboard", "platform", "help", "architecture"]);
-
-function syncViewUrl(view) {
-  const url = new URL(location.href);
-  ["athlete", "series", "results"].forEach((key) => url.searchParams.delete(key));
-  if (view === "discover") url.searchParams.delete("view");
-  else url.searchParams.set("view", view);
-  history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
-async function go(view, { syncUrl = true } = {}) {
-  if (!topLevelViews.has(view)) view = "discover";
-  if (["dashboard", "runner", "platform"].includes(view) && configured && !state.session) {
-    state.pendingView = view;
-    openDialog(authForm());
-    return;
-  }
-  const navigationId=++state.navigationId;
-  state.view = view;
-  state.selectedEvent = null;
-  if (view === "dashboard") {
-    await loadDashboard();
-    if(navigationId!==state.navigationId) return;
-    renderDashboard();
-  } else if (view === "runner") {
-    await loadRunnerDashboard();
-    if(navigationId!==state.navigationId) return;
-    renderRunnerDashboard();
-    if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
-  } else if(view==="platform"){
-    if(!state.platformAdmin?.allowed) await loadPlatformAccess();
-    if(!state.platformAdmin?.allowed){
-      showNotice("Platform operator access is required.");
-      await go("discover");
-      return;
-    }
-    await loadPlatformOverview();
-    if(navigationId!==state.navigationId) return;
-    renderPlatformAdmin();
-  } else if (view === "help") {
-    renderHelp();
-  } else if (view === "architecture") {
-    renderArchitecture();
-  } else if (view === "demo") {
-    if (state.session) await loadDashboard();
-    else await loadPublic();
-    if(navigationId!==state.navigationId) return;
-    renderDemo();
-  } else {
-    await loadPublic();
-    if(navigationId!==state.navigationId) return;
-    renderDiscover();
-  }
-  if(navigationId!==state.navigationId) return;
-  if (syncUrl) syncViewUrl(view);
-  syncNavigation();
-  page.focus({ preventScroll: true });
-}
+const { navigate: go } = createRouter({
+  state,
+  configured,
+  onAuthRequired: () => openDialog(authForm()),
+  routes: {
+    dashboard: async () => {
+      await loadDashboard();
+      renderDashboard();
+    },
+    runner: async () => {
+      await loadRunnerDashboard();
+      renderRunnerDashboard();
+      if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
+    },
+    platform: async ({ navigate }) => {
+      if (!state.platformAdmin?.allowed) await loadPlatformAccess();
+      if (!state.platformAdmin?.allowed) {
+        showNotice("Platform operator access is required.");
+        await navigate("discover");
+        return;
+      }
+      await loadPlatformOverview();
+      renderPlatformAdmin();
+    },
+    help: async () => renderHelp(),
+    architecture: async () => renderArchitecture(),
+    demo: async () => {
+      if (state.session) await loadDashboard();
+      else await loadPublic();
+      renderDemo();
+    },
+    discover: async () => {
+      await loadPublic();
+      renderDiscover();
+    },
+  },
+  afterNavigate: () => {
+    syncNavigation();
+    page.focus({ preventScroll: true });
+  },
+});
 
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");

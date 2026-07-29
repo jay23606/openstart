@@ -5,11 +5,13 @@ platform. It follows the same architecture as BotGarden and Mayfly: static HTML,
 CSS, and browser-native JavaScript modules on GitHub Pages, backed by Supabase.
 There is no frontend framework, bundler, or build step.
 
-The browser code is split into native ES modules: `app.js` composes navigation
-and workflows, `data.js` owns Supabase access, and `modules/` contains shared
-state, presentation utilities, discovery rules, and content catalogs. This
-keeps the static deployment inspectable while avoiding repeated helpers and
-large cross-feature dependencies.
+The browser code is split into native ES modules: `app.js` composes screens and
+workflows, `data.js` owns Supabase access, `modules/router.js` owns navigation,
+and feature modules such as `modules/results.js` contain independently tested
+domain behavior. The remaining modules contain shared state, presentation
+utilities, discovery rules, and content catalogs. This keeps the static
+deployment inspectable while avoiding repeated helpers and cross-feature
+dependencies.
 
 ## Current capabilities
 
@@ -114,8 +116,9 @@ card details until OpenStart is deliberately switched to live Stripe keys.
 ## Files
 
 `index.html` is the static shell. `styles.css` contains the complete responsive
-design. `app.js` owns UI state and events. `data.js` is the browser persistence
-boundary. `core.js` configures Supabase and shared helpers. Supabase Edge
+design. `app.js` composes UI workflows and delegates reusable behavior to
+`modules/`. `data.js` is the browser persistence boundary. `core.js` configures
+Supabase and shared helpers. Supabase Edge
 Functions own Stripe secrets, Checkout, Connect onboarding, and webhooks.
 `service-worker.js` and `manifest.json` provide PWA
 support. `supabase/migrations/20260728150000_initial_openstart.sql` creates the
