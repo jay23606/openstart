@@ -33,7 +33,7 @@ import { createRaceDayController } from "./features/race-day/controller.js?v=55"
 import { createRaceDayViews } from "./features/race-day/views.js?v=61";
 import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
 import { createEventCommerceViews } from "./features/event-commerce/views.js?v=65";
-import { createEventSiteController } from "./features/event-site/controller.js?v=57";
+import { createEventSiteController } from "./features/event-site/controller.js?v=89";
 import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
@@ -59,7 +59,6 @@ const authButton = document.querySelector("#auth-button");
 const signOutButton = document.querySelector("#sign-out");
 const setupBanner = document.querySelector("#setup-banner");
 const platformNav = document.querySelector("#platform-nav");
-let draggedSectionId=null;
 
 const state = createAppState();
 
@@ -736,6 +735,7 @@ const eventSiteController = createEventSiteController({
   dialog,
   renderEvent,
   showNotice,
+  updateEventSections,
 });
 
 const wavesController = createWavesController({
@@ -880,34 +880,16 @@ document.addEventListener("input", async (event) => {
   if (await dispatchFeatureInput(event.target)) return;
 });
 document.addEventListener("dragstart",(event)=>{
-  const row=event.target.closest("[data-site-section-id]");
-  if(!row) return;
-  draggedSectionId=row.dataset.siteSectionId;
-  row.classList.add("dragging");
+  eventSiteController.handleDragStart(event.target);
 });
 document.addEventListener("dragend",(event)=>{
-  event.target.closest("[data-site-section-id]")?.classList.remove("dragging");
-  draggedSectionId=null;
+  eventSiteController.handleDragEnd(event.target);
 });
 document.addEventListener("dragover",(event)=>{
-  const row=event.target.closest("[data-site-section-id]");
-  if(!row || !draggedSectionId || row.dataset.siteSectionId===draggedSectionId) return;
-  event.preventDefault();
-  const dragged=document.querySelector(`[data-site-section-id="${draggedSectionId}"]`);
-  const box=row.getBoundingClientRect();
-  row.parentElement.insertBefore(dragged,event.clientY < box.top+box.height/2 ? row : row.nextSibling);
+  eventSiteController.handleDragOver(event.target, event.clientY, () => event.preventDefault());
 });
 document.addEventListener("drop",async(event)=>{
-  const list=event.target.closest("#site-section-list");
-  if(!list || !draggedSectionId) return;
-  event.preventDefault();
-  const ids=[...list.querySelectorAll("[data-site-section-id]")].map((row)=>row.dataset.siteSectionId);
-  const race=state.events.find((item)=>item.os_event_sections?.some((section)=>ids.includes(section.id)));
-  if(!race) return;
-  await updateEventSections(ids.map((id,sort_order)=>({...race.os_event_sections.find((section)=>section.id===id),sort_order})));
-  await loadDashboard();
-  openDialog(siteEditorForm(eventById(race.id)));
-  showNotice("Section order saved.");
+  await eventSiteController.handleDrop(event.target, () => event.preventDefault());
 });
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();

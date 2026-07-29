@@ -13,7 +13,11 @@ export function createEventSiteController({
   dialog,
   renderEvent,
   showNotice,
+  updateEventSections,
+  documentRef = globalThis.document,
 }) {
+  let draggedSectionId = null;
+
   async function refresh(eventId) {
     await loadDashboard();
     openDialog(siteEditorForm(eventById(eventId)));
@@ -99,5 +103,53 @@ export function createEventSiteController({
     return false;
   }
 
-  return { handleClick, handleSubmit };
+  function handleDragStart(target) {
+    const row = target.closest("[data-site-section-id]");
+    if (!row) return false;
+    draggedSectionId = row.dataset.siteSectionId;
+    row.classList.add("dragging");
+    return true;
+  }
+
+  function handleDragEnd(target) {
+    target.closest("[data-site-section-id]")?.classList.remove("dragging");
+    draggedSectionId = null;
+  }
+
+  function handleDragOver(target, clientY, preventDefault) {
+    const row = target.closest("[data-site-section-id]");
+    if (!row || !draggedSectionId || row.dataset.siteSectionId === draggedSectionId) return false;
+    preventDefault();
+    const dragged = documentRef.querySelector(`[data-site-section-id="${draggedSectionId}"]`);
+    const box = row.getBoundingClientRect();
+    row.parentElement.insertBefore(dragged, clientY < box.top + box.height / 2 ? row : row.nextSibling);
+    return true;
+  }
+
+  async function handleDrop(target, preventDefault) {
+    const list = target.closest("#site-section-list");
+    if (!list || !draggedSectionId) return false;
+    preventDefault();
+    const ids = [...list.querySelectorAll("[data-site-section-id]")].map((row) => row.dataset.siteSectionId);
+    const race = state.events.find((item) => item.os_event_sections?.some((section) => ids.includes(section.id)));
+    if (!race) return false;
+    await updateEventSections(ids.map((id, sort_order) => ({
+      ...race.os_event_sections.find((section) => section.id === id),
+      sort_order,
+    })));
+    await loadDashboard();
+    openDialog(siteEditorForm(eventById(race.id)));
+    showNotice("Section order saved.");
+    draggedSectionId = null;
+    return true;
+  }
+
+  return {
+    handleClick,
+    handleSubmit,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleDrop,
+  };
 }
