@@ -23,6 +23,8 @@ export function createOrganizerController({
   dialog,
   showNotice,
   go,
+  updateWaitlist,
+  documentRef = globalThis.document,
 }) {
   async function refreshDialog(eventId, form) {
     await loadDashboard();
@@ -175,5 +177,35 @@ export function createOrganizerController({
     return false;
   }
 
-  return { handleClick, handleSubmit };
+  function filterRoster(eventId) {
+    const search = documentRef.querySelector(`[data-roster-search="${eventId}"]`)?.value.toLowerCase() || "";
+    const status = documentRef.querySelector(`[data-roster-status="${eventId}"]`)?.value || "";
+    documentRef.querySelectorAll(".roster-manage [data-edit-registration]").forEach((row) => {
+      row.classList.toggle("hidden", !row.dataset.search.includes(search) || (status && row.dataset.status !== status));
+    });
+  }
+
+  function handleInput(target) {
+    if (!target.dataset.rosterSearch) return false;
+    filterRoster(target.dataset.rosterSearch);
+    return true;
+  }
+
+  async function handleChange(target) {
+    if (target.dataset.rosterStatus) {
+      filterRoster(target.dataset.rosterStatus);
+      return true;
+    }
+    if (target.dataset.waitlistId) {
+      await updateWaitlist(target.dataset.waitlistId, {
+        status: target.value,
+        invited_at: target.value === "invited" ? new Date().toISOString() : null,
+      });
+      showNotice("Waitlist status updated.");
+      return true;
+    }
+    return false;
+  }
+
+  return { handleClick, handleSubmit, handleInput, handleChange };
 }

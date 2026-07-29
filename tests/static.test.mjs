@@ -59,6 +59,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.doesNotMatch(app, /target\.dataset\.viewAthlete/);
   assert.doesNotMatch(app, /form\.id\s*===\s*"auth-form"/);
   assert.doesNotMatch(app, /form\.id\s*===\s*"athlete-profile-form"/);
+  assert.doesNotMatch(app, /function filterRoster/);
+  assert.doesNotMatch(app, /event\.target\.dataset\.waitlistId/);
+  assert.doesNotMatch(app, /event\.target\.name !== "template_id"/);
   assert.doesNotMatch(app, /target\.matches\("\[data-view\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-reset-demo\]"\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);

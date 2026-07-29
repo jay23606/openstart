@@ -72,3 +72,22 @@ test("runner registration submissions stay inside the feature controller", async
   });
   assert.deepEqual(actions[1], { view: "runner" });
 });
+
+test("tier changes clear and constrain wave choices", () => {
+  const { controller } = controllerFixture();
+  const options = [
+    { dataset: { tier: "" }, hidden: false },
+    { dataset: { tier: "short" }, hidden: false },
+    { dataset: { tier: "long" }, hidden: false },
+  ];
+  const waveSelect = { value: "wave-1", options };
+  const tier = {
+    value: "long",
+    matches: (selector) => selector === "[data-field='tier_id']",
+    closest: () => ({ querySelector: () => waveSelect }),
+  };
+
+  assert.equal(controller.handleChange(tier), true);
+  assert.equal(waveSelect.value, "");
+  assert.deepEqual(options.map((option) => option.hidden), [false, true, false]);
+});

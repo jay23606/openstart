@@ -79,5 +79,15 @@ export function createCommunicationsController({
     return true;
   }
 
-  return { handleClick, handleSubmit };
+  function handleChange(target) {
+    if (target.name !== "template_id") return false;
+    const template = state.emailTemplates.find((item) => item.id === target.value);
+    if (!template) return true;
+    const form = target.closest("form");
+    form.elements.subject.value = template.subject;
+    form.elements.html_body.value = template.html_body;
+    return true;
+  }
+
+  return { handleClick, handleSubmit, handleChange };
 }

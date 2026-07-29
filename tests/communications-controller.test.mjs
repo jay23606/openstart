@@ -8,7 +8,10 @@ function fixture({ confirmSend = true } = {}) {
   const notices = [];
   const preview = { innerHTML: "" };
   const controller = createCommunicationsController({
-    state: { session: { user: { id: "organizer-1" } } },
+    state: {
+      session: { user: { id: "organizer-1" } },
+      emailTemplates: [{ id: "template-1", subject: "Template subject", html_body: "<p>Template</p>" }],
+    },
     openDialog: (content) => opened.push(content),
     campaignForm: () => "campaign-form",
     communicationsAction: async (action, payload) => {
@@ -83,4 +86,18 @@ test("unrelated actions remain available to other feature controllers", async ()
   const { controller, data } = fixture();
   assert.equal(await controller.handleClick({ matches: () => false }), false);
   assert.equal(await controller.handleSubmit({ id: "registration-form" }, data), false);
+});
+
+test("template selection fills the campaign fields", () => {
+  const { controller } = fixture();
+  const form = { elements: { subject: {}, html_body: {} } };
+  const target = {
+    name: "template_id",
+    value: "template-1",
+    closest: () => form,
+  };
+
+  assert.equal(controller.handleChange(target), true);
+  assert.equal(form.elements.subject.value, "Template subject");
+  assert.equal(form.elements.html_body.value, "<p>Template</p>");
 });

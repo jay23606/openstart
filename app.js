@@ -9,13 +9,13 @@ import {
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
-import { createRegistrationController } from "./features/registration/controller.js?v=48";
+import { createRegistrationController } from "./features/registration/controller.js?v=88";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
 import { createAccountController } from "./features/account/controller.js?v=87";
 import { createPublicController } from "./features/public/controller.js?v=82";
-import { createOrganizerController } from "./features/organizer/controller.js?v=57";
+import { createOrganizerController } from "./features/organizer/controller.js?v=88";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
@@ -23,7 +23,7 @@ import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createSeriesViews } from "./features/series/views.js?v=75";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createLotteryViews } from "./features/lottery/views.js?v=66";
-import { createCommunicationsController } from "./features/communications/controller.js?v=52";
+import { createCommunicationsController } from "./features/communications/controller.js?v=88";
 import { createCommunicationsViews } from "./features/communications/views.js?v=62";
 import { createResultsController } from "./features/results/controller.js?v=53";
 import { createResultsViews } from "./features/results/views.js?v=59";
@@ -419,14 +419,6 @@ function exportFinancials() {
   URL.revokeObjectURL(link.href);
 }
 
-function filterRoster(eventId) {
-  const search = document.querySelector(`[data-roster-search="${eventId}"]`)?.value.toLowerCase() || "";
-  const status = document.querySelector(`[data-roster-status="${eventId}"]`)?.value || "";
-  document.querySelectorAll(".roster-manage [data-edit-registration]").forEach((row) => {
-    row.classList.toggle("hidden", !row.dataset.search.includes(search) || (status && row.dataset.status !== status));
-  });
-}
-
 async function loadPublic() {
   const [discovery,series] = await Promise.all([
     listPublishedEvents({query:state.discoverQuery,region:state.discoverRegion,limit:state.discoverVisible,offset:0}),
@@ -577,6 +569,7 @@ const organizerController = createOrganizerController({
   dialog,
   showNotice,
   go,
+  updateWaitlist,
   forms: {
     checklist: checklistForm,
     duplicateEvent: duplicateEventForm,
@@ -858,24 +851,10 @@ document.addEventListener("click", async (event) => {
   await shellController.handleClick(target);
 });
 
-document.addEventListener("input", (event) => {
-  if (event.target.dataset.rosterSearch) filterRoster(event.target.dataset.rosterSearch);
-});
-
 // Enter (or blur) on the manual place field resolves a typed city/state.
 document.addEventListener("keydown", (event) => {
   publicController.handleKeydown(event.target, event);
 });
-document.addEventListener("change", (event) => {
-  if (event.target.dataset.rosterStatus) filterRoster(event.target.dataset.rosterStatus);
-  if (event.target.dataset.waitlistId) {
-    updateWaitlist(event.target.dataset.waitlistId, {
-      status: event.target.value,
-      invited_at: event.target.value === "invited" ? new Date().toISOString() : null,
-    }).then(() => showNotice("Waitlist status updated.")).catch((error) => showNotice(error.message));
-  }
-});
-
 document.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
@@ -895,22 +874,7 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("change", async (event) => {
-  if (await dispatchFeatureChange(event.target)) return;
-  if (event.target.matches("[data-field='tier_id']")) {
-    const block=event.target.closest(".participant-block");
-    const waveSelect=block?.querySelector("[data-field='wave_id']");
-    if(waveSelect){
-      waveSelect.value="";
-      [...waveSelect.options].forEach((option)=>{option.hidden=Boolean(option.dataset.tier && option.dataset.tier!==event.target.value);});
-    }
-    return;
-  }
-  if (event.target.name !== "template_id") return;
-  const template=state.emailTemplates.find((item)=>item.id===event.target.value);
-  if (!template) return;
-  const form=event.target.closest("form");
-  form.elements.subject.value=template.subject;
-  form.elements.html_body.value=template.html_body;
+  await dispatchFeatureChange(event.target);
 });
 document.addEventListener("input", async (event) => {
   if (await dispatchFeatureInput(event.target)) return;

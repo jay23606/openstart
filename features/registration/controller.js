@@ -296,5 +296,18 @@ export function createRegistrationController({
     return false;
   }
 
-  return { handleClick, handleSubmit };
+  function handleChange(target) {
+    if (!target.matches("[data-field='tier_id']")) return false;
+    const block = target.closest(".participant-block");
+    const waveSelect = block?.querySelector("[data-field='wave_id']");
+    if (waveSelect) {
+      waveSelect.value = "";
+      [...waveSelect.options].forEach((option) => {
+        option.hidden = Boolean(option.dataset.tier && option.dataset.tier !== target.value);
+      });
+    }
+    return true;
+  }
+
+  return { handleClick, handleSubmit, handleChange };
 }
