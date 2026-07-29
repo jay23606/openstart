@@ -44,6 +44,7 @@ import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
 import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
+import { createShellController } from "./modules/shell-controller.js?v=86";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
@@ -830,33 +831,21 @@ const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, 
 const dispatchFeatureChange = createDispatcher(handlersFrom(featureControllers, "handleChange"));
 const dispatchFeatureInput = createDispatcher(handlersFrom(featureControllers, "handleInput"));
 
+const shellController = createShellController({
+  state,
+  eventById,
+  ensureEventRegistrations,
+  renderSetupWizard,
+  go,
+  dispatchFeatureClick,
+  resetDemo,
+  showNotice,
+});
+
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
-  if(["dashboard","demo"].includes(state.view)){
-    const eventId=Object.values(target.dataset).find((value)=>eventById(value));
-    if(eventId) await ensureEventRegistrations(eventId);
-  }
-  if (target.matches("[data-view]")) await go(target.dataset.view);
-  if (target.matches("[data-action='discover'], [data-back]")) {
-    if (state.setupEventId) {
-      const setupEvent=eventById(state.setupEventId);
-      if (setupEvent) {
-        await renderSetupWizard(setupEvent,5);
-        return;
-      }
-    }
-    history.replaceState({},"",location.pathname);
-    await go("discover");
-  }
-  if (target.matches("[data-go-dashboard]")) await go("dashboard");
-  if (await dispatchFeatureClick(target)) return;
-  if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
-  if (target.matches("[data-reset-demo]")) {
-    resetDemo();
-    await go("dashboard");
-    showNotice("Demo data restored.");
-  }
+  await shellController.handleClick(target);
 });
 
 document.addEventListener("input", (event) => {

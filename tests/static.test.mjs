@@ -38,6 +38,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /from "\.\/modules\/content-views\.js/);
   assert.match(app, /from "\.\/modules\/public-views\.js/);
   assert.match(app, /from "\.\/modules\/page-lifecycle\.js/);
+  assert.match(app, /from "\.\/modules\/shell-controller\.js/);
   assert.match(app, /pageLifecycle\.afterNavigate/);
   assert.doesNotMatch(app, /page\.innerHTML\s*=/);
   assert.match(app, /createPublicController/);
@@ -56,6 +57,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.doesNotMatch(app, /target\.matches\("\[data-export-account\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-connect-stripe\]"\)/);
   assert.doesNotMatch(app, /target\.dataset\.viewAthlete/);
+  assert.doesNotMatch(app, /target\.matches\("\[data-view\]"\)/);
+  assert.doesNotMatch(app, /target\.matches\("\[data-reset-demo\]"\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);
   assert.match(publicViews, /function discoveryPage\(model\)/);
   assert.match(publicViews, /function eventPage\(model\)/);
@@ -71,6 +74,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /modules\/public-view-models\.js/);
   assert.match(worker, /modules\/public-views\.js/);
   assert.match(worker, /modules\/page-lifecycle\.js/);
+  assert.match(worker, /modules\/shell-controller\.js/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);
