@@ -52,7 +52,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, seriesViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("features/registration/controller.js"),
     read("features/registration/views.js"),
@@ -60,6 +60,7 @@ test("all persisted features use the repository and server-side payment boundari
     read("features/organizer/views.js"),
     read("features/lottery/views.js"),
     read("features/platform/views.js"),
+    read("features/series/views.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
@@ -120,6 +121,8 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(data, /accountAction/);
   assert.match(app, /seriesSettingsForm/);
   assert.match(app, /renderSeries/);
+  assert.match(app, /seriesViews\.publicPage\(series, standings\)/);
+  assert.match(seriesViews, /function publicPage\(series, standings\)/);
   assert.match(data, /seriesAction/);
   assert.match(app, /duplicateEventForm/);
   assert.match(app, /checklistForm/);

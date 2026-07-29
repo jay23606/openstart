@@ -1,6 +1,6 @@
-import { escapeHtml } from "../../core.js?v=36";
+import { displayDate, escapeHtml } from "../../core.js?v=36";
 import { modalShell, renderList } from "../../modules/render.js?v=62";
-import { safeColor } from "../../modules/ui.js?v=40";
+import { safeColor, safeUrl } from "../../modules/ui.js?v=40";
 
 export function createSeriesViews({ getEvents, getSeries }) {
   function manager() {
@@ -37,5 +37,17 @@ export function createSeriesViews({ getEvents, getSeries }) {
     return modalShell({ eyebrow: "Series settings", title: series.name, body, wide: true }, escapeHtml);
   }
 
-  return { manager, settings };
+  function publicPage(series, standings) {
+    const events = [...(series.os_series_events || [])].sort((a, b) => a.sort_order - b.sort_order);
+    return `<section class="series-page" style="--series-color:${safeColor(series.primary_color)}">
+      <button class="back-button" data-back type="button">← All events</button>
+      ${safeUrl(series.banner_url) ? `<div class="series-banner"><img src="${escapeHtml(safeUrl(series.banner_url))}" alt=""></div>` : ""}
+      <div class="series-hero">${safeUrl(series.logo_url) ? `<img src="${escapeHtml(safeUrl(series.logo_url))}" alt="${escapeHtml(series.name)} logo">` : ""}<p class="eyebrow">Race series</p><h1>${escapeHtml(series.name)}</h1><p>${escapeHtml(series.description)}</p><div><span><b>${events.length}</b>events</span><span><b>${series.minimum_events}</b>required</span><span><b>${escapeHtml(series.tie_breaker.replace("_", " "))}</b>tie-breaker</span></div></div>
+      <section class="series-calendar"><div class="section-heading"><div><p class="eyebrow">Series calendar</p><h2>Earn points at every finish</h2></div></div><div>${events.map((link) => `<article><time>${displayDate(link.os_events?.starts_at)}</time><span><b>${escapeHtml(link.os_events?.name || "")}</b><small>${escapeHtml(link.os_events?.location_name || "")} · ${Number(link.points_multiplier)}× points</small></span>${link.os_events?.status === "published" ? `<button data-event-id="${link.event_id}" type="button">View race</button>` : ""}</article>`).join("") || '<div class="empty-state">Events are coming soon.</div>'}</div></section>
+      <section class="standings-section"><div class="section-heading"><div><p class="eyebrow">Championship</p><h2>Individual standings</h2></div><button class="subtle-button" data-export-series="${series.id}" type="button">Export standings</button></div><div class="standings-table"><div class="standings-header"><span>Rank</span><span>Athlete</span><span>Events</span><span>Wins</span><span>Points</span></div>${standings.individual.map((row) => `<div><span>${row.rank}</span><span><b>${escapeHtml(row.firstName)} ${escapeHtml(row.lastName)}</b><small>${row.eligible ? "Championship eligible" : `${series.minimum_events - row.eventsCompleted} more required`}</small></span><span>${row.eventsCompleted}</span><span>${row.wins}</span><span><b>${row.points}</b></span></div>`).join("") || '<div class="empty-state">Standings appear after published results.</div>'}</div></section>
+      ${standings.teams.length ? `<section class="standings-section"><div class="section-heading"><div><p class="eyebrow">Clubs & teams</p><h2>Team standings</h2></div></div><div class="standings-table team-standings"><div class="standings-header"><span>Rank</span><span>Team</span><span>Members</span><span>Events</span><span>Points</span></div>${standings.teams.map((row) => `<div><span>${row.rank}</span><span><b>${escapeHtml(row.name)}</b></span><span>${row.members}</span><span>${row.eventsCompleted}</span><span><b>${row.points}</b></span></div>`).join("")}</div></section>` : ""}
+    </section>`;
+  }
+
+  return { manager, publicPage, settings };
 }
