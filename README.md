@@ -35,7 +35,8 @@ Its `views.js` contains the public leaderboard and organizer dialog markup.
 layer: target replacement, list rendering, escaped empty states, and modal
 shells. Feature views remain plain functions with explicit escaping.
 `features/volunteers/controller.js` owns public shift signup and waitlisting,
-organizer role creation, roster updates, and volunteer exports.
+organizer role creation, roster updates, and volunteer exports. Its `views.js`
+owns the public opportunities/signup dialogs and organizer volunteer workspace.
 `features/race-day/controller.js` owns participant lookup, QR passes, packet
 pickup, check-in, bibs, walk-ups, staff, fulfillment, and operational exports.
 `features/event-commerce/controller.js` owns waivers, custom registration

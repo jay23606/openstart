@@ -18,6 +18,7 @@ import { createCommunicationsController } from "./features/communications/contro
 import { createResultsController } from "./features/results/controller.js?v=53";
 import { createResultsViews } from "./features/results/views.js?v=59";
 import { createVolunteersController } from "./features/volunteers/controller.js?v=54";
+import { createVolunteerViews } from "./features/volunteers/views.js?v=60";
 import { createRaceDayController } from "./features/race-day/controller.js?v=55";
 import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
 import { createEventSiteController } from "./features/event-site/controller.js?v=57";
@@ -944,32 +945,10 @@ function runnerWaveForm(item) {
   return `<section class="modal"><div class="form-heading"><div><p>Start assignment</p><h2>Choose your wave</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><form id="runner-wave-form" data-event-id="${item.event_id}" data-registration-id="${item.id}"><label>Wave<select name="wave_id" required>${waves.map((wave)=>`<option value="${wave.id}" ${item.wave_id===wave.id ? "selected" : ""}>${escapeHtml(wave.name)} · ${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</option>`).join("")}</select></label><label>Estimated pace per mile<input name="estimated_pace" value="${item.estimated_pace_seconds ? resultTime(item.estimated_pace_seconds*1000) : ""}" placeholder="9:30"></label><button class="primary-button" type="submit">Save start wave</button></form></section>`;
 }
 
-function volunteerOpportunitiesForm(event) {
-  const shifts=(event.os_volunteer_roles || []).flatMap((role)=>(role.os_volunteer_shifts || []).map((shift)=>({role,shift})))
-    .filter(({shift})=>new Date(shift.ends_at)>new Date()).sort((a,b)=>new Date(a.shift.starts_at)-new Date(b.shift.starts_at));
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Join the race-day team</p><h2>Volunteer at ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="volunteer-opportunities">${shifts.map(({role,shift})=>`<article><div><p>${new Date(shift.starts_at).toLocaleString()}–${new Date(shift.ends_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</p><h3>${escapeHtml(role.name)}</h3><span>${escapeHtml(role.description)}</span><small>${escapeHtml(shift.location)} · ${shift.capacity} spots${role.minimum_age ? ` · Age ${role.minimum_age}+` : ""}</small></div><button class="primary-button" data-volunteer-shift="${shift.id}" data-event="${event.id}" type="button">Choose shift</button></article>`).join("") || '<div class="empty-state">No volunteer shifts are currently open.</div>'}</div>
-  </section>`;
-}
-
-function volunteerSignupForm(event,shiftId) {
-  const role=(event.os_volunteer_roles || []).find((item)=>item.os_volunteer_shifts?.some((shift)=>shift.id===shiftId));
-  const shift=role?.os_volunteer_shifts?.find((item)=>item.id===shiftId);
-  return `<section class="modal"><div class="form-heading"><div><p>${escapeHtml(role?.name || "Volunteer")}</p><h2>Sign up to help</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="shift-summary"><b>${new Date(shift.starts_at).toLocaleString()}</b><span>${escapeHtml(shift.location)}</span>${role.requirements ? `<p>${escapeHtml(role.requirements)}</p>` : ""}</div>
-    <form id="volunteer-signup-form" data-shift-id="${shiftId}"><div class="split-fields"><label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label></div><label>Email<input name="email" type="email" value="${escapeHtml(state.session?.user?.email || "")}" required></label><label>Phone<input name="phone" type="tel"></label><label>Emergency contact<input name="emergency_contact"></label><label>Notes or accommodations<textarea name="notes" rows="3"></textarea></label>${role.waiver_text ? `<div class="waiver-box"><p>${escapeHtml(role.waiver_text)}</p><label class="check-label"><input name="waiver" type="checkbox" required> I accept the volunteer waiver</label></div>` : ""}<button class="primary-button" type="submit">Join this shift</button></form>
-  </section>`;
-}
-
-function volunteerManagerForm(event) {
-  const signups=(event.os_volunteer_roles || []).flatMap((role)=>(role.os_volunteer_shifts || []).flatMap((shift)=>(shift.os_volunteer_signups || []).map((signup)=>({role,shift,signup}))));
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Volunteer operations</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="volunteer-summary"><span><b>${signups.filter(({signup})=>signup.status==="confirmed").length}</b>confirmed</span><span><b>${signups.filter(({signup})=>signup.status==="waitlisted").length}</b>waitlisted</span><span><b>${signups.filter(({signup})=>signup.checked_in_at).length}</b>checked in</span><button class="subtle-button" data-export-volunteers="${event.id}" type="button">Export CSV</button></div>
-    <div class="volunteer-admin-list">${(event.os_volunteer_roles || []).map((role)=>`<article><h3>${escapeHtml(role.name)}</h3>${(role.os_volunteer_shifts || []).map((shift)=>`<div><b>${new Date(shift.starts_at).toLocaleString()}</b><small>${escapeHtml(shift.location)} · capacity ${shift.capacity} · ${(shift.os_volunteer_signups || []).filter((item)=>item.status==="confirmed").length} confirmed</small></div>`).join("")}</article>`).join("") || '<div class="empty-state">No volunteer roles yet.</div>'}</div>
-    <h3>Create a role and first shift</h3><form id="volunteer-role-form" data-event-id="${event.id}"><div class="split-fields"><label>Role name<input name="name" placeholder="Course marshal" required></label><label>Minimum age<input name="minimum_age" type="number" min="0"></label></div><label>Description<input name="description" required></label><label>Requirements<input name="requirements" placeholder="Comfortable standing outdoors"></label><label>Volunteer waiver<textarea name="waiver_text" rows="3"></textarea></label><div class="split-fields"><label>Starts<input name="starts_at" type="datetime-local" required></label><label>Ends<input name="ends_at" type="datetime-local" required></label></div><div class="split-fields"><label>Location<input name="location" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div><label>Shift instructions<input name="instructions"></label><button class="primary-button" type="submit">Create volunteer shift</button></form>
-    <h3>Volunteer roster</h3><form id="volunteer-roster-form" data-event-id="${event.id}"><div class="volunteer-roster">${signups.map(({role,shift,signup})=>`<div data-volunteer-signup-id="${signup.id}"><span><b>${escapeHtml(signup.first_name)} ${escapeHtml(signup.last_name)}</b><small>${escapeHtml(signup.email)} · ${escapeHtml(role.name)} · ${new Date(shift.starts_at).toLocaleString()}</small></span><select name="status">${["confirmed","waitlisted","completed","no_show","cancelled"].map((status)=>`<option ${signup.status===status ? "selected" : ""}>${status}</option>`).join("")}</select><label class="check-label"><input name="checked_in" type="checkbox" ${signup.checked_in_at ? "checked" : ""}> Checked in</label><input name="hours" type="number" min="0" step=".25" placeholder="Hours" value="${signup.hours_worked ?? ""}"></div>`).join("") || '<div class="empty-state">No volunteers have signed up.</div>'}</div>${signups.length ? '<button class="primary-button" type="submit">Save volunteer roster</button>' : ""}</form>
-  </section>`;
-}
+const volunteerViews = createVolunteerViews({ getSessionEmail: () => state.session?.user?.email });
+const volunteerOpportunitiesForm = volunteerViews.opportunities;
+const volunteerSignupForm = volunteerViews.signup;
+const volunteerManagerForm = volunteerViews.manager;
 
 function exportVolunteers(event) {
   const rows=[["role","shift_start","shift_end","location","first_name","last_name","email","phone","emergency_contact","status","checked_in","hours"]];

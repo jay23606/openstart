@@ -19,9 +19,9 @@ export function modalShell({ eyebrow, title, body, wide = false }, escapeHtml) {
   </section>`;
 }
 
-export function summaryMetrics(items, escapeHtml, className = "metric-summary") {
+export function summaryMetrics(items, escapeHtml, className = "metric-summary", trailing = "") {
   return `<div class="${className}">${renderList(items, ({ label, value }) =>
-    `<span><b>${escapeHtml(value)}</b>${escapeHtml(label)}</span>`)}</div>`;
+    `<span><b>${escapeHtml(value)}</b>${escapeHtml(label)}</span>`)}${trailing}</div>`;
 }
 
 export function statusBadge(label, escapeHtml, tone = "") {
