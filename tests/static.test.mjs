@@ -4,8 +4,8 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
-  const [html, app, worker] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js")]);
+test("the static shell connects the app, stylesheet, manifest, theme, and service worker", async () => {
+  const [html, app, worker, theme] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js")]);
   // Assert the wiring, not a specific cache-bust number: pinning the literal
   // version meant every routine bump failed this test. What actually matters is
   // that both assets are busted together and the service-worker cache name is
@@ -26,6 +26,12 @@ test("the static shell connects the app, stylesheet, manifest, and service worke
   assert.match(html, /data-view="help"/);
   assert.match(html, /data-view="demo"/);
   assert.match(app, /function renderDemo\(\)/);
+  assert.match(html, /id="theme-toggle"/);
+  assert.match(html, /src="theme\.js\?v=/);
+  assert.match(worker, /theme\.js/);
+  assert.match(theme, /prefers-color-scheme: dark/);
+  assert.match(theme, /openstart-theme/);
+  assert.match(theme, /aria-label/);
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {

@@ -31,6 +31,17 @@ test("mobile navigation and content fit the viewport", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
+test("theme toggle switches modes accessibly and remembers the choice", async ({ page }) => {
+  await page.goto("/");
+  const toggle=page.getByRole("button",{name:"Switch to dark mode"});
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme","dark");
+  await expect(page.getByRole("button",{name:"Switch to light mode"})).toBeVisible();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme","dark");
+});
+
 test("help guides can be searched and filtered", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button",{name:"Help"}).click();
