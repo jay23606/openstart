@@ -39,6 +39,7 @@ organizer role creation, roster updates, and volunteer exports. Its `views.js`
 owns the public opportunities/signup dialogs and organizer volunteer workspace.
 `features/race-day/controller.js` owns participant lookup, QR passes, packet
 pickup, check-in, bibs, walk-ups, staff, fulfillment, and operational exports.
+Its `views.js` owns the operations workspace, lookup results, and signed pass.
 `features/event-commerce/controller.js` owns waivers, custom registration
 questions, scheduled pricing, promotions, merchandise, and donations.
 `features/event-site/controller.js` owns event branding, content sections,
