@@ -168,8 +168,8 @@ test("event publishing is guided and server-authoritative", async () => {
   ]);
   assert.match(app,/function renderSetupWizard/);
   assert.match(organizerViews,/Create draft & continue/);
-  assert.match(app,/READY TO PUBLISH/);
-  assert.match(app,/setup-basics-form/);
+  assert.match(organizerViews,/READY TO PUBLISH/);
+  assert.match(organizerViews,/setup-basics-form/);
   assert.match(data,/os_event_readiness/);
   assert.match(data,/os_publish_event/);
   assert.match(migration,/os_enforce_event_publish_readiness/);

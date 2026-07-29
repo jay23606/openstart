@@ -23,7 +23,7 @@ organizer editing, runner self-service, and transfer acceptance.
 publishing, core organizer navigation, and operational checklists through the
 same dependency-driven boundary. Its `views.js` owns event creation,
 duplication, operational-readiness checklists, and the participant/team/waitlist
-roster workspace.
+roster workspace, plus the six-step event setup and publishing page.
 `features/platform/controller.js` isolates platform search, fee controls,
 event suspension, and private support notes from the public application shell.
 Its `views.js` owns the operations console, reconciliation/provider reporting,

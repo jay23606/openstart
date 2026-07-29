@@ -12,7 +12,7 @@ import {
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
-import { createOrganizerViews } from "./features/organizer/views.js?v=72";
+import { createOrganizerViews } from "./features/organizer/views.js?v=73";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -186,8 +186,6 @@ function renderDemo() {
   page.innerHTML = demoView(state);
 }
 
-const setupSteps = ["Basics","Registration options","Runner experience","Website","Optional tools","Review & publish"];
-
 function localReadiness(event) {
   const paid=(event.os_event_tiers || []).some((tier)=>tier.price_cents>0);
   return {ready:false,items:[
@@ -198,61 +196,14 @@ function localReadiness(event) {
   ]};
 }
 
-async function renderSetupWizard(event,step=0) {
-  state.setupEventId=event.id;
-  const readiness=configured ? await eventReadiness(event.id) : localReadiness(event);
-  const completed=readiness.items.filter((item)=>item.complete).length;
-  const content=[
-    `<form id="setup-basics-form" data-event-id="${event.id}" data-next-step="1">
-      <label>Event name<input name="name" value="${escapeHtml(event.name)}" required minlength="3" maxlength="120"></label>
-      <div class="split-fields"><label>Date and time<input name="starts_at" type="datetime-local" value="${localDateTime(event.starts_at)}" required></label><label>Location<input name="location_name" value="${escapeHtml(event.location_name)}" required></label></div>
-      <label>Description<textarea name="description" rows="6" required minlength="10">${escapeHtml(event.description)}</textarea></label>
-      <button class="primary-button" type="submit">Save and continue</button>
-    </form>`,
-    `<div class="setup-tier-summary">${event.os_event_tiers.map((tier)=>`<article><span><b>${escapeHtml(tier.name)}</b><small>${escapeHtml(tier.distance_label)}</small></span><span><b>${money(tier.price_cents)}</b><small>${tier.capacity} spots</small></span></article>`).join("")}</div>
-    <form id="setup-tier-form" data-event-id="${event.id}">
-      <h3>Add another registration option</h3>
-      <div class="split-fields"><label>Name<input name="name" placeholder="Half Marathon" required></label><label>Distance<input name="distance_label" placeholder="13.1 miles" required></label></div>
-      <div class="split-fields"><label>Price<input name="price" type="number" min="0" step=".01" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div>
-      <div class="dialog-actions"><button class="subtle-button" type="submit">Add option</button><button class="primary-button" data-setup-step="2" data-setup-event="${event.id}" type="button">Continue</button></div>
-    </form>`,
-    `<form id="setup-runner-form" data-event-id="${event.id}" data-next-step="3">
-      <label>Participant waiver <span class="optional-label">Strongly recommended</span><textarea name="waiver_text" rows="7" placeholder="Enter the agreement participants must accept">${escapeHtml(event.waiver_text || "")}</textarea></label>
-      <div class="split-fields"><label>Participant edits close<input name="participant_edits_close_at" type="datetime-local" value="${localDateTime(event.participant_edits_close_at)}"></label><label>Transfers close<input name="transfers_close_at" type="datetime-local" value="${localDateTime(event.transfers_close_at)}"></label></div>
-      <div class="setup-inline-actions"><button class="subtle-button" data-registration-settings="${event.id}" type="button">Manage custom questions</button><span>${event.os_event_questions?.length || 0} questions configured</span></div>
-      <button class="primary-button" type="submit">Save and continue</button>
-    </form>`,
-    `<form id="setup-website-form" data-event-id="${event.id}" data-next-step="4">
-      <div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(event.primary_color)}"></label><label>Public contact email<input name="contact_email" type="email" value="${escapeHtml(event.contact_email || state.session?.user?.email || "")}"></label></div>
-      <label class="check-label"><input name="website_published" type="checkbox" ${event.website_published ? "checked" : ""}> Publish custom website sections when the event goes live</label>
-      <div class="setup-inline-actions"><button class="subtle-button" data-site-editor="${event.id}" type="button">Edit page sections and sponsors</button><span>${event.os_event_sections?.length || 0} sections configured</span></div>
-      <button class="primary-button" type="submit">Save and continue</button>
-    </form>`,
-    `<div class="setup-option-grid">
-      <article><h3>Pricing & promotions</h3><p>Scheduled prices, promo codes, and capacity.</p><button class="subtle-button" data-pricing-settings="${event.id}" type="button">Configure</button></article>
-      <article><h3>Merchandise & donations</h3><p>Products, inventory, fundraising, and fulfillment.</p><button class="subtle-button" data-product-settings="${event.id}" type="button">Configure</button></article>
-      <article><h3>Lottery</h3><p>Applications, qualification rules, and available spots.</p><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Configure</button></article>
-      <article><h3>Waves & corrals</h3><p>Start times, pace ranges, capacity, and bib ranges.</p><button class="subtle-button" data-wave-manager="${event.id}" type="button">Configure</button></article>
-      <article><h3>Volunteers</h3><p>Roles, shifts, requirements, and capacity.</p><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Configure</button></article>
-      <article><h3>Readiness checklist</h3><p>Permits, course planning, communications, and race day.</p><button class="subtle-button" data-checklist="${event.id}" type="button">Open checklist</button></article>
-    </div><button class="primary-button" data-setup-step="5" data-setup-event="${event.id}" type="button">Continue to review</button>`,
-    `<div class="setup-review">
-      <div class="setup-readiness">${readiness.items.map((item)=>`<article class="${item.complete ? "complete" : item.required ? "required" : ""}"><i>${item.complete ? "✓" : item.required ? "!" : "○"}</i><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}${item.required ? " · Required" : " · Optional"}</small></span></article>`).join("")}</div>
-      <aside><p class="eyebrow">${event.status==="published" ? "EVENT IS LIVE" : readiness.ready ? "READY TO PUBLISH" : "SETUP INCOMPLETE"}</p><h3>${event.status==="published" ? "Registration is public." : readiness.ready ? "Everything required is ready." : "Finish the required items first."}</h3><p>You can preview at any time. Publishing makes the event discoverable and opens eligible registration or lottery applications.</p>
-      <button class="subtle-button" data-setup-preview="${event.id}" type="button">Preview event page</button>
-      ${event.status==="published" ? `<button class="danger-button" data-unpublish-event="${event.id}" type="button">Return to draft</button>` : `<button class="primary-button" data-publish-event="${event.id}" type="button" ${readiness.ready ? "" : "disabled"}>Publish event</button>`}</aside>
-    </div>`,
-  ][step];
-  setPageMetadata(`${event.name} setup — OpenStart`,"Guided event setup and publishing.");
-  page.innerHTML=`<section class="setup-wizard">
-    <header><button class="back-button" data-exit-setup type="button">← Organizer</button><p class="eyebrow">GUIDED EVENT SETUP</p><h1>${escapeHtml(event.name)}</h1><div><span><b>${completed}/${readiness.items.length}</b> readiness items</span><span><b>${event.status}</b> visibility</span></div></header>
-    <nav class="setup-steps" aria-label="Event setup steps">${setupSteps.map((label,index)=>`<button class="${index===step ? "active" : ""}" data-setup-step="${index}" data-setup-event="${event.id}" type="button"><i>${index+1}</i><span>${label}</span></button>`).join("")}</nav>
-    <div class="setup-content"><div><p class="eyebrow">STEP ${step+1} OF ${setupSteps.length}</p><h2>${setupSteps[step]}</h2></div>${content}</div>
-  </section>`;
+async function renderSetupWizard(event, step = 0) {
+  state.setupEventId = event.id;
+  const readiness = configured ? await eventReadiness(event.id) : localReadiness(event);
+  setPageMetadata(`${event.name} setup — OpenStart`, "Guided event setup and publishing.");
+  page.innerHTML = organizerViews.setup(event, step, readiness, state.session?.user?.email || "");
   syncNavigation();
-  scrollTo(0,0);
-}
-const effectivePrice = (tier) => {
+  scrollTo(0, 0);
+}const effectivePrice = (tier) => {
   const now = Date.now();
   const active = (tier.os_tier_prices || []).filter((price) => new Date(price.starts_at).getTime() <= now)
     .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
