@@ -36,6 +36,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(contentViews, /data-view="architecture"/);
   assert.match(contentViews, /Postgres \+ RLS/);
   assert.match(contentViews, /PAYMENT FLOW/);
+  assert.match(contentViews, /tiny observable store/);
   assert.match(html, /data-view="help"/);
   assert.match(html, /data-view="architecture"/);
   assert.match(html, /data-view="demo"/);

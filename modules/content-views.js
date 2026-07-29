@@ -141,7 +141,7 @@ export function architectureView() {
           <div class="deployment-strip" aria-label="Deployment sequence">
             <span><b>Static assets</b>HTML, CSS, JavaScript, manifest</span><i>→</i><span><b>Supabase project</b>Auth, Postgres, storage, functions</span><i>→</i><span><b>Providers</b>Stripe and Resend credentials</span><i>→</i><span><b>Operations</b>Migrations, monitoring, reconciliation</span>
           </div>
-          <div class="paper-note"><b>Why this shape?</b><p>The static client is inexpensive to host and easy to inspect. Native ES modules separate state, content, discovery, shared presentation, and workflow composition without adding a build system. Postgres centralizes consistency, while Edge Functions keep secrets and privileged workflows out of the browser.</p></div>
+          <div class="paper-note"><b>Why this shape?</b><p>The static client is inexpensive to host and easy to inspect. Native ES modules separate content, discovery, shared presentation, and workflow composition without adding a build system. A tiny observable store publishes atomic, named state transitions to focused subscribers, while Postgres centralizes durable consistency and Edge Functions keep secrets and privileged workflows out of the browser.</p></div>
         </section>
         <section class="paper-close"><p class="eyebrow">THE OPERATING IDEA</p><blockquote>Keep the experience welcoming. Keep the important decisions verifiable.</blockquote><button class="subtle-button" data-view="help" type="button">Return to Help</button></section>
       </div>

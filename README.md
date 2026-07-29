@@ -85,6 +85,14 @@ backdrop/close behavior, cleanup hooks, and accessible status/error notices.
 `modules/busy.js` gives every submitted form the same duplicate-submit guard,
 accessible busy state, progress label, and reliable control restoration.
 
+`modules/store.js` provides the framework-free reactive state layer. Top-level
+state keys are schema-checked, related changes publish atomically, and keyed or
+derived subscriptions update browser effects without rerendering unrelated
+surfaces. Named actions retain a bounded metadata-only history containing the
+action name and changed keys—never session tokens or participant values.
+Controllers receive the store's patch boundary explicitly, so they remain easy
+to test without a browser or global singleton.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with
