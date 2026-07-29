@@ -37,6 +37,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);
+  assert.match(app, /assets\/openstart-race-hero\.png/);
+  assert.match(worker, /assets\/openstart-race-hero\.png/);
+  assert.match(app, /class="race-type race-type-/);
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {

@@ -627,9 +627,11 @@ function renderDiscover() {
         <p class="hero-lede">Discover local events and register in minutes. OpenStart gives organizers a transparent, community-owned alternative for managing every starting line.</p>
         <div class="hero-actions"><a class="primary-button" href="#events">Explore events</a><button class="text-button" data-go-dashboard type="button">I organize races →</button></div>
       </div>
-      <div class="hero-card">
+      <div class="hero-photo">
+        <img src="assets/openstart-race-hero.png" width="1536" height="1024" alt="A community road race beginning at sunrise">
+        <div class="hero-photo-shade"></div>
         <div class="route-line"><span>START</span><i></i><span>FINISH</span></div>
-        <p>Up next</p><strong>${escapeHtml(published[0]?.name || "Your next race")}</strong>
+        <div class="hero-photo-caption"><p>Up next</p><strong>${escapeHtml(published[0]?.name || "Your next race")}</strong></div>
         <div class="hero-meta"><span><b>${state.discoverTotal}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> visible distances</span><span><b>${published.length ? money(Math.min(...published.flatMap((event) => event.os_event_tiers.map(effectivePrice)))) : "—"}</b> from</span></div>
       </div>
     </section>

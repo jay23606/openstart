@@ -890,6 +890,38 @@ footer b { color: white; }
 .brand-mark { box-shadow: inset 0 0 0 1px #ffffff24, 0 6px 16px #0f6b4f2b; transform: rotate(-3deg); }
 .hero { background: linear-gradient(135deg, var(--cream), color-mix(in srgb, var(--paper) 82%, var(--lime))); }
 .hero-card { border-radius: var(--radius); box-shadow: 18px 20px 0 var(--lime), var(--shadow); }
+.hero::before {
+  background-image:
+    radial-gradient(ellipse at 50% 50%, transparent 57%, color-mix(in srgb, var(--green) 12%, transparent) 58%, transparent 60%),
+    radial-gradient(ellipse at 50% 50%, transparent 68%, color-mix(in srgb, var(--green) 9%, transparent) 69%, transparent 71%);
+  background-size: 340px 210px, 420px 270px;
+  content: "";
+  inset: 0;
+  opacity: .24;
+  pointer-events: none;
+  position: absolute;
+}
+.hero-copy { position: relative; z-index: 2; }
+.hero-photo {
+  align-self: center;
+  aspect-ratio: 4 / 3;
+  border: 1px solid #ffffff38;
+  border-radius: var(--radius-lg);
+  box-shadow: 18px 20px 0 var(--lime), var(--shadow);
+  color: white;
+  min-height: 390px;
+  overflow: hidden;
+  position: relative;
+  transform: rotate(1.5deg);
+  z-index: 2;
+}
+.hero-photo > img { height: 100%; inset: 0; object-fit: cover; object-position: 57% center; position: absolute; width: 100%; }
+.hero-photo-shade { background: linear-gradient(180deg,#071b1433 15%,transparent 48%,#071b14e8 100%); inset: 0; position: absolute; }
+.hero-photo .route-line { inset: 28px 30px auto; margin: 0; position: absolute; }
+.hero-photo-caption { bottom: 92px; left: 30px; position: absolute; right: 30px; }
+.hero-photo-caption p { color: #d8e2dd; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; margin: 0 0 7px; text-transform: uppercase; }
+.hero-photo-caption strong { display: block; font-family: Georgia,serif; font-size: clamp(25px,3vw,39px); font-weight: 500; line-height: 1.05; text-shadow: 0 2px 18px #071b14aa; }
+.hero-photo .hero-meta { bottom: 23px; left: 30px; margin: 0; padding-top: 14px; position: absolute; right: 30px; }
 .event-card,
 .dashboard-card,
 .metric-grid > div,
@@ -911,7 +943,13 @@ footer b { color: white; }
   box-shadow: var(--shadow);
   transform: translateY(-3px);
 }
+.event-card { border-top: 4px solid var(--event-accent,var(--green)); }
 .event-date { border-radius: var(--radius) 0 0 var(--radius); }
+.event-card-kicker { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
+.event-card-kicker p { color: var(--muted); font-size: 12px; margin: 0; }
+.race-type { align-items: center; background: var(--cream); border: 1px solid var(--line); border-radius: 999px; color: var(--green); display: inline-flex; flex: 0 0 auto; font-family: Georgia,serif; font-size: 9px; font-weight: 800; height: 29px; justify-content: center; letter-spacing: .4px; min-width: 36px; padding: 0 8px; }
+.race-type-trail { background: color-mix(in srgb, var(--lime) 25%, var(--cream)); }
+.race-type-marathon { background: color-mix(in srgb, var(--orange) 16%, var(--cream)); color: var(--ink); }
 .primary-button, .stripe-button, .subtle-button, .danger-button { border-radius: var(--radius-sm); transition: background .18s, border-color .18s, box-shadow .18s, transform .18s; }
 .primary-button { box-shadow: 0 7px 18px color-mix(in srgb, var(--green) 24%, transparent); }
 .primary-button:hover { box-shadow: 0 10px 24px color-mix(in srgb, var(--green) 32%, transparent); }
@@ -925,6 +963,20 @@ dialog::backdrop { backdrop-filter: blur(7px); }
 input, select, textarea { background: var(--input); border-color: var(--line); color: var(--ink); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .78; }
 .detail-note, .waiver-box, .answer-list, .empty-state, .help-support, .athlete-cta-card { border-radius: var(--radius); }
+.empty-state { border: 1px dashed var(--line); line-height: 1.55; overflow: hidden; position: relative; }
+.empty-state::before {
+  background:
+    radial-gradient(circle at 64% 38%,var(--orange) 0 4px,transparent 5px),
+    linear-gradient(145deg,transparent 48%,var(--green) 49% 52%,transparent 53%);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  content: "";
+  display: block;
+  height: 48px;
+  margin: 0 auto 14px;
+  opacity: .8;
+  width: 48px;
+}
 .notice { background: var(--surface-raised); border: 1px solid var(--line); color: var(--ink); }
 .notice button { color: var(--ink); }
 
@@ -947,8 +999,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .78; }
 :root[data-theme="dark"] .sandbox-badge { background: #3b3015; border-color: #725f28; color: #f4d77d; }
 :root[data-theme="dark"] .operation-suspended { background: #321d19; }
 :root[data-theme="dark"] img { filter: brightness(.92) contrast(1.04); }
+:root[data-theme="dark"] .hero-photo > img { filter: brightness(.8) saturate(.88) contrast(1.08); }
 
 @media (max-width: 760px) {
   .theme-toggle { margin-right: 6px; padding: 6px; }
   .theme-toggle-label { display: none; }
+  .hero-photo { min-height: 330px; transform: none; }
+  .hero-photo .route-line { inset: 24px 24px auto; }
+  .hero-photo-caption { bottom: 86px; left: 24px; right: 24px; }
+  .hero-photo .hero-meta { bottom: 20px; left: 24px; right: 24px; }
 }

@@ -2,6 +2,7 @@ const CACHE = "openstart-v38";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./theme.js", "./config.js", "./manifest.json", "./favicon.svg",
+  "./assets/openstart-race-hero.png",
 ];
 
 self.addEventListener("install", (event) => {
