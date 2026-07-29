@@ -53,6 +53,19 @@ test("help guides can be searched and filtered", async ({ page }) => {
   await expect(page.locator("[data-help-article]:not(.hidden)")).toHaveCount(4);
 });
 
+test("the architecture paper is discoverable, deep-linkable, and responsive", async ({ page }) => {
+  await page.setViewportSize({width:390,height:844});
+  await page.goto("/?view=architecture");
+  await expect(page.getByRole("heading",{name:"A simple platform for a complicated race day."})).toBeVisible();
+  await expect(page.getByRole("figure",{name:/The client never receives provider secrets/})).toBeVisible();
+  await expect(page.getByText("PAYMENT FLOW",{exact:true})).toBeVisible();
+  await expect(page.locator(".domain-grid article")).toHaveCount(6);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
+  expect(overflow).toBe(false);
+  await page.getByRole("button",{name:"Back to Help"}).click();
+  await expect(page.getByRole("heading",{name:"How can we help?"})).toBeVisible();
+});
+
 test("the public demo explains every feature without requiring setup", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button",{name:"Demo"}).click();

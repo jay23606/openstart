@@ -126,6 +126,14 @@ function renderHelp() {
             </details>
           `).join("")}
         </div>
+        <aside class="architecture-promo">
+          <div>
+            <p class="eyebrow">FOR BUILDERS &amp; OPERATORS</p>
+            <h2>See how OpenStart fits together.</h2>
+            <p>A concise architecture paper covering the application, data model, trust boundaries, payments, communications, and race-day operations.</p>
+          </div>
+          <button class="primary-button" data-view="architecture" type="button">Read the architecture paper</button>
+        </aside>
         <aside class="help-support">
           <div><p class="eyebrow">STILL STUCK?</p><h2>Tell us what happened.</h2></div>
           <p>Include the page you were on and the exact error message. Never include passwords, Stripe secret keys, or other credentials.</p>
@@ -133,6 +141,99 @@ function renderHelp() {
         </aside>
       </div>
     </section>`;
+}
+
+function renderArchitecture() {
+  setPageMetadata(
+    "OpenStart Architecture — Platform overview",
+    "A concise guide to OpenStart's system design, core domains, trust boundaries, and critical workflows.",
+  );
+  page.innerHTML = `
+    <article class="architecture-page">
+      <header class="architecture-hero">
+        <button class="back-button" data-view="help" type="button">← Back to Help</button>
+        <p class="eyebrow">OPENSTART ARCHITECTURE · JULY 2026</p>
+        <h1>A simple platform for a complicated race day.</h1>
+        <p>OpenStart keeps the browser lightweight and puts durable records, permissions, capacity, and money decisions behind server-controlled boundaries. This paper is a practical map of the system, not an exhaustive specification.</p>
+        <div class="architecture-facts">
+          <span><b>Static web app</b>Fast, portable client</span>
+          <span><b>Postgres core</b>One source of truth</span>
+          <span><b>Edge functions</b>Trusted integrations</span>
+          <span><b>Open source</b>Auditable by design</span>
+        </div>
+      </header>
+      <nav class="architecture-toc" aria-label="Architecture paper sections">
+        <a href="#system-map">System map</a><a href="#domains">Core domains</a><a href="#flows">Critical flows</a><a href="#trust">Trust &amp; reliability</a><a href="#deployment">Deployment</a>
+      </nav>
+      <div class="architecture-body">
+        <section class="paper-section paper-intro">
+          <div><p class="section-number">01</p><h2>Design in one sentence</h2></div>
+          <p>OpenStart is a browser-delivered race-management application backed by Supabase: the client handles presentation and workflow, Postgres owns durable state and invariants, and Edge Functions mediate operations that require secrets or external providers.</p>
+        </section>
+        <section class="paper-section" id="system-map">
+          <div><p class="section-number">02</p><h2>System map</h2><p class="section-lede">Four user groups share one application surface, while policy and provider boundaries stay on the server.</p></div>
+          <figure class="system-diagram" aria-labelledby="system-map-caption">
+            <div class="diagram-users"><span>Runners</span><span>Organizers</span><span>Race-day staff</span><span>Platform operators</span></div>
+            <div class="diagram-connector" aria-hidden="true"><i></i><b>HTTPS</b><i></i></div>
+            <div class="diagram-client"><small>CLIENT</small><strong>OpenStart web application</strong><span>Discovery · Registration · Organizer workspace · Race-day tools</span></div>
+            <div class="diagram-connector" aria-hidden="true"><i></i><b>Supabase SDK / API</b><i></i></div>
+            <div class="diagram-platform">
+              <div><small>IDENTITY</small><strong>Supabase Auth</strong><span>Sessions and verified accounts</span></div>
+              <div class="diagram-core"><small>SYSTEM OF RECORD</small><strong>Postgres + RLS</strong><span>Events, people, orders, results, audit history</span></div>
+              <div><small>TRUSTED COMPUTE</small><strong>Edge Functions</strong><span>Payments, email, admin, race operations</span></div>
+            </div>
+            <div class="diagram-connector" aria-hidden="true"><i></i><b>Verified provider APIs</b><i></i></div>
+            <div class="diagram-providers"><span><b>Stripe</b>Checkout &amp; payouts</span><span><b>Resend</b>Transactional &amp; campaign email</span></div>
+            <figcaption id="system-map-caption">The client never receives provider secrets. Row Level Security and server functions enforce access at the data boundary.</figcaption>
+          </figure>
+        </section>
+        <section class="paper-section" id="domains">
+          <div><p class="section-number">03</p><h2>Core domains</h2><p class="section-lede">The product is broad, but its capabilities group into six understandable areas.</p></div>
+          <div class="domain-grid">
+            <article><span>01</span><h3>Event publishing</h3><p>Drafts, guided setup, branded event sites, readiness checks, schedules, tiers, waves, and race series.</p></article>
+            <article><span>02</span><h3>Registration</h3><p>Participants, questions, waivers, teams, lotteries, waitlists, transfers, promo codes, and capacity.</p></article>
+            <article><span>03</span><h3>Commerce</h3><p>Stripe Checkout, connected organizer payouts, application fees, merchandise, donations, and reconciliation.</p></article>
+            <article><span>04</span><h3>Race operations</h3><p>Staff access, QR passes, packet pickup, check-in, bib assignment, walk-ups, volunteers, and fulfillment.</p></article>
+            <article><span>05</span><h3>Results &amp; community</h3><p>Timing imports, official results, leaderboards, athlete profiles, series points, and team standings.</p></article>
+            <article><span>06</span><h3>Platform operations</h3><p>Health signals, audit logs, payment and email failures, fees, support notes, and event suspension.</p></article>
+          </div>
+        </section>
+        <section class="paper-section" id="flows">
+          <div><p class="section-number">04</p><h2>Critical flows</h2><p class="section-lede">Two workflows show the main architectural rule: the browser initiates; the server decides.</p></div>
+          <div class="flow-grid">
+            <figure class="flow-card"><figcaption><span>PAYMENT FLOW</span><strong>A registration becomes confirmed only after provider verification.</strong></figcaption><ol>
+              <li><b>1</b><span><strong>Reserve</strong>The database atomically checks eligibility and capacity.</span></li>
+              <li><b>2</b><span><strong>Checkout</strong>An Edge Function creates an idempotent Stripe session.</span></li>
+              <li><b>3</b><span><strong>Verify</strong>A signed webhook reports the payment outcome.</span></li>
+              <li><b>4</b><span><strong>Confirm</strong>The server records payment, registration, and receipt state.</span></li>
+            </ol></figure>
+            <figure class="flow-card"><figcaption><span>RACE-DAY FLOW</span><strong>Every scan resolves against current, authorized records.</strong></figcaption><ol>
+              <li><b>1</b><span><strong>Assign</strong>An organizer grants a scoped staff role to a verified email.</span></li>
+              <li><b>2</b><span><strong>Present</strong>The runner shows a signed QR pass or provides identifying details.</span></li>
+              <li><b>3</b><span><strong>Validate</strong>The race-day function checks role, event, and participant state.</span></li>
+              <li><b>4</b><span><strong>Record</strong>Pickup, bib, check-in, and fulfillment changes are auditable.</span></li>
+            </ol></figure>
+          </div>
+        </section>
+        <section class="paper-section" id="trust">
+          <div><p class="section-number">05</p><h2>Trust, privacy &amp; reliability</h2></div>
+          <div class="principle-list">
+            <article><h3>Server-authoritative invariants</h3><p>Database constraints and functions protect capacity, unique active registrations, publishing readiness, lottery finality, and financial settings—even if a client is stale or modified.</p></article>
+            <article><h3>Least-privilege access</h3><p>Row Level Security scopes records to public visitors, account owners, event staff, organizers, and platform operators. Hiding a control in the interface is never treated as authorization.</p></article>
+            <article><h3>Idempotent external work</h3><p>Payment sessions, webhooks, campaigns, and background claims are designed to tolerate retries without duplicate charges or sends. Provider events and operational actions remain traceable.</p></article>
+            <article><h3>Fast public, bounded private</h3><p>Discovery uses a purpose-built, paged read model. Organizer metrics use counters and summaries; worker claims use bounded batches so platform growth does not turn every screen into a full-table scan.</p></article>
+          </div>
+        </section>
+        <section class="paper-section" id="deployment">
+          <div><p class="section-number">06</p><h2>Deployment model</h2></div>
+          <div class="deployment-strip" aria-label="Deployment sequence">
+            <span><b>Static assets</b>HTML, CSS, JavaScript, manifest</span><i>→</i><span><b>Supabase project</b>Auth, Postgres, storage, functions</span><i>→</i><span><b>Providers</b>Stripe and Resend credentials</span><i>→</i><span><b>Operations</b>Migrations, monitoring, reconciliation</span>
+          </div>
+          <div class="paper-note"><b>Why this shape?</b><p>The static client is inexpensive to host and easy to inspect. Postgres centralizes consistency. Edge Functions keep secrets and privileged workflows out of the browser. Each layer has one clear job.</p></div>
+        </section>
+        <section class="paper-close"><p class="eyebrow">THE OPERATING IDEA</p><blockquote>Keep the experience welcoming. Keep the important decisions verifiable.</blockquote><button class="subtle-button" data-view="help" type="button">Return to Help</button></section>
+      </div>
+    </article>`;
 }
 
 const showcaseFeatures = [
@@ -495,11 +596,16 @@ try {
 
 function publicEventCard(event, index) {
   const tiers = event.os_event_tiers || [];
+  const distances = tiers.map((tier) => String(tier.distance_label || "").toLowerCase()).join(" ");
+  const raceType = distances.includes("marathon") || distances.includes("26.2") ? ["26.2","marathon"] :
+    distances.includes("trail") || distances.includes("ultra") ? ["TR","trail"] :
+    distances.includes("10k") || distances.includes("6.2") ? ["10K","road"] :
+    distances.includes("5k") || distances.includes("3.1") ? ["5K","road"] : ["RUN","open"];
   return `
-    <article class="event-card event-tone-${index % 3}">
+    <article class="event-card event-tone-${index % 3}" style="--event-accent:${safeColor(event.primary_color)}">
       <div class="event-date"><span>${eventMonth(event.starts_at)}</span><strong>${eventDay(event.starts_at)}</strong></div>
       <div class="event-card-content">
-        <p>${escapeHtml(event.location_name)}</p>
+        <div class="event-card-kicker"><p>${escapeHtml(event.location_name)}</p><span class="race-type race-type-${raceType[1]}" title="${raceType[1]} race">${raceType[0]}</span></div>
         <h3>${escapeHtml(event.name)}</h3>
         <div class="tier-pills">${tiers.map((tier) => `<span>${escapeHtml(tier.distance_label)}</span>`).join("")}</div>
         <button data-event-id="${event.id}" type="button">View event <span>→</span></button>
@@ -1481,6 +1587,8 @@ async function go(view) {
     renderPlatformAdmin();
   } else if (view === "help") {
     renderHelp();
+  } else if (view === "architecture") {
+    renderArchitecture();
   } else if (view === "demo") {
     if (state.session) await loadDashboard();
     else await loadPublic();
@@ -2819,7 +2927,7 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
-  await go(state.pendingTransfer ? "runner" : "discover");
+  await go(state.pendingTransfer ? "runner" : params.get("view") === "architecture" ? "architecture" : "discover");
   if (params.get("athlete")) {
     const athlete=await getAthleteProfile(params.get("athlete"));
     if(athlete) renderAthlete(athlete);

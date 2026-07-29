@@ -23,7 +23,12 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(html, /Content-Security-Policy/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.match(app, /function renderHelp\(\)/);
+  assert.match(app, /function renderArchitecture\(\)/);
+  assert.match(app, /data-view="architecture"/);
+  assert.match(app, /Postgres \+ RLS/);
+  assert.match(app, /PAYMENT FLOW/);
   assert.match(html, /data-view="help"/);
+  assert.match(html, /data-view="architecture"/);
   assert.match(html, /data-view="demo"/);
   assert.match(app, /function renderDemo\(\)/);
   assert.match(html, /id="theme-toggle"/);
