@@ -49,7 +49,7 @@ export function createAccountController({
       if (!confirmAction("Permanently delete your OpenStart account and anonymize your runner data? This cannot be undone.")) return true;
       if (!confirmAction("Final confirmation: delete this account now?")) return true;
       await accountAction("delete");
-      patchState({ session: null });
+      patchState({ session: null }, "account.deleted");
       await go("discover");
       showNotice("Your account was deleted and participant data was anonymized.");
       return true;
@@ -120,14 +120,14 @@ export function createAccountController({
         return true;
       }
 
-      patchState({ session: result.data.session });
+      patchState({ session: result.data.session }, "auth.signed-in");
       await loadPlatformAccess();
       closeDialog();
       if (state.pendingLotteryEvent) {
         const lotteryEventId = state.pendingLotteryEvent;
         await loadPublic();
         const selectedEvent = await hydrateEvent(lotteryEventId);
-        patchState({ pendingLotteryEvent: null, selectedEvent });
+        patchState({ pendingLotteryEvent: null, selectedEvent }, "lottery.resumed");
         renderEvent(state.selectedEvent);
         afterNavigate();
         openDialog(lotteryApplicationForm(state.selectedEvent));
@@ -146,7 +146,7 @@ export function createAccountController({
         is_public: data.get("is_public") === "on",
       };
       try {
-        patchState({ athleteProfile: await saveAthleteProfile(payload) });
+        patchState({ athleteProfile: await saveAthleteProfile(payload) }, "athlete.saved");
         closeDialog();
         renderRunnerDashboard();
         showNotice("Athlete profile saved.");
@@ -162,7 +162,7 @@ export function createAccountController({
   }
 
   function requestSignIn() {
-    patchState({ pendingView: "runner" });
+    patchState({ pendingView: "runner" }, "auth.requested");
     if (configured) openDialog(authForm());
     else showNotice("Add Supabase credentials in config.js to enable accounts.");
   }
@@ -174,7 +174,7 @@ export function createAccountController({
       platformAdmin: null,
       registrations: [],
       loadedRegistrationEvents: new Set(),
-    });
+    }, "auth.signed-out");
     await go("discover");
   }
 

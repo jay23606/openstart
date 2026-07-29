@@ -17,7 +17,7 @@ export function createDemoController({
 }) {
   async function handleClick(target) {
     if (target.matches("[data-demo-sign-in]")) {
-      patchState({ pendingView: "demo" });
+      patchState({ pendingView: "demo" }, "demo.auth-requested");
       openDialog(authForm());
       return true;
     }

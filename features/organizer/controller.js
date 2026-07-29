@@ -42,10 +42,10 @@ export function createOrganizerController({
     } else if (target.dataset.openSetup) await renderSetupWizard(eventById(target.dataset.openSetup), 0);
     else if (target.dataset.setupStep) await renderSetupWizard(eventById(target.dataset.setupEvent), Number(target.dataset.setupStep));
     else if (target.matches("[data-exit-setup]")) {
-      patchState({ setupEventId: null });
+      patchState({ setupEventId: null }, "setup.closed");
       await go("dashboard");
     } else if (target.dataset.setupPreview) {
-      patchState({ setupEventId: target.dataset.setupPreview });
+      patchState({ setupEventId: target.dataset.setupPreview }, "setup.previewed");
       renderEvent(eventById(target.dataset.setupPreview), true);
     } else if (target.dataset.publishEvent) {
       target.disabled = true;

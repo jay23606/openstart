@@ -33,7 +33,7 @@ export function createRegistrationController({
     if (target.dataset.applyLottery) {
       const race = eventById(target.dataset.applyLottery);
       if (!state.session) {
-        patchState({ pendingLotteryEvent: race.id, pendingView: "discover" });
+        patchState({ pendingLotteryEvent: race.id, pendingView: "discover" }, "lottery.auth-required");
         openDialog(forms.auth());
       } else openDialog(forms.lotteryApplication(race));
       return true;
@@ -181,7 +181,7 @@ export function createRegistrationController({
         if (result.status === "waitlisted") showNotice("This option is full. You have been added to the waitlist.");
         else {
           await loadPublic();
-          patchState({ selectedEvent: await hydrateEvent(race.id) });
+          patchState({ selectedEvent: await hydrateEvent(race.id) }, "registration.completed");
           renderEvent(state.selectedEvent);
           showNotice(result.status === "confirmed" ? "Registration confirmed." : "Registration saved.");
         }
@@ -287,7 +287,7 @@ export function createRegistrationController({
         emergencyContact: data.get("emergency_contact"),
       });
       dialog.close();
-      patchState({ pendingTransfer: null });
+      patchState({ pendingTransfer: null }, "transfer.accepted");
       history.replaceState({}, "", location.pathname);
       await go("runner");
       showNotice("Registration transfer accepted.");

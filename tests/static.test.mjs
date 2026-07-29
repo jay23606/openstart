@@ -56,7 +56,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(publicController, /publicViews\.eventPage\(model\)/);
   assert.match(publicController, /async function handleClick\(target\)/);
   assert.match(publicController, /function handleInput\(target\)/);
-  assert.match(publicController, /patchState\(\{ discoverQuery: value, discoverVisible: discoverPageSize \}\)/);
+  assert.match(publicController, /patchState\(\{ discoverQuery: value, discoverVisible: discoverPageSize \}, "discovery\.query-changed"\)/);
+  assert.match(publicController, /"discovery\.query-changed"/);
+  assert.match(app, /"organizer\.loaded"/);
   assert.doesNotMatch(app, /state\.(setupEventId|view|selectedEvent|pendingTransfer)\s*=/);
   assert.doesNotMatch(app, /target\.matches\("\[data-show-more\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-help-filter\]"\)/);

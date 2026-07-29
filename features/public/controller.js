@@ -48,7 +48,7 @@ export function createPublicController({
 
   async function loadDiscovery() {
     const request = state.discoverRequest + 1;
-    patchState({ discoverRequest: request });
+    patchState({ discoverRequest: request }, "discovery.requested");
     const result = await listPublishedEvents({
       query: state.discoverQuery,
       region: state.discoverRegion,
@@ -58,12 +58,12 @@ export function createPublicController({
     if (request !== state.discoverRequest) return false;
     patchState(Array.isArray(result)
       ? { events: result, discoverTotal: result.length }
-      : { events: result.events, discoverTotal: result.total });
+      : { events: result.events, discoverTotal: result.total }, "discovery.loaded");
     return true;
   }
 
   async function setRegion(region) {
-    patchState({ discoverRegion: region, discoverVisible: discoverPageSize });
+    patchState({ discoverRegion: region, discoverVisible: discoverPageSize }, "discovery.region-changed");
     try {
       if (region) storage.setItem("openstart-region", JSON.stringify(region));
       else storage.removeItem("openstart-region");
@@ -75,19 +75,19 @@ export function createPublicController({
   function restoreRegion() {
     try {
       const saved = JSON.parse(storage.getItem("openstart-region") || "null");
-      if (saved?.state) patchState({ discoverRegion: saved });
+      if (saved?.state) patchState({ discoverRegion: saved }, "discovery.region-restored");
     } catch { /* ignore missing or unreadable storage */ }
     return state.discoverRegion;
   }
 
   async function showMore() {
-    patchState({ discoverVisible: state.discoverVisible + discoverPageSize });
+    patchState({ discoverVisible: state.discoverVisible + discoverPageSize }, "discovery.page-expanded");
     await loadDiscovery();
     refreshDiscover();
   }
 
   function search(value) {
-    patchState({ discoverQuery: value, discoverVisible: discoverPageSize });
+    patchState({ discoverQuery: value, discoverVisible: discoverPageSize }, "discovery.query-changed");
     if (searchTimer) cancelSchedule(searchTimer);
     searchTimer = schedule(async () => {
       searchTimer = null;
@@ -137,7 +137,7 @@ export function createPublicController({
   }
 
   async function openEvent(id) {
-    patchState({ selectedEvent: await hydrateEvent(id) });
+    patchState({ selectedEvent: await hydrateEvent(id) }, "event.opened");
     if (!state.selectedEvent) return false;
     renderEvent(state.selectedEvent);
     scrollToTop();
