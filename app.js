@@ -15,6 +15,7 @@ import { createPlatformController } from "./features/platform/controller.js?v=49
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createCommunicationsController } from "./features/communications/controller.js?v=52";
+import { createCommunicationsViews } from "./features/communications/views.js?v=62";
 import { createResultsController } from "./features/results/controller.js?v=53";
 import { createResultsViews } from "./features/results/views.js?v=59";
 import { createVolunteersController } from "./features/volunteers/controller.js?v=54";
@@ -968,22 +969,11 @@ function parseResultsCsv(text,event) {
   return parseResultRows(text, eventRegistrations(event.id), parseResultTime);
 }
 
-function campaignForm() {
-  const firstEvent=state.events[0];
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Organizer communications</p><h2>Create a campaign</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <form id="campaign-form">
-      <div class="split-fields"><label>Event<select name="event_id">${state.events.map((event)=>`<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("")}</select></label><label>Campaign name<input name="name" placeholder="Final race instructions" required></label></div>
-      <label>Start from a template<select name="template_id"><option value="">Blank message</option>${state.emailTemplates.map((template)=>`<option value="${template.id}">${escapeHtml(template.name)}</option>`).join("")}</select></label>
-      <div class="split-fields"><label>Audience<select name="audience_type"><option value="confirmed">All confirmed participants</option><option value="tier">Specific registration option</option><option value="wave">Specific start wave</option><option value="team">Specific team</option><option value="captains">Team captains</option><option value="waitlist">Waitlist</option><option value="missing_bib">Missing bib</option><option value="checked_in">Checked in</option><option value="not_checked_in">Not checked in</option></select></label><label>Message type<select name="message_type"><option value="transactional">Transactional event message</option><option value="marketing">Marketing</option></select></label></div>
-      <div class="split-fields"><label>Registration option<select name="tier_id"><option value="">Choose when needed</option>${(firstEvent?.os_event_tiers || []).map((tier)=>`<option value="${tier.id}">${escapeHtml(tier.name)}</option>`).join("")}</select></label><label>Start wave<select name="wave_id"><option value="">Choose when needed</option>${(firstEvent?.os_waves || []).map((wave)=>`<option value="${wave.id}">${escapeHtml(wave.name)}</option>`).join("")}</select></label></div><label>Team<select name="team_id"><option value="">Choose when needed</option>${(firstEvent?.os_teams || []).map((team)=>`<option value="${team.id}">${escapeHtml(team.name)}</option>`).join("")}</select></label>
-      <label>Subject<input name="subject" required></label><label>Message<textarea name="html_body" rows="9" placeholder="<p>Hi {{first_name}}, ...</p>" required></textarea></label>
-      <p class="template-help">Variables: <code>{{first_name}}</code> and <code>{{event_name}}</code></p>
-      <label>Schedule <span class="optional-label">Leave blank for a draft</span><input name="scheduled_at" type="datetime-local"></label>
-      <div id="audience-preview" class="audience-preview">Preview the audience before sending.</div>
-      <div class="dialog-actions"><button class="subtle-button" name="campaign_intent" value="preview" type="submit">Preview audience</button><button class="subtle-button" name="campaign_intent" value="test" type="submit">Send test to me</button><button class="subtle-button" name="campaign_intent" value="template" type="submit">Save as template</button><button class="subtle-button" name="campaign_intent" value="save" type="submit">Save draft/schedule</button><button class="primary-button" name="campaign_intent" value="send" type="submit">Send now</button></div>
-    </form>
-  </section>`;
-}
+const communicationsViews = createCommunicationsViews({
+  getEvents: () => state.events,
+  getEmailTemplates: () => state.emailTemplates,
+});
+const campaignForm = communicationsViews.campaign;
 
 const raceDayViews = createRaceDayViews({ eventRegistrations });
 const raceDayForm = raceDayViews.manager;

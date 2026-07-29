@@ -29,6 +29,6 @@ export function statusBadge(label, escapeHtml, tone = "") {
 }
 
 export function actionToolbar(actions, className = "dialog-actions") {
-  return `<div class="${className}">${renderList(actions, ({ label, attributes = "", primary = false }) =>
-    `<button class="${primary ? "primary-button" : "subtle-button"}" ${attributes} type="button">${label}</button>`)}</div>`;
+  return `<div class="${className}">${renderList(actions, ({ label, attributes = "", primary = false, type = "button" }) =>
+    `<button class="${primary ? "primary-button" : "subtle-button"}" ${attributes} type="${type}">${label}</button>`)}</div>`;
 }

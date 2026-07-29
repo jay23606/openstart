@@ -28,6 +28,8 @@ calendar membership, public standings navigation, and standings exports.
 application review, irreversible draw confirmation, and invitation summaries.
 `features/communications/controller.js` owns campaign composition, audience
 previews, test messages, reusable templates, scheduling, drafts, and sends.
+Its `views.js` owns the campaign composer and reuses the shared modal, list,
+and action-toolbar primitives.
 `features/results/controller.js` owns timing imports, manual corrections,
 publication state, runner notifications, and public leaderboard filtering.
 Its `views.js` contains the public leaderboard and organizer dialog markup.
