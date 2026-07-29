@@ -9,12 +9,13 @@ import {
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
-import { createRegistrationController } from "./features/registration/controller.js?v=44";
+import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createOrganizerController } from "./features/organizer/controller.js?v=45";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
+import { createBusyController } from "./modules/busy.js?v=48";
 import { parseResultsCsv as parseResultRows, rankResults } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
@@ -1436,6 +1437,7 @@ const organizerController = createOrganizerController({
 });
 
 const featureControllers = [organizerController, registrationController];
+const busyController = createBusyController();
 const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
 const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
 
@@ -1775,6 +1777,8 @@ document.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
   const data = new FormData(form);
+  const releaseBusy = busyController.begin(form, event.submitter);
+  if (!releaseBusy) return;
   try {
     if (form.id === "auth-form") {
       const intent = event.submitter?.value || "signin";
@@ -2215,7 +2219,12 @@ document.addEventListener("submit", async (event) => {
     }
 
   } catch (error) {
-    showNotice(error.message || "Something went wrong.", { type: "error", duration: 0 });
+    const message = error.message || "Something went wrong.";
+    const formMessage = form.querySelector(".form-message");
+    if (formMessage) formMessage.textContent = message;
+    showNotice(message, { type: "error", duration: 0 });
+  } finally {
+    releaseBusy({ keepBusy: form.dataset.keepBusy === "true" });
   }
 });
 

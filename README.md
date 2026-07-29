@@ -28,6 +28,8 @@ from feature-specific `data-*` attributes.
 
 `modules/ui-feedback.js` owns modal focus, focus restoration, keyboard trapping,
 backdrop/close behavior, cleanup hooks, and accessible status/error notices.
+`modules/busy.js` gives every submitted form the same duplicate-submit guard,
+accessible busy state, progress label, and reliable control restoration.
 
 ## Current capabilities
 

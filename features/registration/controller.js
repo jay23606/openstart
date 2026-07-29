@@ -172,7 +172,10 @@ export function createRegistrationController({
         successUrl: `${location.origin}${location.pathname}`,
         cancelUrl: `${location.origin}${location.pathname}`,
       });
-      if (result.checkoutUrl) location.assign(result.checkoutUrl);
+      if (result.checkoutUrl) {
+        form.dataset.keepBusy = "true";
+        location.assign(result.checkoutUrl);
+      }
       else {
         dialog.close();
         if (result.status === "waitlisted") showNotice("This option is full. You have been added to the waitlist.");
@@ -216,7 +219,10 @@ export function createRegistrationController({
         waiverVersion: application.os_events?.waiver_text ? String(application.os_events.updated_at || application.id) : null,
         idempotencyKey: crypto.randomUUID(),
       });
-      if (result.checkoutUrl) location.assign(result.checkoutUrl);
+      if (result.checkoutUrl) {
+        form.dataset.keepBusy = "true";
+        location.assign(result.checkoutUrl);
+      }
       else {
         dialog.close();
         await go("runner");
