@@ -13,6 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createSeriesController } from "./features/series/controller.js?v=50";
+import { createSeriesViews } from "./features/series/views.js?v=63";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createCommunicationsController } from "./features/communications/controller.js?v=52";
 import { createCommunicationsViews } from "./features/communications/views.js?v=62";
@@ -924,15 +925,6 @@ function siteEditorForm(event) {
   </section>`;
 }
 
-function seriesManagerForm() {
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Championships</p><h2>Race series</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><div class="series-admin-list">${state.series.map((series)=>`<button data-configure-series="${series.id}" type="button"><span><b>${escapeHtml(series.name)}</b><small>${series.os_series_events?.length || 0} events · ${escapeHtml(series.status)}</small></span><strong>Configure →</strong></button>`).join("") || '<div class="empty-state">Create your first multi-event series.</div>'}</div><h3>Create series</h3><form id="series-form"><label>Name<input name="name" placeholder="OpenStart Summer Series" required></label><label>Description<textarea name="description" rows="3" required></textarea></label><div class="split-fields"><label>Minimum events<input name="minimum_events" type="number" min="1" value="2" required></label><label>Tie breaker<select name="tie_breaker"><option value="most_wins">Most wins</option><option value="best_finish">Best finish</option><option value="most_events">Most events</option></select></label></div><button class="primary-button" type="submit">Create series</button></form></section>`;
-}
-
-function seriesSettingsForm(series) {
-  const linked=new Set((series.os_series_events || []).map((link)=>link.event_id));
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Series settings</p><h2>${escapeHtml(series.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div><form id="series-settings-form" data-series-id="${series.id}"><label>Description<textarea name="description" rows="3">${escapeHtml(series.description)}</textarea></label><div class="split-fields"><label>Brand color<input name="primary_color" type="color" value="${safeColor(series.primary_color)}"></label><label>Status<select name="status">${["draft","published","archived"].map((status)=>`<option ${series.status===status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><div class="split-fields"><label>Minimum completed events<input name="minimum_events" type="number" min="1" value="${series.minimum_events}" required></label><label>Tie breaker<select name="tie_breaker"><option value="most_wins" ${series.tie_breaker==="most_wins" ? "selected" : ""}>Most wins</option><option value="best_finish" ${series.tie_breaker==="best_finish" ? "selected" : ""}>Best finish</option><option value="most_events" ${series.tie_breaker==="most_events" ? "selected" : ""}>Most events</option></select></label></div><label>Placement points <span class="optional-label">Comma separated</span><input name="points_schedule" value="${escapeHtml((series.points_schedule || []).join(","))}"></label><label>Finisher points after listed places<input name="participation_points" type="number" min="0" value="${series.participation_points}"></label><div class="split-fields"><label>Logo URL<input name="logo_url" type="url" value="${escapeHtml(series.logo_url || "")}"></label><label>Banner URL<input name="banner_url" type="url" value="${escapeHtml(series.banner_url || "")}"></label></div><button class="primary-button" type="submit">Save series settings</button></form><h3>Series calendar</h3><div class="series-event-admin">${(series.os_series_events || []).sort((a,b)=>a.sort_order-b.sort_order).map((link)=>`<span><b>${escapeHtml(link.os_events?.name || "")}</b><small>${Number(link.points_multiplier)}× points</small><button data-remove-series-event="${link.id}" data-series="${series.id}" type="button">Remove</button></span>`).join("") || "<p>No events linked.</p>"}</div><form id="series-event-form" data-series-id="${series.id}"><div class="split-fields"><label>Add event<select name="event_id">${state.events.filter((event)=>!linked.has(event.id)).map((event)=>`<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("")}</select></label><label>Points multiplier<input name="points_multiplier" type="number" min=".1" step=".1" value="1"></label></div><button class="subtle-button" type="submit">Add event</button></form>${series.status==="published" ? `<button class="subtle-button" data-view-series="${series.id}" type="button">View public series</button>` : ""}</section>`;
-}
-
 function waveManagerForm(event) {
   const waves=[...(event.os_waves || [])].sort((a,b)=>a.sort_order-b.sort_order);
   return `<section class="modal wide-modal"><div class="form-heading"><div><p>Starts & corrals</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
@@ -964,6 +956,13 @@ function exportVolunteers(event) {
 const resultsViews = createResultsViews({ page, eventRegistrations, tierById });
 const renderResults = resultsViews.renderPage;
 const resultsManagerForm = resultsViews.manager;
+
+const seriesViews = createSeriesViews({
+  getEvents: () => state.events,
+  getSeries: () => state.series,
+});
+const seriesManagerForm = seriesViews.manager;
+const seriesSettingsForm = seriesViews.settings;
 
 function parseResultsCsv(text,event) {
   return parseResultRows(text, eventRegistrations(event.id), parseResultTime);
