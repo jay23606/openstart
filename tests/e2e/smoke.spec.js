@@ -76,3 +76,19 @@ test("the public demo explains every feature without requiring setup", async ({ 
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
   expect(overflow).toBe(false);
 });
+
+test("dark mode keeps inverted information panels readable", async ({ page }) => {
+  await page.goto("/");
+  const darkToggle=page.getByRole("button",{name:"Switch to dark mode"});
+  if(await darkToggle.isVisible()) await darkToggle.click();
+  await page.getByRole("button",{name:"Demo"}).click();
+  const panel=page.locator(".demo-hero aside");
+  await expect(panel).toBeVisible();
+  const colors=await panel.evaluate((element)=>{
+    const style=getComputedStyle(element);
+    return {background:style.backgroundColor,color:style.color};
+  });
+  expect(colors.background).not.toBe(colors.color);
+  expect(colors.background).toBe("rgb(10, 73, 55)");
+  expect(colors.color).toBe("rgb(255, 255, 255)");
+});

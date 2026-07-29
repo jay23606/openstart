@@ -653,7 +653,7 @@ footer b { color: white; }
 .demo-hero { align-items: end; border-bottom: 3px solid var(--ink); display: grid; gap: 50px; grid-template-columns: 1fr 270px; padding-bottom: 48px; }
 .demo-hero h1 { font-family: Georgia,serif; font-size: clamp(46px,7vw,82px); letter-spacing: -4px; line-height: .94; margin: 10px 0 22px; max-width: 900px; }
 .demo-hero > div > p:last-child { color: var(--muted); font-size: 18px; line-height: 1.55; max-width: 720px; }
-.demo-hero aside { background: var(--ink); color: white; display: grid; gap: 9px; padding: 25px; }
+.demo-hero aside { background: var(--green-dark); color: #fff; display: grid; gap: 9px; padding: 25px; }
 .demo-hero aside b { color: var(--lime); margin-bottom: 5px; text-transform: uppercase; }
 .demo-hero aside span::before { content: "✓"; color: var(--lime); font-weight: 900; margin-right: 9px; }
 .demo-setup { align-items: center; background: var(--cream); display: flex; justify-content: space-between; margin: 34px 0 64px; padding: 28px; }
@@ -813,7 +813,7 @@ footer b { color: white; }
 }
 
 .platform-console { margin: 0 auto; max-width: 1440px; padding: 64px 5vw 100px; }
-.operator-role { background: var(--ink); color: white; font-size: 12px; font-weight: 800; letter-spacing: 1px; padding: 10px 14px; text-transform: uppercase; }
+.operator-role { background: var(--green-dark); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 1px; padding: 10px 14px; text-transform: uppercase; }
 .platform-metrics { margin: 30px 0; }
 .platform-metrics small { color: var(--muted); display: block; margin-top: 8px; }
 .platform-toolbar { align-items: end; display: grid; gap: 18px; grid-template-columns: 1fr auto; margin-bottom: 22px; }
