@@ -54,3 +54,27 @@ test("regionLabel renders a readable chip for state-only and city results", () =
   assert.equal(regionLabel({ city: "", state: "CO" }), "CO");
   assert.equal(regionLabel({ city: "boulder", state: "CO" }), "Boulder, CO");
 });
+
+test("the discovery list stays light and detail data is fetched per event", async () => {
+  const data = await readFile(new URL("../data.js", import.meta.url), "utf8");
+  const cardSelect = data.match(/const EVENT_CARD_SELECT = "([^"]+)"/);
+  const detailSelect = data.match(/const EVENT_DETAIL_SELECT =\s*"([^"]+)"/);
+  assert.ok(cardSelect && detailSelect, "data.js must define both event selects");
+
+  // Relations only an event's own page renders must stay out of the list query,
+  // otherwise first paint downloads the entire catalogue's nested data again.
+  for (const relation of ["os_event_questions", "os_products", "os_volunteer_roles",
+    "os_event_sections", "os_event_sponsors", "os_waves", "os_results", "os_teams"]) {
+    assert.ok(!cardSelect[1].includes(relation), `${relation} must not be in the discovery list query`);
+    assert.ok(detailSelect[1].includes(relation), `${relation} must still load on the detail query`);
+  }
+  // Cards still price themselves from scheduled tier pricing.
+  assert.match(cardSelect[1], /os_event_tiers\(\*, os_tier_prices\(\*\)\)/);
+  assert.match(data, /export async function getPublishedEvent/);
+
+  // Every path that renders an event's detail must hydrate first.
+  const app = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  assert.equal((app.match(/state\.selectedEvent = await hydrateEvent\(/g) || []).length, 3);
+  assert.ok(!/state\.selectedEvent = eventById\(/.test(app),
+    "selectedEvent must come from hydrateEvent, not the light list record");
+});

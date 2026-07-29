@@ -5,7 +5,7 @@ import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createEventTier, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
-  getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
+  getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, getPublishedEvent, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=32";
@@ -69,6 +69,26 @@ const helpArticles=[
 ];
 
 const eventById = (id) => state.events.find((event) => event.id === id);
+
+// Discovery loads a light card-only record per event. Anything that renders an
+// event's detail must first pull the full record (questions, products, waves,
+// volunteer roles, site sections, sponsors, results) and cache it back into
+// state.events, so later lookups through eventById see the complete object.
+const hydrateEvent = async (id) => {
+  const existing = eventById(id);
+  if (!id || existing?.detailLoaded) return existing;
+  try {
+    const full = await getPublishedEvent(id);
+    if (!full) return existing;
+    full.detailLoaded = true;
+    const index = state.events.findIndex((event) => event.id === id);
+    if (index >= 0) state.events[index] = full; else state.events.push(full);
+    return full;
+  } catch (error) {
+    showNotice(error.message);
+    return existing;
+  }
+};
 const tierById = (event, id) => event?.os_event_tiers?.find((tier) => tier.id === id);
 const eventRegistrations = (id) => state.registrations.filter((registration) => registration.event_id === id);
 
@@ -1525,11 +1545,13 @@ document.addEventListener("click", async (event) => {
   }
   if (target.dataset.demoRoster) {
     renderDashboard();
-    renderRoster(eventById(target.dataset.demoRoster));
+    renderRoster(await hydrateEvent(target.dataset.demoRoster));
     scrollTo(0,document.body.scrollHeight);
   }
   if (target.dataset.demoFeature) {
-    const race=eventById(target.dataset.eventIdDemo);
+    // These dialogs edit products, waves, volunteer roles, and site sections,
+    // none of which the discovery list carries.
+    const race=await hydrateEvent(target.dataset.eventIdDemo);
     const launchers={
       roster:()=>{renderDashboard();renderRoster(race);},
       registration:()=>openDialog(registrationSettingsForm(race)),
@@ -1546,7 +1568,7 @@ document.addEventListener("click", async (event) => {
     launchers[target.dataset.demoFeature]?.();
   }
   if (target.dataset.eventId) {
-    state.selectedEvent = eventById(target.dataset.eventId);
+    state.selectedEvent = await hydrateEvent(target.dataset.eventId);
     renderEvent(state.selectedEvent);
     scrollTo(0, 0);
   }
@@ -1952,7 +1974,7 @@ document.addEventListener("submit", async (event) => {
         const lotteryEventId = state.pendingLotteryEvent;
         state.pendingLotteryEvent = null;
         await loadPublic();
-        state.selectedEvent = eventById(lotteryEventId);
+        state.selectedEvent = await hydrateEvent(lotteryEventId);
         renderEvent(state.selectedEvent);
         syncNavigation();
         openDialog(lotteryApplicationForm(state.selectedEvent));
@@ -2162,7 +2184,7 @@ document.addEventListener("submit", async (event) => {
         return;
       }
       await loadPublic();
-      state.selectedEvent = eventById(race.id);
+      state.selectedEvent = await hydrateEvent(race.id);
       renderEvent(state.selectedEvent);
       showNotice(result.status === "confirmed" ? "Registration confirmed." : "Registration saved.");
     }

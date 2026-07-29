@@ -107,13 +107,33 @@ async function functionResult(name, body) {
   return data;
 }
 
+// The discovery grid needs only card fields plus tier pricing. Questions, teams,
+// products, variants, results, volunteer roles and shifts, site sections,
+// sponsors, and waves are needed solely on an event's detail page, so they are
+// fetched per event instead of for the whole catalogue on first paint.
+const EVENT_CARD_SELECT = "*, os_event_tiers(*, os_tier_prices(*))";
+const EVENT_DETAIL_SELECT =
+  "*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*)), os_event_sections(*), os_event_sponsors(*), os_waves(*)";
+
 export async function listPublishedEvents() {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
   const { data, error } = await supabase
     .from("os_events")
-    .select("*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*)), os_event_sections(*), os_event_sponsors(*), os_waves(*)")
+    .select(EVENT_CARD_SELECT)
     .eq("status", "published")
     .order("starts_at");
+  if (error) throw error;
+  return data;
+}
+
+// Full record for one event, loaded when a runner actually opens it.
+export async function getPublishedEvent(eventId) {
+  if (!configured) return demoState().events.find((event) => event.id === eventId) || null;
+  const { data, error } = await supabase
+    .from("os_events")
+    .select(EVENT_DETAIL_SELECT)
+    .eq("id", eventId)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
