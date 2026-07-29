@@ -1321,12 +1321,14 @@ const { navigate: go } = createRouter({
   routes: {
     dashboard: async () => {
       await loadDashboard();
-      renderDashboard();
+      return () => renderDashboard();
     },
     runner: async () => {
       await loadRunnerDashboard();
-      renderRunnerDashboard();
-      if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
+      return () => {
+        renderRunnerDashboard();
+        if (state.pendingTransfer) openDialog(acceptTransferForm(state.pendingTransfer));
+      };
     },
     platform: async ({ navigate }) => {
       if (!state.platformAdmin?.allowed) await loadPlatformAccess();
@@ -1336,18 +1338,18 @@ const { navigate: go } = createRouter({
         return;
       }
       await loadPlatformOverview();
-      renderPlatformAdmin();
+      return () => renderPlatformAdmin();
     },
-    help: async () => renderHelp(),
-    architecture: async () => renderArchitecture(),
+    help: async () => () => renderHelp(),
+    architecture: async () => () => renderArchitecture(),
     demo: async () => {
       if (state.session) await loadDashboard();
       else await loadPublic();
-      renderDemo();
+      return () => renderDemo();
     },
     discover: async () => {
       await loadPublic();
-      renderDiscover();
+      return () => renderDiscover();
     },
   },
   afterNavigate: () => {

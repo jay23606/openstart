@@ -33,9 +33,10 @@ export function createRouter({
     const navigationId = ++state.navigationId;
     state.view = view;
     state.selectedEvent = null;
-    await routes[view]({ navigationId, navigate });
+    const commit = await routes[view]({ navigationId, navigate });
     if (navigationId !== state.navigationId) return false;
 
+    if (commit) commit();
     if (syncUrl) history.replaceState({}, "", routeUrl(location.href, view));
     afterNavigate(view);
     return true;
