@@ -12,6 +12,16 @@ test("public discovery and event details load without browser errors", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("discovery result refreshes preserve search focus", async ({ page }) => {
+  await page.goto("/");
+  const search = page.getByRole("searchbox", { name: "Search events by name or location" });
+  await search.fill("run");
+  await page.waitForTimeout(700);
+  await expect(search).toBeFocused();
+  await expect(page.locator("#discover-results")).toBeVisible();
+  await expect(page.locator("#discover-count")).toContainText(/event/);
+});
+
 test("protected organizer navigation opens an accessible sign-in dialog", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button",{name:"Organizer"}).click();

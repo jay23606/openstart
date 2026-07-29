@@ -1,5 +1,5 @@
 import {
-  configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
+  configured, escapeHtml, slugify, supabase,
 } from "./core.js?v=36";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
@@ -36,13 +36,14 @@ import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { createAccountViews } from "./modules/account-views.js?v=77";
 import { architectureView, demoView, helpView } from "./modules/content-views.js?v=74";
-import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
+import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
+import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
-import { contentHtml, localDateTime, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
+import { localDateTime, parseResultTime, resultTime, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -118,12 +119,15 @@ async function renderSetupWizard(event, step = 0) {
   page.innerHTML = organizerViews.setup(event, step, readiness, state.session?.user?.email || "");
   syncNavigation();
   scrollTo(0, 0);
-}const effectivePrice = (tier) => {
+}
+
+const effectivePrice = (tier) => {
   const now = Date.now();
   const active = (tier.os_tier_prices || []).filter((price) => new Date(price.starts_at).getTime() <= now)
     .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   return active[0]?.price_cents ?? tier.price_cents;
 };
+const publicViews = createPublicViews({ effectivePrice, eventRegistrations, tierById });
 const noticeController = createNoticeController({ notice });
 const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
 function showNotice(message, options) { noticeController.show(message, options); }
@@ -171,23 +175,12 @@ const discoverEvents = () => {
 };
 
 const discoverCountLabel = () => {
-  const total = state.discoverTotal;
-  const filtered = state.discoverQuery || (state.discoverRegion && state.discoverRegion.state);
-  return `${total} ${total === 1 ? "event" : "events"}${filtered ? " found" : " open"}`;
+  return publicViews.discoveryModel(state, discoverEvents()).countLabel;
 };
 
 const discoverResults = () => {
-  const matching = discoverEvents();
-  const visible = matching;
-  const region = state.discoverRegion;
-  const nearby = Boolean(region && region.state);
-  const noneNearby = nearby && !matching.some((event) => proximityRank(event, region) < 2);
-  return `
-    ${noneNearby ? `<p class="discover-empty">No events near ${escapeHtml(regionLabel(region))} yet — showing the soonest events everywhere.</p>` : ""}
-    <div class="event-grid">${visible.map(publicEventCard).join("")}</div>
-    ${state.discoverTotal > visible.length
-      ? `<div class="discover-more"><button class="subtle-button" data-show-more type="button">Show more events (${state.discoverTotal-visible.length} remaining)</button></div>` : ""}
-    ${state.discoverTotal === 0 ? `<p class="discover-empty">No events match that search.</p>` : ""}`;
+  const model = publicViews.discoveryModel(state, discoverEvents());
+  return publicViews.discoveryResults(model);
 };
 
 // Repaint only the results so typing never steals focus from the search field.
@@ -231,118 +224,17 @@ try {
   if (savedRegion && savedRegion.state) state.discoverRegion = savedRegion;
 } catch { /* ignore unreadable storage */ }
 
-function publicEventCard(event, index) {
-  const tiers = event.os_event_tiers || [];
-  const raceType = raceTypeFor(tiers);
-  return `
-    <article class="event-card event-tone-${index % 3}" style="--event-accent:${safeColor(event.primary_color)}">
-      <div class="event-date"><span>${eventMonth(event.starts_at)}</span><strong>${eventDay(event.starts_at)}</strong></div>
-      <div class="event-card-content">
-        <div class="event-card-kicker"><p>${escapeHtml(event.location_name)}</p><span class="race-type race-type-${raceType.kind}" title="${raceType.kind} race">${raceType.label}</span></div>
-        <h3>${escapeHtml(event.name)}</h3>
-        <div class="tier-pills">${tiers.map((tier) => `<span>${escapeHtml(tier.distance_label)}</span>`).join("")}</div>
-        <button data-event-id="${event.id}" type="button">View event <span>→</span></button>
-      </div>
-    </article>`;
-}
-
 function renderDiscover() {
   setPageMetadata();
-  const published = state.events.filter((event) => event.status === "published");
-  const matching = discoverEvents();
-  const visible = matching;
-  const nearby = Boolean(state.discoverRegion && state.discoverRegion.state);
-  page.innerHTML = `
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">Registration without the runaround</p>
-        <h1>Great race days start in the open.</h1>
-        <p class="hero-lede">Discover local events and register in minutes. OpenStart gives organizers a transparent, community-owned alternative for managing every starting line.</p>
-        <div class="hero-actions"><a class="primary-button" href="#events">Explore events</a><button class="text-button" data-go-dashboard type="button">I organize races →</button></div>
-      </div>
-      <div class="hero-photo">
-        <img src="assets/openstart-race-hero.png" width="1536" height="1024" alt="A community road race beginning at sunrise">
-        <div class="hero-photo-shade"></div>
-        <div class="route-line"><span>START</span><i></i><span>FINISH</span></div>
-        <div class="hero-photo-caption"><p>Up next</p><strong>${escapeHtml(published[0]?.name || "Your next race")}</strong></div>
-        <div class="hero-meta"><span><b>${state.discoverTotal}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> visible distances</span><span><b>${published.length ? money(Math.min(...published.flatMap((event) => event.os_event_tiers.map(effectivePrice)))) : "—"}</b> from</span></div>
-      </div>
-    </section>
-    <section class="events-section" id="events">
-      <div class="section-heading"><div><p class="eyebrow">On the calendar</p><h2>Find your next starting line</h2></div><span id="discover-count">${discoverCountLabel()}</span></div>
-      <div class="discover-controls">
-        <input id="discover-search" type="search" placeholder="Search races or places" value="${escapeHtml(state.discoverQuery)}" aria-label="Search events by name or location">
-        <div class="discover-location">
-          ${nearby
-            ? `<span class="location-chip">Near ${escapeHtml(regionLabel(state.discoverRegion))}<button data-clear-location type="button" aria-label="Clear location">×</button></span>`
-            : `<button class="subtle-button" data-use-location type="button">Use my location</button>
-               <input id="discover-place" placeholder="or enter a city or state" aria-label="Enter your city or state">`}
-        </div>
-      </div>
-      <div id="discover-results">${discoverResults()}</div>
-    </section>
-    ${state.series.length ? `<section class="series-section"><div class="section-heading"><div><p class="eyebrow">Race more</p><h2>Series & championships</h2></div><span>${state.series.length} active series</span></div><div class="series-grid">${state.series.map((series)=>`<article style="--series-color:${safeColor(series.primary_color)}">${safeUrl(series.banner_url) ? `<img src="${escapeHtml(safeUrl(series.banner_url))}" alt="">` : ""}<div><p>${series.os_series_events?.length || 0} events</p><h3>${escapeHtml(series.name)}</h3><span>${escapeHtml(series.description)}</span><button data-view-series="${series.id}" type="button">View series standings →</button></div></article>`).join("")}</div></section>` : ""}
-    <section class="open-promise">
-      <div><p class="eyebrow">Built differently</p><h2>Your event platform should work for your community.</h2></div>
-      <div class="promise-grid">
-        <div><b>01</b><h3>Transparent by default</h3><p>Open code, understandable costs, and participant data that stays yours.</p></div>
-        <div><b>02</b><h3>Ready for race day</h3><p>Registration, rosters, capacity, and exports in one focused workspace.</p></div>
-        <div><b>03</b><h3>Made to extend</h3><p>Build the workflow your event needs without waiting on a closed platform.</p></div>
-      </div>
-    </section>`;
+  const model = publicViews.discoveryModel(state, discoverEvents());
+  page.innerHTML = publicViews.discoveryPage(model);
 }
 
 function renderEvent(event, preview=false) {
-  const registrations = eventRegistrations(event.id);
-  const lottery = event.registration_mode === "lottery";
-  const lotteryOpen = lottery &&
-    (!event.lottery_opens_at || new Date(event.lottery_opens_at) <= new Date()) &&
-    (!event.lottery_closes_at || new Date(event.lottery_closes_at) >= new Date());
-  const customSite=event.website_published || preview;
-  const sections=customSite ? [...(event.os_event_sections || [])].filter((section)=>preview || section.published).sort((a,b)=>a.sort_order-b.sort_order) : [];
-  const sponsors=customSite ? [...(event.os_event_sponsors || [])].sort((a,b)=>a.sort_order-b.sort_order) : [];
-  setPageMetadata(`${event.name} — OpenStart`,event.description,event.banner_url || event.logo_url || "og.png");
-  page.innerHTML = `
-    <section class="event-detail" style="--event-color:${safeColor(event.primary_color)}">
-      <button class="back-button" data-back type="button">← All events</button>
-      ${customSite && safeUrl(event.banner_url) ? `<div class="event-banner"><img src="${escapeHtml(safeUrl(event.banner_url))}" alt=""></div>` : ""}
-      <div class="detail-hero">
-        <div>${customSite && safeUrl(event.logo_url) ? `<img class="event-logo" src="${escapeHtml(safeUrl(event.logo_url))}" alt="${escapeHtml(event.name)} logo">` : ""}<p class="eyebrow">${displayDate(event.starts_at)} · ${escapeHtml(event.location_name)}</p><h1>${escapeHtml(event.name)}</h1><p>${escapeHtml(event.description)}</p></div>
-        <div class="start-badge"><span>OPEN</span><strong>START</strong></div>
-      </div>
-      <div class="detail-layout">
-        <div>
-          <h2>${lottery ? "Lottery race options" : "Choose your event"}</h2>
-          <div class="tier-list">
-            ${event.os_event_tiers.map((tier) => {
-              const used = registrations.filter((item) => item.tier_id === tier.id).length;
-              return `<div class="tier-row"><div><h3>${escapeHtml(tier.name)}</h3><p>${escapeHtml(tier.distance_label)} · capacity ${tier.capacity}${used ? ` · ${used} registered` : ""}</p></div><strong>${money(effectivePrice(tier))}</strong></div>`;
-            }).join("")}
-          </div>
-          <div class="event-secondary-actions">${event.results_published_at ? `<button class="subtle-button results-link" data-view-results="${event.id}" type="button">View official results</button>` : ""}${event.os_volunteer_roles?.length ? `<button class="subtle-button results-link" data-volunteer="${event.id}" type="button">Volunteer</button>` : ""}</div>
-          <div class="detail-note"><b>Simple for now, extensible later.</b><p>Registration is connected. Paid entries remain pending until a payment provider confirms them server-side.</p></div>
-        </div>
-        <aside class="registration-panel">
-          ${lottery ? `
-            <p>${lotteryOpen ? "Lottery applications are open" : "Lottery application period"}</p>
-            <h2>${lotteryOpen ? "Enter the lottery" : "Applications are closed"}</h2>
-            <span>${event.lottery_spots ? `${event.lottery_spots} available spots. ` : ""}${event.qualifier_required ? "A qualifying result is required. " : ""}${event.lottery_closes_at ? `Applications close ${displayDate(event.lottery_closes_at)}.` : ""}</span>
-            ${lotteryOpen ? `<button class="primary-button" data-apply-lottery="${event.id}" type="button">Apply to lottery</button>` : ""}
-          ` : event.registration_mode === "closed" ? `
-            <p>Registration</p><h2>Registration is closed</h2><span>Check back for updates from the organizer.</span>
-          ` : `
-            <p>Registration is open</p><h2>Claim your spot</h2>
-            <span>Complete registration and use Stripe Checkout for paid entries.</span>
-            <button class="primary-button" data-register="${event.id}" type="button">Register now</button>
-          `}
-        </aside>
-      </div>
-      ${event.os_waves?.length ? `<section class="public-start-list"><p class="eyebrow">Start plan</p><h2>Waves & corrals</h2><div>${[...event.os_waves].sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at)).map((wave)=>`<span><b>${new Date(wave.starts_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</b><strong>${escapeHtml(wave.name)}</strong><small>${escapeHtml(tierById(event,wave.tier_id)?.name || "")} · capacity ${wave.capacity}</small></span>`).join("")}</div></section>` : ""}
-      ${sections.length ? `<div class="event-content-sections">${sections.map((section)=>`<article class="event-content-${section.section_type}"><p class="eyebrow">${escapeHtml(section.section_type.replace("_"," "))}</p><h2>${escapeHtml(section.title)}</h2><div>${contentHtml(section.content)}</div>${safeUrl(section.link_url) ? `<a class="subtle-button" href="${escapeHtml(safeUrl(section.link_url))}" target="_blank" rel="noopener">${escapeHtml(section.link_label || "Learn more")}</a>` : ""}</article>`).join("")}</div>` : ""}
-      ${sponsors.length ? `<section class="event-sponsors"><p class="eyebrow">Event partners</p><h2>Thank you to our sponsors</h2><div>${sponsors.map((sponsor)=>`<a href="${escapeHtml(safeUrl(sponsor.website_url) || "#")}" ${safeUrl(sponsor.website_url) ? 'target="_blank" rel="noopener"' : ""}>${safeUrl(sponsor.logo_url) ? `<img src="${escapeHtml(safeUrl(sponsor.logo_url))}" alt="${escapeHtml(sponsor.name)}">` : `<b>${escapeHtml(sponsor.name)}</b>`}<small>${escapeHtml(sponsor.sponsor_level)}</small></a>`).join("")}</div></section>` : ""}
-    </section>`;
+  const model = publicViews.eventModel(event, preview);
+  setPageMetadata(`${event.name} — OpenStart`, event.description, event.banner_url || event.logo_url || "og.png");
+  page.innerHTML = publicViews.eventPage(model);
 }
-
 async function renderSeries(series) {
   const standings=await seriesAction("standings",{seriesId:series.id});
   state.seriesStandings=standings;

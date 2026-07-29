@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, theme, and service worker", async () => {
-  const [html, app, worker, theme, appState, contentViews] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js"), read("modules/app-state.js"), read("modules/content-views.js")]);
+  const [html, app, worker, theme, appState, contentViews, publicViews] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js"), read("modules/app-state.js"), read("modules/content-views.js"), read("modules/public-views.js")]);
   // Assert the wiring, not a specific cache-bust number: pinning the literal
   // version meant every routine bump failed this test. What actually matters is
   // that both assets are busted together and the service-worker cache name is
@@ -36,6 +36,14 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /function renderDemo\(\)/);
   assert.match(app, /from "\.\/modules\/app-state\.js/);
   assert.match(app, /from "\.\/modules\/content-views\.js/);
+  assert.match(app, /from "\.\/modules\/public-views\.js/);
+  assert.match(app, /publicViews\.discoveryPage\(model\)/);
+  assert.match(app, /publicViews\.eventPage\(model\)/);
+  assert.match(publicViews, /function discoveryResults\(model\)/);
+  assert.match(publicViews, /function discoveryPage\(model\)/);
+  assert.match(publicViews, /function eventPage\(model\)/);
+  assert.doesNotMatch(app, /function publicEventCard/);
+  assert.doesNotMatch(app, /class="event-detail"/);
   assert.match(app, /from "\.\/modules\/discovery\.js/);
   assert.match(app, /from "\.\/modules\/ui\.js/);
   assert.doesNotMatch(app, /const STATE_BOXES/);
@@ -43,18 +51,21 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(html, /id="theme-toggle"/);
   assert.match(html, /src="theme\.js\?v=/);
   assert.match(worker, /theme\.js/);
+  assert.match(worker, /modules\/public-view-models\.js/);
+  assert.match(worker, /modules\/public-views\.js/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);
-  assert.match(app, /assets\/openstart-race-hero\.png/);
+  assert.match(publicViews, /assets\/openstart-race-hero\.png/);
   assert.match(worker, /assets\/openstart-race-hero\.png/);
-  assert.match(app, /class="race-type race-type-/);
+  assert.match(publicViews, /class="race-type race-type-/);
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, accountViews, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, seriesViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, accountViews, publicViews, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, seriesViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("modules/account-views.js"),
+    read("modules/public-views.js"),
     read("features/registration/controller.js"),
     read("features/registration/views.js"),
     read("features/organizer/controller.js"),
@@ -109,7 +120,7 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /volunteerSignupForm/);
   assert.match(data, /joinVolunteerShift/);
   assert.match(app, /siteEditorForm/);
-  assert.match(app, /event-content-sections/);
+  assert.match(publicViews, /event-content-sections/);
   assert.match(data, /uploadEventAsset/);
   assert.match(app, /waveManagerForm/);
   assert.match(app, /runnerWaveForm/);
