@@ -13,6 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
+import { createAccountController } from "./features/account/controller.js?v=85";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -789,10 +790,27 @@ const demoController = createDemoController({
   },
 });
 
+const accountController = createAccountController({
+  state,
+  accountAction,
+  beginStripeOnboarding,
+  getAthleteProfile,
+  eventById,
+  openDialog,
+  healthForm,
+  embedSnippetForm,
+  athleteProfileForm,
+  downloadJson,
+  showNotice,
+  go,
+  renderAthlete,
+});
+
 const featureControllers = [
   publicController,
   contentController,
   demoController,
+  accountController,
   platformController,
   seriesController,
   lotteryController,
@@ -833,47 +851,6 @@ document.addEventListener("click", async (event) => {
   }
   if (target.matches("[data-go-dashboard]")) await go("dashboard");
   if (await dispatchFeatureClick(target)) return;
-  if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
-  if (target.matches("[data-export-account]")) {
-    const accountExport=await accountAction("export");
-    downloadJson(`openstart-data-${new Date().toISOString().slice(0,10)}.json`,accountExport);
-    showNotice("Your OpenStart data export was downloaded.");
-  }
-  if (target.matches("[data-delete-account]")) {
-    if(!confirm("Permanently delete your OpenStart account and anonymize your runner data? This cannot be undone.")) return;
-    if(!confirm("Final confirmation: delete this account now?")) return;
-    await accountAction("delete");
-    state.session=null;
-    await go("discover");
-    showNotice("Your account was deleted and participant data was anonymized.");
-  }
-  if (target.dataset.embedCode) openDialog(embedSnippetForm(eventById(target.dataset.embedCode)));
-  if (target.matches("[data-copy-embed]")) {
-    const textarea = document.querySelector("#embed-snippet");
-    if (textarea) {
-      textarea.select();
-      navigator.clipboard?.writeText(textarea.value).then(() => showNotice("Embed code copied.")).catch(() => {});
-    }
-  }
-  if (target.matches("[data-connect-stripe]")) {
-    target.disabled = true;
-    target.textContent = "Opening Stripe…";
-    try {
-      const url = await beginStripeOnboarding(`${location.origin}${location.pathname}?stripe=return`);
-      location.assign(url);
-    } catch (error) {
-      target.disabled = false;
-      showNotice(error.message || "Stripe onboarding could not start.", { type: "error", duration: 0 });
-      await go("dashboard");
-    }
-  }
-  if (target.matches("[data-edit-athlete]")) openDialog(athleteProfileForm(state.athleteProfile));
-  if (target.dataset.viewAthlete) {
-    const athlete = await getAthleteProfile(target.dataset.viewAthlete);
-    if (!athlete) { showNotice("That athlete page isn't public yet."); return; }
-    history.replaceState({}, "", `${location.pathname}?athlete=${target.dataset.viewAthlete}`);
-    renderAthlete(athlete);
-  }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-reset-demo]")) {
     resetDemo();
