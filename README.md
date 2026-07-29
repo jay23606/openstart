@@ -45,6 +45,8 @@ pickup, check-in, bibs, walk-ups, staff, fulfillment, and operational exports.
 Its `views.js` owns the operations workspace, lookup results, and signed pass.
 `features/event-commerce/controller.js` owns waivers, custom registration
 questions, scheduled pricing, promotions, merchandise, and donations.
+Its `views.js` owns the registration settings, pricing, promotion, product,
+inventory, and fundraising dialogs.
 `features/event-site/controller.js` owns event branding, content sections,
 sponsors, publishing previews, and asset uploads. `features/waves/controller.js`
 owns wave creation, assignments, runner selection, starts, and bib allocation.
