@@ -249,8 +249,17 @@ footer b { color: white; }
 
 @media (max-width: 900px) {
   .site-header { grid-template-columns: 1fr auto; }
-  nav { bottom: 0; box-shadow: 0 -2px 14px #17211d15; background: var(--paper); display: grid; grid-template-columns: repeat(3, 1fr); left: 0; padding: 0 20px; position: fixed; right: 0; z-index: 30; }
-  nav button { padding: 16px; }
+  /* One row, always. A fixed 3-column grid wrapped the 5-6 items onto a second
+     row, which grew the bottom-anchored bar until the first row was pushed off
+     the top of the viewport and became unreachable. Equal auto-fit columns keep
+     every item on a single row, so showing Platform cannot re-break the layout. */
+  nav { bottom: 0; box-shadow: 0 -2px 14px #17211d15; background: var(--paper); display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; left: 0; padding: 0 4px; padding-bottom: env(safe-area-inset-bottom); position: fixed; right: 0; z-index: 30; }
+  /* Icon above a small label: the label alone cannot fit six items at 360px. */
+  nav button { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; line-height: 1.1; letter-spacing: .1px; padding: 10px 2px; min-height: 56px; justify-content: center; }
+  nav button::before { content: attr(data-icon); font-size: 19px; line-height: 1; font-weight: 400; }
+  /* Swap to the abbreviated label so nothing truncates in a narrow column. */
+  .nav-label { font-size: 0; }
+  .nav-label::after { content: attr(data-short); font-size: 10px; }
   nav button.nav-active::after { bottom: auto; top: 0; }
   .account-actions { display: flex; }
   .github-link { border: 1px solid var(--line); border-radius: 999px; padding: 9px 13px; }

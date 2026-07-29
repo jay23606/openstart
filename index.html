@@ -15,7 +15,7 @@
   <title>OpenStart — Open-source race registration</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
   <div id="setup-banner" class="setup-banner hidden">
@@ -25,12 +25,12 @@
   <header class="site-header">
     <button class="brand" data-action="discover" type="button" aria-label="OpenStart home"><span class="brand-mark" aria-hidden="true">OS</span><span>OpenStart</span></button>
     <nav aria-label="Primary navigation">
-      <button class="nav-active" data-view="discover" type="button">Find events</button>
-      <button data-view="demo" type="button">Demo</button>
-      <button data-view="runner" type="button">My races</button>
-      <button data-view="dashboard" type="button">Organizer</button>
-      <button id="platform-nav" class="hidden" data-view="platform" type="button">Platform</button>
-      <button data-view="help" type="button">Help</button>
+      <button class="nav-active" data-view="discover" data-icon="🔍" type="button"><span class="nav-label" data-short="Events">Find events</span></button>
+      <button data-view="demo" data-icon="✨" type="button"><span class="nav-label" data-short="Demo">Demo</span></button>
+      <button data-view="runner" data-icon="🏃" type="button"><span class="nav-label" data-short="Races">My races</span></button>
+      <button data-view="dashboard" data-icon="📋" type="button"><span class="nav-label" data-short="Organize">Organizer</span></button>
+      <button id="platform-nav" class="hidden" data-view="platform" data-icon="⚙️" type="button"><span class="nav-label" data-short="Platform">Platform</span></button>
+      <button data-view="help" data-icon="💬" type="button"><span class="nav-label" data-short="Help">Help</span></button>
     </nav>
     <div class="account-actions">
       <span class="sandbox-badge" title="Payments use Stripe test mode">Sandbox</span>
@@ -50,6 +50,6 @@
     <span>Built for organizers, runners, and the communities between them.</span>
   </footer>
 
-  <script type="module" src="app.js?v=32"></script>
+  <script type="module" src="app.js?v=33"></script>
 </body>
 </html>
