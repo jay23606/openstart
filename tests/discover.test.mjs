@@ -62,11 +62,14 @@ test("the discovery list stays light and detail data is fetched per event", asyn
 
   // Every path that renders an event's detail must hydrate first.
   const app = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const publicController = await readFile(new URL("../features/public/controller.js", import.meta.url), "utf8");
   const registration = await readFile(new URL("../features/registration/controller.js", import.meta.url), "utf8");
-  assert.match(app, /const loadDiscovery = async/);
+  assert.match(app, /createPublicController/);
+  assert.match(publicController, /async function loadDiscovery\(\)/);
+  assert.match(publicController, /request !== state\.discoverRequest/);
   assert.ok(!/matching\.slice\(0, state\.discoverVisible\)/.test(app),
     "discovery paging must happen in Postgres, not after downloading the catalogue");
-  const detailFlows = `${app}\n${registration}`;
+  const detailFlows = `${app}\n${registration}\n${publicController}`;
   assert.equal((detailFlows.match(/state\.selectedEvent = await hydrateEvent\(/g) || []).length, 3);
   assert.ok(!/state\.selectedEvent = eventById\(/.test(detailFlows),
     "selectedEvent must come from hydrateEvent, not the light list record");

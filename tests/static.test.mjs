@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, theme, and service worker", async () => {
-  const [html, app, worker, theme, appState, contentViews, publicViews] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js"), read("modules/app-state.js"), read("modules/content-views.js"), read("modules/public-views.js")]);
+  const [html, app, worker, theme, appState, contentViews, publicController, publicViews] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js"), read("modules/app-state.js"), read("modules/content-views.js"), read("features/public/controller.js"), read("modules/public-views.js")]);
   // Assert the wiring, not a specific cache-bust number: pinning the literal
   // version meant every routine bump failed this test. What actually matters is
   // that both assets are busted together and the service-worker cache name is
@@ -37,8 +37,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /from "\.\/modules\/app-state\.js/);
   assert.match(app, /from "\.\/modules\/content-views\.js/);
   assert.match(app, /from "\.\/modules\/public-views\.js/);
-  assert.match(app, /publicViews\.discoveryPage\(model\)/);
-  assert.match(app, /publicViews\.eventPage\(model\)/);
+  assert.match(app, /createPublicController/);
+  assert.match(publicController, /publicViews\.discoveryPage\(discoveryModel\(\)\)/);
+  assert.match(publicController, /publicViews\.eventPage\(model\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);
   assert.match(publicViews, /function discoveryPage\(model\)/);
   assert.match(publicViews, /function eventPage\(model\)/);

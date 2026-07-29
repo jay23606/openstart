@@ -11,6 +11,7 @@ import {
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
+import { createPublicController } from "./features/public/controller.js?v=80";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
@@ -131,6 +132,20 @@ const publicViews = createPublicViews({ effectivePrice, eventRegistrations, tier
 const noticeController = createNoticeController({ notice });
 const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
 function showNotice(message, options) { noticeController.show(message, options); }
+const publicController = createPublicController({
+  state,
+  page,
+  publicViews,
+  listPublishedEvents,
+  setPageMetadata,
+  hydrateEvent,
+  parseRegion,
+  stateFromCoords,
+  showNotice,
+  scrollToTop: () => scrollTo(0, 0),
+});
+const { loadDiscovery, renderDiscover, renderEvent } = publicController;
+publicController.restoreRegion();
 
 const platformViews = createPlatformViews();
 const healthForm = platformViews.health;
@@ -168,73 +183,6 @@ function renderPlatformAdmin() {
   page.innerHTML = platformViews.consolePage(state.platformData);
 }
 
-const DISCOVER_PAGE_SIZE = 12;
-
-const discoverEvents = () => {
-  return state.events.filter((event)=>event.status==="published");
-};
-
-const discoverCountLabel = () => {
-  return publicViews.discoveryModel(state, discoverEvents()).countLabel;
-};
-
-const discoverResults = () => {
-  const model = publicViews.discoveryModel(state, discoverEvents());
-  return publicViews.discoveryResults(model);
-};
-
-// Repaint only the results so typing never steals focus from the search field.
-const refreshDiscover = () => {
-  const results = document.querySelector("#discover-results");
-  if (!results) return;
-  results.innerHTML = discoverResults();
-  const count = document.querySelector("#discover-count");
-  if (count) count.textContent = discoverCountLabel();
-};
-
-const loadDiscovery = async () => {
-  const request=++state.discoverRequest;
-  const result=await listPublishedEvents({
-    query:state.discoverQuery,region:state.discoverRegion,limit:state.discoverVisible,offset:0,
-  });
-  if(request!==state.discoverRequest) return false;
-  if(Array.isArray(result)){
-    state.events=result;
-    state.discoverTotal=result.length;
-  }else{
-    state.events=result.events;
-    state.discoverTotal=result.total;
-  }
-  return true;
-};
-
-const setDiscoverRegion = async (region) => {
-  state.discoverRegion = region;
-  state.discoverVisible = DISCOVER_PAGE_SIZE;
-  try {
-    if (region) localStorage.setItem("openstart-region", JSON.stringify(region));
-    else localStorage.removeItem("openstart-region");
-  } catch { /* private browsing — the region simply will not persist */ }
-  await loadDiscovery();
-  renderDiscover();
-};
-
-try {
-  const savedRegion = JSON.parse(localStorage.getItem("openstart-region") || "null");
-  if (savedRegion && savedRegion.state) state.discoverRegion = savedRegion;
-} catch { /* ignore unreadable storage */ }
-
-function renderDiscover() {
-  setPageMetadata();
-  const model = publicViews.discoveryModel(state, discoverEvents());
-  page.innerHTML = publicViews.discoveryPage(model);
-}
-
-function renderEvent(event, preview=false) {
-  const model = publicViews.eventModel(event, preview);
-  setPageMetadata(`${event.name} — OpenStart`, event.description, event.banner_url || event.logo_url || "og.png");
-  page.innerHTML = publicViews.eventPage(model);
-}
 async function renderSeries(series) {
   const standings=await seriesAction("standings",{seriesId:series.id});
   state.seriesStandings=standings;
@@ -806,36 +754,9 @@ document.addEventListener("click", async (event) => {
     if(eventId) await ensureEventRegistrations(eventId);
   }
   if (target.matches("[data-view]")) await go(target.dataset.view);
-  if (target.matches("[data-show-more]")) {
-    state.discoverVisible += DISCOVER_PAGE_SIZE;
-    await loadDiscovery();
-    refreshDiscover();
-  }
-  if (target.matches("[data-clear-location]")) await setDiscoverRegion(null);
-  if (target.matches("[data-use-location]")) {
-    if (!navigator.geolocation) {
-      showNotice("This browser cannot share a location. Enter a city instead.");
-      return;
-    }
-    target.disabled = true;
-    target.textContent = "Locating…";
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const code = stateFromCoords(position.coords.latitude, position.coords.longitude);
-        if (!code) {
-          showNotice("We could not match that location. Enter a city instead.");
-          renderDiscover();
-          return;
-        }
-        setDiscoverRegion({ city: "", state: code });
-      },
-      () => {
-        showNotice("Location permission was declined. Enter a city instead.");
-        renderDiscover();
-      },
-      { timeout: 10000, maximumAge: 600000 },
-    );
-  }
+  if (target.matches("[data-show-more]")) await publicController.showMore();
+  if (target.matches("[data-clear-location]")) await publicController.setRegion(null);
+  if (target.matches("[data-use-location]")) await publicController.useLocation(target);
   if (target.matches("[data-help-filter]")) {
     const searchInput = document.querySelector("[data-help-search]");
     if (searchInput) searchInput.value = "";
@@ -906,9 +827,7 @@ document.addEventListener("click", async (event) => {
     launchers[target.dataset.demoFeature]?.();
   }
   if (target.dataset.eventId) {
-    state.selectedEvent = await hydrateEvent(target.dataset.eventId);
-    renderEvent(state.selectedEvent);
-    scrollTo(0, 0);
+    await publicController.openEvent(target.dataset.eventId);
   }
   if (await dispatchFeatureClick(target)) return;
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
@@ -964,13 +883,7 @@ document.addEventListener("click", async (event) => {
 document.addEventListener("input", (event) => {
   if (event.target.dataset.rosterSearch) filterRoster(event.target.dataset.rosterSearch);
   if (event.target.id === "discover-search") {
-    state.discoverQuery = event.target.value;
-    state.discoverVisible = DISCOVER_PAGE_SIZE;
-    clearTimeout(event.target._openstartSearchTimer);
-    event.target._openstartSearchTimer=setTimeout(async()=>{
-      await loadDiscovery();
-      refreshDiscover();
-    },250);
+    publicController.search(event.target.value);
   }
 });
 
@@ -978,12 +891,7 @@ document.addEventListener("input", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.target.id === "discover-place" && event.key === "Enter") {
     event.preventDefault();
-    const typed = parseRegion(event.target.value);
-    if (!typed.state) {
-      showNotice("Enter a city and state, for example \"Boulder, CO\".");
-      return;
-    }
-    setDiscoverRegion(typed);
+    publicController.resolvePlace(event.target.value);
   }
 });
 document.addEventListener("change", (event) => {
