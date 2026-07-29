@@ -1,14 +1,14 @@
 import {
   configured, displayDate, escapeHtml, eventDay, eventMonth, money, slugify, supabase,
-} from "./core.js?v=32";
+} from "./core.js?v=36";
 import {
   accountAction, addSeriesEvent, beginRegistration, beginStripeOnboarding, createChecklistItem, createEvent, createEventQuestion, createSeries,
   communicationsAction, createEmailTemplate, createEventSection, createEventSponsor, createEventTier, createManualRegistration, createProduct, createPromoCode, createScheduledPrice, createShowcaseEvent, createVolunteerRole, createWave,
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
-  getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, getPublishedEvent, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations,
+  getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, getPublishedEvent, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations, organizerEventMetrics,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=32";
+} from "./data.js?v=36";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -25,6 +25,10 @@ const state = {
   discoverQuery: "",
   discoverRegion: null,
   discoverVisible: 12,
+  discoverTotal: 0,
+  discoverRequest: 0,
+  organizerMetrics: [],
+  loadedRegistrationEvents: new Set(),
   events: [],
   registrations: [],
   selectedEvent: null,
@@ -328,7 +332,7 @@ function renderPlatformAdmin(){
     <div class="metric-grid platform-metrics">
       <div><span>Gross processed</span><strong>${money(m.grossCents)}</strong><small>${money(m.feeCents)} platform fees</small></div>
       <div><span>Organizers</span><strong>${m.organizers}</strong><small>${m.activeEvents} active events</small></div>
-      <div><span>Reconciliation</span><strong class="${m.reconciliationAlerts ? "health-bad" : "health-ok"}">${m.reconciliationAlerts}</strong><small>records needing review</small></div>
+      <div><span>Reconciliation</span><strong class="${m.reconciliationAlerts+m.counterDrift ? "health-bad" : "health-ok"}">${m.reconciliationAlerts+m.counterDrift}</strong><small>${m.counterDrift} capacity drift · ${m.reconciliationAlerts} payment alerts</small></div>
       <div><span>Operational failures</span><strong class="${m.failedDeliveries+m.failedProviderEvents ? "health-bad" : "health-ok"}">${m.failedDeliveries+m.failedProviderEvents}</strong><small>email + provider events</small></div>
     </div>
     <div class="platform-toolbar">
@@ -425,35 +429,27 @@ const proximityRank = (event, region) => {
 const DISCOVER_PAGE_SIZE = 12;
 
 const discoverEvents = () => {
-  const query = state.discoverQuery.trim().toLowerCase();
-  const matches = state.events.filter((event) => event.status === "published")
-    .filter((event) => !query
-      || event.name.toLowerCase().includes(query)
-      || String(event.location_name || "").toLowerCase().includes(query));
-  const region = state.discoverRegion;
-  return matches.map((event) => ({ event, rank: proximityRank(event, region) }))
-    .sort((a, b) => a.rank - b.rank || new Date(a.event.starts_at) - new Date(b.event.starts_at))
-    .map((entry) => entry.event);
+  return state.events.filter((event)=>event.status==="published");
 };
 
 const discoverCountLabel = () => {
-  const total = discoverEvents().length;
+  const total = state.discoverTotal;
   const filtered = state.discoverQuery || (state.discoverRegion && state.discoverRegion.state);
   return `${total} ${total === 1 ? "event" : "events"}${filtered ? " found" : " open"}`;
 };
 
 const discoverResults = () => {
   const matching = discoverEvents();
-  const visible = matching.slice(0, state.discoverVisible);
+  const visible = matching;
   const region = state.discoverRegion;
   const nearby = Boolean(region && region.state);
   const noneNearby = nearby && !matching.some((event) => proximityRank(event, region) < 2);
   return `
     ${noneNearby ? `<p class="discover-empty">No events near ${escapeHtml(regionLabel(region))} yet — showing the soonest events everywhere.</p>` : ""}
     <div class="event-grid">${visible.map(publicEventCard).join("")}</div>
-    ${matching.length > visible.length
-      ? `<div class="discover-more"><button class="subtle-button" data-show-more type="button">Show more events (${matching.length - visible.length} remaining)</button></div>` : ""}
-    ${matching.length === 0 ? `<p class="discover-empty">No events match that search.</p>` : ""}`;
+    ${state.discoverTotal > visible.length
+      ? `<div class="discover-more"><button class="subtle-button" data-show-more type="button">Show more events (${state.discoverTotal-visible.length} remaining)</button></div>` : ""}
+    ${state.discoverTotal === 0 ? `<p class="discover-empty">No events match that search.</p>` : ""}`;
 };
 
 // Repaint only the results so typing never steals focus from the search field.
@@ -465,13 +461,30 @@ const refreshDiscover = () => {
   if (count) count.textContent = discoverCountLabel();
 };
 
-const setDiscoverRegion = (region) => {
+const loadDiscovery = async () => {
+  const request=++state.discoverRequest;
+  const result=await listPublishedEvents({
+    query:state.discoverQuery,region:state.discoverRegion,limit:state.discoverVisible,offset:0,
+  });
+  if(request!==state.discoverRequest) return false;
+  if(Array.isArray(result)){
+    state.events=result;
+    state.discoverTotal=result.length;
+  }else{
+    state.events=result.events;
+    state.discoverTotal=result.total;
+  }
+  return true;
+};
+
+const setDiscoverRegion = async (region) => {
   state.discoverRegion = region;
   state.discoverVisible = DISCOVER_PAGE_SIZE;
   try {
     if (region) localStorage.setItem("openstart-region", JSON.stringify(region));
     else localStorage.removeItem("openstart-region");
   } catch { /* private browsing — the region simply will not persist */ }
+  await loadDiscovery();
   renderDiscover();
 };
 
@@ -498,7 +511,7 @@ function renderDiscover() {
   setPageMetadata();
   const published = state.events.filter((event) => event.status === "published");
   const matching = discoverEvents();
-  const visible = matching.slice(0, state.discoverVisible);
+  const visible = matching;
   const nearby = Boolean(state.discoverRegion && state.discoverRegion.state);
   page.innerHTML = `
     <section class="hero">
@@ -511,7 +524,7 @@ function renderDiscover() {
       <div class="hero-card">
         <div class="route-line"><span>START</span><i></i><span>FINISH</span></div>
         <p>Up next</p><strong>${escapeHtml(published[0]?.name || "Your next race")}</strong>
-        <div class="hero-meta"><span><b>${published.length}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> distances</span><span><b>${money(Math.min(...published.flatMap((event) => event.os_event_tiers.map(effectivePrice))))}</b> from</span></div>
+        <div class="hero-meta"><span><b>${state.discoverTotal}</b> events</span><span><b>${published.reduce((sum, event) => sum + event.os_event_tiers.length, 0)}</b> visible distances</span><span><b>${published.length ? money(Math.min(...published.flatMap((event) => event.os_event_tiers.map(effectivePrice)))) : "—"}</b> from</span></div>
       </div>
     </section>
     <section class="events-section" id="events">
@@ -614,16 +627,14 @@ function renderDashboard() {
   const realEvents = state.events.filter((event) => !event.is_showcase);
   const realEventIds = new Set(realEvents.map((event) => event.id));
   const published = realEvents.filter((event) => event.status === "published");
-  const confirmed = state.registrations.filter((registration) => registration.status === "confirmed" && realEventIds.has(registration.event_id));
-  const gross = confirmed.reduce((sum, registration) => sum + registration.amount_cents, 0);
-  const discounts = confirmed.reduce((sum, registration) => sum + (registration.discount_cents || 0), 0);
-  const platformFees = confirmed.reduce((sum, registration) => {
-    const race = eventById(registration.event_id);
-    return sum + Math.round(registration.amount_cents * (race?.platform_fee_bps || 500) / 10000);
-  }, 0);
-  const paidItems = state.orderItems.filter((item) => ["paid","partially_refunded"].includes(item.os_orders?.status));
-  const merchandiseRevenue = paidItems.filter((item) => item.item_type === "product").reduce((sum,item) => sum + item.amount_cents, 0);
-  const donationRevenue = paidItems.filter((item) => item.item_type === "donation").reduce((sum,item) => sum + item.amount_cents, 0);
+  const metrics=state.organizerMetrics.filter((item)=>realEventIds.has(item.event_id));
+  const metricByEvent=(id)=>metrics.find((item)=>item.event_id===id) || {};
+  const confirmedCount=metrics.reduce((sum,item)=>sum+Number(item.confirmed_count || 0),0);
+  const gross=metrics.reduce((sum,item)=>sum+Number(item.gross_cents || 0),0);
+  const discounts=metrics.reduce((sum,item)=>sum+Number(item.discount_cents || 0),0);
+  const platformFees=metrics.reduce((sum,item)=>sum+Number(item.platform_fee_cents || 0),0);
+  const merchandiseRevenue=metrics.reduce((sum,item)=>sum+Number(item.merchandise_cents || 0),0);
+  const donationRevenue=metrics.reduce((sum,item)=>sum+Number(item.donation_cents || 0),0);
   const stripeReady = state.profile?.stripe_charges_enabled && state.profile?.stripe_payouts_enabled;
   const stripeStarted = Boolean(state.profile?.stripe_account_id);
   page.innerHTML = `
@@ -639,7 +650,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="metric-grid">
-        <div><p>Confirmed registrations</p><strong>${confirmed.length}</strong><span>Across all events</span></div>
+        <div><p>Confirmed registrations</p><strong>${confirmedCount}</strong><span>Across all events</span></div>
         <div><p>Published events</p><strong>${published.length}</strong><span>${realEvents.length - published.length} draft</span></div>
         <div><p>Confirmed registration value</p><strong>${money(gross)}</strong><span>Paid and free confirmed entries</span></div>
         <div><p>Estimated organizer net</p><strong>${money(gross - platformFees)}</strong><span>${money(discounts)} discounts · before Stripe fees</span></div>
@@ -652,7 +663,7 @@ function renderDashboard() {
             <button class="table-row" data-roster="${event.id}" type="button">
               <span><b>${escapeHtml(event.name)}</b><small>${event.status === "draft" ? "Continue guided setup" : escapeHtml(event.location_name)} · ${event.os_event_checklist_items?.filter((item) => item.completed_at).length || 0}/${event.os_event_checklist_items?.length || 0} tasks done</small></span>
               <span><i class="status-dot ${event.status}"></i>${event.status}</span>
-              <span>${eventRegistrations(event.id).filter((registration) => registration.status === "confirmed").length}</span>
+              <span>${Number(metricByEvent(event.id).confirmed_count || 0)}</span>
               <span>${displayDate(event.starts_at)} <b>›</b></span>
             </button>`).join("")}
         </div>
@@ -661,10 +672,10 @@ function renderDashboard() {
         <div class="card-heading"><div><h2>Financial overview</h2><p>Confirmed registration revenue and OpenStart application fees.</p></div><button class="subtle-button" data-export-finance type="button">Export financial CSV</button></div>
         <div class="revenue-categories"><span><b>${money(gross)}</b>Registrations</span><span><b>${money(merchandiseRevenue)}</b>Merchandise</span><span><b>${money(donationRevenue)}</b>Donations</span></div>
         <div class="finance-grid">${realEvents.map((event) => {
-          const entries = eventRegistrations(event.id).filter((item) => item.status === "confirmed");
-          const revenue = entries.reduce((sum, item) => sum + item.amount_cents, 0);
-          const fees = entries.reduce((sum, item) => sum + Math.round(item.amount_cents * (event.platform_fee_bps || 500) / 10000), 0);
-          return `<div><span>${escapeHtml(event.name)}</span><b>${money(revenue)}</b><small>${entries.length} entries · ${money(revenue - fees)} estimated net</small></div>`;
+          const eventMetric=metricByEvent(event.id);
+          const revenue=Number(eventMetric.gross_cents || 0);
+          const fees=Number(eventMetric.platform_fee_cents || 0);
+          return `<div><span>${escapeHtml(event.name)}</span><b>${money(revenue)}</b><small>${Number(eventMetric.confirmed_count || 0)} entries · ${money(revenue-fees)} estimated net</small></div>`;
         }).join("")}</div>
       </div>
       <div class="dashboard-card">
@@ -1390,24 +1401,44 @@ function filterRoster(eventId) {
 }
 
 async function loadPublic() {
-  [state.events,state.series] = await Promise.all([listPublishedEvents(),listPublishedSeries()]);
+  const [discovery,series] = await Promise.all([
+    listPublishedEvents({query:state.discoverQuery,region:state.discoverRegion,limit:state.discoverVisible,offset:0}),
+    listPublishedSeries(),
+  ]);
+  if(Array.isArray(discovery)){
+    state.events=discovery;
+    state.discoverTotal=discovery.length;
+  }else{
+    state.events=discovery.events;
+    state.discoverTotal=discovery.total;
+  }
+  state.series=series;
   state.registrations = configured ? [] : await listRegistrations(state.events.map((event) => event.id));
 }
 
 async function loadDashboard() {
   const userId = state.session?.user?.id || DEMO_ORGANIZER_ID;
-  [state.events, state.profile] = await Promise.all([
+  [state.events, state.profile, state.organizerMetrics] = await Promise.all([
     listOrganizerEvents(userId),
     getOrganizerProfile(userId),
+    organizerEventMetrics(),
   ]);
   state.series=await listOrganizerSeries(userId);
-  state.registrations = await listRegistrations(state.events.map((event) => event.id));
-  [state.orderItems,state.campaigns,state.emailTemplates,state.auditLog] = await Promise.all([
-    listOrganizerOrderItems(state.events.map((event) => event.id)),
+  const loadedIds=[...state.loadedRegistrationEvents].filter((id)=>state.events.some((event)=>event.id===id));
+  state.registrations=loadedIds.length ? await listRegistrations(loadedIds) : [];
+  state.orderItems=[];
+  [state.campaigns,state.emailTemplates,state.auditLog] = await Promise.all([
     listOrganizerCampaigns(state.events.map((event) => event.id)),
     listEmailTemplates(userId),
     listAuditLog(state.events.map((event)=>event.id)),
   ]);
+}
+
+async function ensureEventRegistrations(eventId,force=false){
+  if(!eventId || (!force && state.loadedRegistrationEvents.has(eventId))) return;
+  const rows=await listRegistrations([eventId]);
+  state.registrations=state.registrations.filter((item)=>item.event_id!==eventId).concat(rows);
+  state.loadedRegistrationEvents.add(eventId);
 }
 
 async function loadRunnerDashboard() {
@@ -1468,12 +1499,17 @@ async function go(view) {
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
+  if(["dashboard","demo"].includes(state.view)){
+    const eventId=Object.values(target.dataset).find((value)=>eventById(value));
+    if(eventId) await ensureEventRegistrations(eventId);
+  }
   if (target.matches("[data-view]")) await go(target.dataset.view);
   if (target.matches("[data-show-more]")) {
     state.discoverVisible += DISCOVER_PAGE_SIZE;
+    await loadDiscovery();
     refreshDiscover();
   }
-  if (target.matches("[data-clear-location]")) setDiscoverRegion(null);
+  if (target.matches("[data-clear-location]")) await setDiscoverRegion(null);
   if (target.matches("[data-use-location]")) {
     if (!navigator.geolocation) {
       showNotice("This browser cannot share a location. Enter a city instead.");
@@ -1820,7 +1856,14 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.raceDay) openDialog(raceDayForm(eventById(target.dataset.raceDay)));
   if (target.dataset.startScanner) await startQrScanner(target.dataset.startScanner);
   if (target.dataset.exportRoster) exportRoster(eventById(target.dataset.exportRoster));
-  if (target.matches("[data-export-finance]")) exportFinancials();
+  if (target.matches("[data-export-finance]")){
+    const eventIds=state.events.filter((item)=>!item.is_showcase).map((item)=>item.id);
+    [state.registrations,state.orderItems]=await Promise.all([
+      listRegistrations(eventIds),listOrganizerOrderItems(eventIds),
+    ]);
+    eventIds.forEach((id)=>state.loadedRegistrationEvents.add(id));
+    exportFinancials();
+  }
   if (target.dataset.editRegistration) {
     const item = state.registrations.find((registration) => registration.id === target.dataset.editRegistration);
     openDialog(editRegistrationForm(item));
@@ -1925,7 +1968,11 @@ document.addEventListener("input", (event) => {
   if (event.target.id === "discover-search") {
     state.discoverQuery = event.target.value;
     state.discoverVisible = DISCOVER_PAGE_SIZE;
-    refreshDiscover();
+    clearTimeout(event.target._openstartSearchTimer);
+    event.target._openstartSearchTimer=setTimeout(async()=>{
+      await loadDiscovery();
+      refreshDiscover();
+    },250);
   }
 });
 
@@ -2742,6 +2789,8 @@ signOutButton.addEventListener("click", async () => {
   await supabase.auth.signOut();
   state.session = null;
   state.platformAdmin=null;
+  state.registrations=[];
+  state.loadedRegistrationEvents.clear();
   await go("discover");
 });
 dialog.addEventListener("click", (event) => {
@@ -2759,6 +2808,10 @@ async function boot() {
     await loadPlatformAccess();
     supabase.auth.onAuthStateChange((_event, session) => {
       state.session = session;
+      if(!session){
+        state.registrations=[];
+        state.loadedRegistrationEvents.clear();
+      }
       syncNavigation();
       setTimeout(()=>loadPlatformAccess(),0);
     });

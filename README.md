@@ -43,6 +43,9 @@ There is no frontend framework, bundler, or build step.
   guidance, bulk assignment, bib ranges, start controls, and targeted messaging
 - Production safeguards including immutable audit history, server-side rate
   limits, health checks, account export/deletion, CSP, and Playwright smoke tests
+- Burst-ready capacity accounting with per-tier atomic counters, narrow lock
+  domains, reconciliation checks, worker-safe email claims, server-paged public
+  discovery, lazy organizer rosters, and scheduled reservation cleanup
 - Branded race series with event calendars, configurable placement points,
   eligibility rules, tie-breakers, individual/team standings, and CSV reporting
 - Private event duplication that carries reusable registration, website,

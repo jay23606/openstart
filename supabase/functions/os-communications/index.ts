@@ -14,6 +14,7 @@ const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g,(c
 })[character] || character);
 
 type Recipient = { registrationId?: string; email: string; firstName: string };
+type Delivery = { id:string; registration_id?:string|null; email:string };
 
 const audienceRecipients = async (
   admin: ReturnType<typeof adminClient>, eventId: string, audience: Record<string, unknown>,
@@ -66,8 +67,11 @@ const sendCampaign = async (admin: ReturnType<typeof adminClient>, campaignId: s
     await admin.from("os_campaigns").update({recipient_count:recipients.length,status:"sending"}).eq("id",campaign.id);
   } else await admin.from("os_campaigns").update({status:"sending"}).eq("id",campaign.id);
 
-  const queued=(deliveries || []).filter((delivery)=>delivery.status==="queued").slice(0,50);
-  for (const delivery of queued) {
+  const {data:queued,error:claimError}=await admin.rpc("os_claim_campaign_deliveries",{
+    p_campaign_id:campaign.id,p_limit:50,
+  });
+  if(claimError) throw claimError;
+  const sendOne=async(delivery:Delivery)=>{
     const registration = delivery.registration_id
       ? await admin.from("os_registrations").select("first_name").eq("id",delivery.registration_id).maybeSingle()
       : {data:null};
@@ -86,11 +90,15 @@ const sendCampaign = async (admin: ReturnType<typeof adminClient>, campaignId: s
     await admin.from("os_campaign_deliveries").update(response.ok ? {
       status:"sent",provider_message_id:result.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString(),
     } : {status:"failed",error_message:result.message || "Send failed",updated_at:new Date().toISOString()}).eq("id",delivery.id);
+  };
+  const claimed=queued || [];
+  for(let index=0;index<claimed.length;index+=5){
+    await Promise.all((claimed.slice(index,index+5) as Delivery[]).map(sendOne));
   }
   const { data: counts }=await admin.from("os_campaign_deliveries").select("status").eq("campaign_id",campaign.id);
   const sent=(counts || []).filter((item)=>["sent","delivered"].includes(item.status)).length;
   const failed=(counts || []).filter((item)=>["failed","bounced","complained"].includes(item.status)).length;
-  const remaining=(counts || []).filter((item)=>item.status==="queued").length;
+  const remaining=(counts || []).filter((item)=>["queued","processing"].includes(item.status)).length;
   await admin.from("os_campaigns").update({
     sent_count:sent,failed_count:failed,status:remaining ? "sending" : "completed",
     completed_at:remaining ? null : new Date().toISOString(),
@@ -112,9 +120,11 @@ Deno.serve(async (request)=>{
     }
     if(body.action==="process_due"){
       if(!cronSecret || request.headers.get("x-cron-secret")!==cronSecret) return json(request,{error:"Invalid scheduler credentials"},401);
+      const {data:maintenance,error:maintenanceError}=await admin.rpc("os_scalability_maintenance");
+      if(maintenanceError) throw maintenanceError;
       const {data:campaigns}=await admin.from("os_campaigns").select("id").in("status",["scheduled","sending"]).lte("scheduled_at",new Date().toISOString()).limit(10);
       for(const campaign of campaigns || []) await sendCampaign(admin,campaign.id);
-      return json(request,{processed:campaigns?.length || 0});
+      return json(request,{processed:campaigns?.length || 0,maintenance});
     }
     const user=await requiredUser(request);
     if(!user) return json(request,{error:"Sign in is required"},401);

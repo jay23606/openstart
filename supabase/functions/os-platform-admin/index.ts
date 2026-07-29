@@ -30,7 +30,8 @@ Deno.serve(async(request)=>{
         {data:events,error:eventError},{data:registrations,error:registrationError},
         {data:profiles,error:profileError},{data:failedDeliveries,error:deliveryError},
         {data:providerEvents,error:providerError},{data:notes,error:noteError},
-        {data:settings,error:settingsError},
+        {data:settings,error:settingsError},{data:counterDrift,error:counterError},
+        {data:scaleMetrics,error:scaleMetricsError},
       ]=await Promise.all([
         admin.from("os_events").select("id,name,status,starts_at,organizer_id,platform_fee_bps,platform_suspended_at,platform_suspension_reason,created_at")
           .order("created_at",{ascending:false}).limit(200),
@@ -43,8 +44,10 @@ Deno.serve(async(request)=>{
         admin.from("os_provider_events").select("*").order("received_at",{ascending:false}).limit(100),
         admin.from("os_platform_support_notes").select("*").order("created_at",{ascending:false}).limit(100),
         admin.from("os_platform_settings").select("*").eq("singleton",true).single(),
+        admin.rpc("os_reconcile_capacity_counters",{p_repair:false}),
+        admin.rpc("os_platform_scale_metrics"),
       ]);
-      for(const error of [eventError,registrationError,profileError,deliveryError,providerError,noteError,settingsError]) if(error) throw error;
+      for(const error of [eventError,registrationError,profileError,deliveryError,providerError,noteError,settingsError,counterError,scaleMetricsError]) if(error) throw error;
       const users=[]; let page=1;
       while(page<=3){
         const {data,error}=await admin.auth.admin.listUsers({page,perPage:200});
@@ -64,21 +67,13 @@ Deno.serve(async(request)=>{
         || (item.amount_cents>0 && item.status==="confirmed" && item.payment_status!=="paid")
         || (item.payment_status==="pending" && Date.now()-new Date(item.created_at).getTime()>60*60*1000)
       ).slice(0,100).map((item)=>({...item,event_name:eventMap.get(item.event_id)?.name || "Unknown event"}));
-      const paid=(registrations || []).filter((item)=>item.payment_status==="paid");
-      const gross=paid.reduce((sum,item)=>sum+item.amount_cents,0);
-      const fees=paid.reduce((sum,item)=>sum+Math.round(item.amount_cents*(eventMap.get(item.event_id)?.platform_fee_bps || 0)/10000),0);
       return json(request,{
         role:access.role,settings,
-        metrics:{organizers:organizerRows.filter((item)=>item.event_count>0).length,events:(events || []).length,
-          activeEvents:(events || []).filter((item)=>item.status==="published" && !item.platform_suspended_at).length,
-          suspendedEvents:(events || []).filter((item)=>item.platform_suspended_at).length,
-          registrations:(registrations || []).length,grossCents:gross,feeCents:fees,
-          failedDeliveries:(failedDeliveries || []).length,failedProviderEvents:(providerEvents || []).filter((item)=>item.status==="failed").length,
-          reconciliationAlerts:suspicious.length},
+        metrics:{...(scaleMetrics || {}),counterDrift:(counterDrift || []).length},
         organizers:organizerRows.filter((item)=>item.event_count>0).slice(0,100),
         events:(events || []).filter((item)=>!query || item.name.toLowerCase().includes(query)
           || organizerRows.some((owner)=>owner.id===item.organizer_id && `${owner.email} ${owner.display_name}`.toLowerCase().includes(query))),
-        reconciliation:suspicious,failedDeliveries,providerEvents,notes,
+        reconciliation:suspicious,counterDrift,failedDeliveries,providerEvents,notes,
       });
     }
 

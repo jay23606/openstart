@@ -340,9 +340,10 @@ begin
       status='waitlisted',invitation_status='expired',invitation_expires_at=null,updated_at=now()
     where id=v_expired.id;
 
-    select * into v_promoted from public.os_lottery_applications
-    where event_id=v_expired.event_id and status='waitlisted' and invitation_status='none'
-    order by waitlist_position,id for update skip locked limit 1;
+    select application.* into v_promoted from public.os_lottery_applications application
+    where application.event_id=v_expired.event_id
+      and application.status='waitlisted' and application.invitation_status='none'
+    order by application.waitlist_position,application.id for update skip locked limit 1;
     if found then
       update public.os_lottery_applications set
         status='selected',invitation_status='offered',invited_at=now(),

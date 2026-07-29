@@ -174,7 +174,7 @@ test("platform operations stay behind a server-authoritative owner boundary", as
   assert.match(migration,/os_platform_admins/);
   assert.match(migration,/os_block_suspended_event_registration/);
   assert.match(operator,/Platform operator access is required/);
-  assert.match(operator,/reconciliationAlerts/);
+  assert.match(operator,/os_platform_scale_metrics/);
   assert.match(operator,/platform_suspend/);
   assert.match(webhook,/os_provider_events/);
 });
@@ -225,4 +225,28 @@ test("no framework runtime is referenced by the application", async () => {
   const source = files.join("\n");
   assert.doesNotMatch(source, /(?:from\s+["'](?:next|react|vinext|vite)|@vite|__next)/i);
   assert.doesNotMatch(source, /\.tsx\b/i);
+});
+
+test("scalability hot paths use counters, bounded pages, and worker claims", async () => {
+  const [app,data,migration,communications,operator] = await Promise.all([
+    read("app.js"),read("data.js"),
+    read("supabase/migrations/20260729180000_scalability_foundations.sql"),
+    read("supabase/functions/os-communications/index.ts"),
+    read("supabase/functions/os-platform-admin/index.ts"),
+  ]);
+  assert.match(migration,/reserved_count=reserved_count\+1/);
+  assert.match(migration,/os_registration_capacity_counters/);
+  assert.match(migration,/for update skip locked/);
+  assert.match(migration,/os_discover_events/);
+  assert.match(migration,/os_organizer_event_metrics/);
+  assert.match(migration,/os_scalability_maintenance/);
+  assert.doesNotMatch(
+    migration.match(/create or replace function public\.os_guard_registration_integrity[\s\S]*?\$\$;/)?.[0] || "",
+    /for update/i,
+  );
+  assert.match(data,/organizerEventMetrics/);
+  assert.match(app,/ensureEventRegistrations/);
+  assert.match(communications,/os_claim_campaign_deliveries/);
+  assert.match(communications,/Promise\.all/);
+  assert.match(operator,/counterDrift/);
 });

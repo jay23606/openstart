@@ -1,5 +1,5 @@
-import { configured, supabase } from "./core.js?v=32";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=32";
+import { configured, supabase } from "./core.js?v=36";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js?v=36";
 
 export const DEMO_ORGANIZER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -115,8 +115,19 @@ const EVENT_CARD_SELECT = "*, os_event_tiers(*, os_tier_prices(*))";
 const EVENT_DETAIL_SELECT =
   "*, os_event_tiers(*, os_tier_prices(*)), os_event_questions(*), os_teams(id,name,category,max_members), os_products(*, os_product_variants(*)), os_results(*), os_volunteer_roles(*,os_volunteer_shifts(*)), os_event_sections(*), os_event_sponsors(*), os_waves(*)";
 
-export async function listPublishedEvents() {
+export async function listPublishedEvents(options=null) {
   if (!configured) return demoState().events.filter((event) => event.status === "published");
+  if(options){
+    const {data,error}=await supabase.rpc("os_discover_events",{
+      p_query:options.query || null,p_state:options.region?.state || null,
+      p_city:options.region?.city || null,p_limit:options.limit || 12,p_offset:options.offset || 0,
+    });
+    if(error) throw error;
+    return {
+      events:(data || []).map((row)=>row.event),
+      total:Number(data?.[0]?.total_count || 0),
+    };
+  }
   const { data, error } = await supabase
     .from("os_events")
     .select(EVENT_CARD_SELECT)
@@ -124,6 +135,27 @@ export async function listPublishedEvents() {
     .order("starts_at");
   if (error) throw error;
   return data;
+}
+
+export async function organizerEventMetrics() {
+  if(!configured){
+    const demo=demoState();
+    return demo.events.map((event)=>{
+      const rows=demo.registrations.filter((item)=>item.event_id===event.id);
+      const confirmed=rows.filter((item)=>item.status==="confirmed");
+      return {
+        event_id:event.id,registration_count:rows.length,confirmed_count:confirmed.length,
+        gross_cents:confirmed.reduce((sum,item)=>sum+item.amount_cents,0),
+        platform_fee_cents:confirmed.reduce((sum,item)=>sum+Math.round(item.amount_cents*(event.platform_fee_bps || 500)/10000),0),
+        discount_cents:confirmed.reduce((sum,item)=>sum+(item.discount_cents || 0),0),
+        pending_count:rows.filter((item)=>item.payment_status==="pending").length,
+        merchandise_cents:0,donation_cents:0,
+      };
+    });
+  }
+  const {data,error}=await supabase.rpc("os_organizer_event_metrics");
+  if(error) throw error;
+  return data || [];
 }
 
 // Full record for one event, loaded when a runner actually opens it.
@@ -411,7 +443,7 @@ export async function deleteWave(id) {
 export async function listOrganizerCampaigns(eventIds) {
   if (!configured || !eventIds.length) return [];
   const { data, error } = await supabase.from("os_campaigns")
-    .select("*,os_campaign_deliveries(status)").in("event_id",eventIds).order("created_at",{ascending:false});
+    .select("*").in("event_id",eventIds).order("created_at",{ascending:false}).limit(100);
   if (error) throw error;
   return data;
 }
