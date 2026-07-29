@@ -12,6 +12,7 @@ import {
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
+import { createDemoController } from "./features/demo/controller.js?v=84";
 import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
@@ -760,9 +761,38 @@ const wavesController = createWavesController({
   },
 });
 
+const demoController = createDemoController({
+  state,
+  openDialog,
+  authForm,
+  createShowcaseEvent,
+  deleteShowcaseEvent,
+  loadDashboard,
+  renderDemo,
+  renderDashboard,
+  renderRoster,
+  hydrateEvent,
+  showNotice,
+  scrollToBottom: () => scrollTo(0, document.body.scrollHeight),
+  launchers: {
+    roster: (race) => { renderDashboard(); renderRoster(race); },
+    registration: (race) => openDialog(registrationSettingsForm(race)),
+    website: (race) => openDialog(siteEditorForm(race)),
+    pricing: (race) => openDialog(pricingSettingsForm(race)),
+    products: (race) => openDialog(productSettingsForm(race)),
+    waves: (race) => openDialog(waveManagerForm(race)),
+    volunteers: (race) => openDialog(volunteerManagerForm(race)),
+    "race-day": (race) => openDialog(raceDayForm(race)),
+    results: (race) => openDialog(resultsManagerForm(race)),
+    lottery: (race) => openDialog(lotteryLifecycleForm(race)),
+    checklist: (race) => openDialog(checklistForm(race)),
+  },
+});
+
 const featureControllers = [
   publicController,
   contentController,
+  demoController,
   platformController,
   seriesController,
   lotteryController,
@@ -802,52 +832,6 @@ document.addEventListener("click", async (event) => {
     await go("discover");
   }
   if (target.matches("[data-go-dashboard]")) await go("dashboard");
-  if (target.matches("[data-demo-sign-in]")) {
-    state.pendingView = "demo";
-    openDialog(authForm());
-  }
-  if (target.matches("[data-create-showcase]")) {
-    target.disabled = true;
-    try {
-      await createShowcaseEvent();
-      await loadDashboard();
-      renderDemo();
-      showNotice("Your private showcase is ready.");
-    } catch (error) {
-      showNotice(error.message || "The showcase could not be created.", { type: "error", duration: 0 });
-    }
-  }
-  if (target.dataset.deleteShowcase) {
-    if (!confirm("Remove this private showcase and all of its sample data? Your real events will not be affected.")) return;
-    await deleteShowcaseEvent(target.dataset.deleteShowcase);
-    await loadDashboard();
-    renderDemo();
-    showNotice("Showcase removed. Your real events were not changed.");
-  }
-  if (target.dataset.demoRoster) {
-    renderDashboard();
-    renderRoster(await hydrateEvent(target.dataset.demoRoster));
-    scrollTo(0,document.body.scrollHeight);
-  }
-  if (target.dataset.demoFeature) {
-    // These dialogs edit products, waves, volunteer roles, and site sections,
-    // none of which the discovery list carries.
-    const race=await hydrateEvent(target.dataset.eventIdDemo);
-    const launchers={
-      roster:()=>{renderDashboard();renderRoster(race);},
-      registration:()=>openDialog(registrationSettingsForm(race)),
-      website:()=>openDialog(siteEditorForm(race)),
-      pricing:()=>openDialog(pricingSettingsForm(race)),
-      products:()=>openDialog(productSettingsForm(race)),
-      waves:()=>openDialog(waveManagerForm(race)),
-      volunteers:()=>openDialog(volunteerManagerForm(race)),
-      "race-day":()=>openDialog(raceDayForm(race)),
-      results:()=>openDialog(resultsManagerForm(race)),
-      lottery:()=>openDialog(lotteryLifecycleForm(race)),
-      checklist:()=>openDialog(checklistForm(race)),
-    };
-    launchers[target.dataset.demoFeature]?.();
-  }
   if (await dispatchFeatureClick(target)) return;
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
   if (target.matches("[data-export-account]")) {

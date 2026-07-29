@@ -42,7 +42,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.doesNotMatch(app, /page\.innerHTML\s*=/);
   assert.match(app, /createPublicController/);
   assert.match(app, /createContentController/);
-  assert.match(app, /publicController,\s+contentController,\s+platformController/);
+  assert.match(app, /createDemoController/);
+  assert.match(app, /publicController,\s+contentController,\s+demoController,\s+platformController/);
   assert.match(publicController, /publicViews\.discoveryPage\(discoveryModel\(\)\)/);
   assert.match(publicController, /publicViews\.eventPage\(model\)/);
   assert.match(publicController, /async function handleClick\(target\)/);
@@ -50,6 +51,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.doesNotMatch(app, /target\.matches\("\[data-show-more\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-help-filter\]"\)/);
   assert.doesNotMatch(app, /target\.matches\("\[data-help-search\]"\)/);
+  assert.doesNotMatch(app, /target\.matches\("\[data-create-showcase\]"\)/);
   assert.match(publicViews, /function discoveryResults\(model\)/);
   assert.match(publicViews, /function discoveryPage\(model\)/);
   assert.match(publicViews, /function eventPage\(model\)/);
