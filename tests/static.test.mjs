@@ -19,6 +19,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.equal(styleVersion[1], scriptVersion[1], "app.js and styles.css must share a cache-bust version");
   assert.equal(cacheVersion[1], scriptVersion[1], "service-worker CACHE must match the shell asset version");
   assert.match(appState, /pendingView:\s*"runner"/);
+  assert.match(appState, /createAppStore/);
+  assert.match(app, /appStore\.subscribe\(\["view", "session", "platformAdmin"\], syncNavigation\)/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
@@ -84,6 +86,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /modules\/public-views\.js/);
   assert.match(worker, /modules\/page-lifecycle\.js/);
   assert.match(worker, /modules\/shell-controller\.js/);
+  assert.match(worker, /modules\/store\.js/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);

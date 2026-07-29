@@ -37,7 +37,7 @@ import { createEventSiteController } from "./features/event-site/controller.js?v
 import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
-import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
+import { createAppStore, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=91";
 import { createAccountViews } from "./modules/account-views.js?v=77";
 import { architectureView, demoView, helpView } from "./modules/content-views.js?v=74";
 import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -60,7 +60,8 @@ const signOutButton = document.querySelector("#sign-out");
 const setupBanner = document.querySelector("#setup-banner");
 const platformNav = document.querySelector("#platform-nav");
 
-const state = createAppState();
+const appStore = createAppStore();
+const { state } = appStore;
 
 const eventById = (id) => findEventById(state,id);
 
@@ -164,6 +165,7 @@ function syncNavigation() {
   signOutButton.classList.toggle("hidden", !state.session);
   platformNav.classList.toggle("hidden", !state.platformAdmin?.allowed);
 }
+appStore.subscribe(["view", "session", "platformAdmin"], syncNavigation);
 
 const pageLifecycle = createPageLifecycle({
   page,
@@ -188,7 +190,6 @@ publicController.restoreRegion();
 
 async function loadPlatformAccess(){
   state.platformAdmin=state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
-  syncNavigation();
 }
 
 async function loadPlatformOverview(query=""){
@@ -915,7 +916,6 @@ async function boot() {
         state.registrations=[];
         state.loadedRegistrationEvents.clear();
       }
-      syncNavigation();
       setTimeout(()=>loadPlatformAccess(),0);
     });
   }

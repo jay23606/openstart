@@ -1,3 +1,5 @@
+import { createStore } from "./store.js";
+
 export function createAppState() {
   return {
     view: "discover",
@@ -32,6 +34,10 @@ export function createAppState() {
     platformData: null,
     athleteProfile: null,
   };
+}
+
+export function createAppStore() {
+  return createStore(createAppState());
 }
 
 export const eventById = (state, id) => state.events.find((event) => event.id === id);
