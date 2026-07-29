@@ -34,7 +34,7 @@ import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
-import { createAccountViews } from "./modules/account-views.js?v=71";
+import { createAccountViews } from "./modules/account-views.js?v=76";
 import { architectureView, demoView, helpView } from "./modules/content-views.js?v=74";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
@@ -42,7 +42,7 @@ import { createBusyController } from "./modules/busy.js?v=48";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
-import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
+import { contentHtml, localDateTime, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -459,70 +459,13 @@ function renderRunnerDashboard() {
     </section>`;
 }
 
-function athletePrs(results){
-  const best=new Map();
-  for(const row of results){
-    if(row.status!=="finisher") continue;
-    const milliseconds=row.chip_time_ms ?? row.gun_time_ms;
-    if(milliseconds==null) continue;
-    const key=row.distance_label || row.tier_name || "Result";
-    const current=best.get(key);
-    if(!current || milliseconds<current.milliseconds) best.set(key,{milliseconds,event:row.event_name,when:row.starts_at});
-  }
-  return [...best.entries()].map(([label,info])=>({label,...info}));
-}
-
 function renderAthlete(data){
   state.view="athlete";
   state.selectedEvent=null;
-  const {profile,results}=data;
-  const finishes=results.filter((row)=>row.status==="finisher");
-  const prs=athletePrs(results);
+  const {profile}=data;
   const name=profile.display_name || `@${profile.handle}`;
   setPageMetadata(`${name} · OpenStart athlete`,`Race history and personal bests for ${name} on OpenStart.`);
-  page.innerHTML=`
-    <section class="athlete-page">
-      <div class="athlete-header">
-        <button class="text-button" data-back type="button">← OpenStart</button>
-        <div class="athlete-identity">
-          <span class="athlete-avatar" aria-hidden="true">${escapeHtml((profile.display_name || profile.handle).slice(0,1).toUpperCase())}</span>
-          <div>
-            <p class="eyebrow">Athlete</p>
-            <h1>${escapeHtml(name)}</h1>
-            <p class="athlete-meta">@${escapeHtml(profile.handle)}${profile.location ? ` · ${escapeHtml(profile.location)}` : ""}</p>
-          </div>
-        </div>
-        ${profile.bio ? `<p class="athlete-bio">${contentHtml(profile.bio)}</p>` : ""}
-      </div>
-      <div class="metric-grid">
-        <div><p>Races</p><strong>${results.length}</strong><span>Published results</span></div>
-        <div><p>Finishes</p><strong>${finishes.length}</strong><span>Official finisher results</span></div>
-        <div><p>Distances</p><strong>${prs.length}</strong><span>Personal bests below</span></div>
-      </div>
-      ${prs.length ? `<div class="dashboard-card"><div class="card-heading"><div><h2>Personal bests</h2><p>Fastest published finish per distance.</p></div></div>
-        <div class="athlete-pr-grid">${prs.map((pr)=>`<article><b>${resultTime(pr.milliseconds)}</b><span>${escapeHtml(pr.label)}</span><small>${escapeHtml(pr.event)} · ${displayDate(pr.when)}</small></article>`).join("")}</div></div>` : ""}
-      <div class="dashboard-card">
-        <div class="card-heading"><div><h2>Race history</h2><p>Every published result, newest first.</p></div></div>
-        <div class="athlete-results">
-          ${results.length ? results.map((row)=>{
-            const milliseconds=row.chip_time_ms ?? row.gun_time_ms;
-            const place=row.status==="finisher" && row.overall_place ? `${row.overall_place} / ${row.tier_finishers}` : "—";
-            const division=row.status==="finisher" && row.division_place && row.division ? `${ordinal(row.division_place)} ${escapeHtml(row.division)}` : "";
-            return `<article class="athlete-result">
-              <div class="athlete-result-main">
-                <p>${displayDate(row.starts_at)} · ${escapeHtml(row.location_name || "")}</p>
-                <h3>${escapeHtml(row.event_name)}</h3>
-                <small>${escapeHtml(row.tier_name)}${row.distance_label ? ` · ${escapeHtml(row.distance_label)}` : ""}</small>
-              </div>
-              <div class="athlete-result-time">
-                <b>${row.status==="finisher" ? resultTime(milliseconds) : row.status.toUpperCase()}</b>
-                <span>${place}${division ? ` · ${division}` : ""}</span>
-              </div>
-            </article>`;
-          }).join("") : '<div class="empty-state">No published results yet.</div>'}
-        </div>
-      </div>
-    </section>`;
+  page.innerHTML = accountViews.publicAthlete(data);
   syncNavigation();
   page.focus({preventScroll:true});
 }

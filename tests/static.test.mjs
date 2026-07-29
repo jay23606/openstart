@@ -224,12 +224,15 @@ test("platform operations stay behind a server-authoritative owner boundary", as
 });
 
 test("public athlete profiles aggregate published results behind a security-definer boundary", async () => {
-  const [app, data, migration] = await Promise.all([
+  const [app, accountViews, data, migration] = await Promise.all([
     read("app.js"),
+    read("modules/account-views.js"),
     read("data.js"),
     read("supabase/migrations/20260729170000_athlete_profiles.sql"),
   ]);
   assert.match(app, /function renderAthlete/);
+  assert.match(app, /accountViews\.publicAthlete\(data\)/);
+  assert.match(accountViews, /function publicAthlete\(\{ profile, results \}\)/);
   assert.match(app, /athleteProfileForm/);
   assert.match(app, /params\.get\("athlete"\)/);
   assert.match(data, /getAthleteProfile/);

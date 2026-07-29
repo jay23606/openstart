@@ -1,5 +1,19 @@
-import { escapeHtml } from "../core.js?v=36";
+import { displayDate, escapeHtml } from "../core.js?v=36";
 import { modalShell } from "./render.js?v=62";
+import { contentHtml, ordinal, resultTime } from "./ui.js?v=40";
+
+function athletePrs(results) {
+  const best = new Map();
+  for (const row of results) {
+    if (row.status !== "finisher") continue;
+    const milliseconds = row.chip_time_ms ?? row.gun_time_ms;
+    if (milliseconds == null) continue;
+    const key = row.distance_label || row.tier_name || "Result";
+    const current = best.get(key);
+    if (!current || milliseconds < current.milliseconds) best.set(key, { milliseconds, event: row.event_name, when: row.starts_at });
+  }
+  return [...best.entries()].map(([label, info]) => ({ label, ...info }));
+}
 
 export function createAccountViews({ getBaseUri }) {
   function auth() {
@@ -33,5 +47,54 @@ export function createAccountViews({ getBaseUri }) {
     return modalShell({ eyebrow: "Embed registration", title: event.name, body }, escapeHtml);
   }
 
-  return { auth, athleteProfile, embed };
+  function publicAthlete({ profile, results }) {
+    const finishes = results.filter((row) => row.status === "finisher");
+    const prs = athletePrs(results);
+    const name = profile.display_name || `@${profile.handle}`;
+    return `
+      <section class="athlete-page">
+        <div class="athlete-header">
+          <button class="text-button" data-back type="button">← OpenStart</button>
+          <div class="athlete-identity">
+            <span class="athlete-avatar" aria-hidden="true">${escapeHtml((profile.display_name || profile.handle).slice(0, 1).toUpperCase())}</span>
+            <div>
+              <p class="eyebrow">Athlete</p>
+              <h1>${escapeHtml(name)}</h1>
+              <p class="athlete-meta">@${escapeHtml(profile.handle)}${profile.location ? ` · ${escapeHtml(profile.location)}` : ""}</p>
+            </div>
+          </div>
+          ${profile.bio ? `<p class="athlete-bio">${contentHtml(profile.bio)}</p>` : ""}
+        </div>
+        <div class="metric-grid">
+          <div><p>Races</p><strong>${results.length}</strong><span>Published results</span></div>
+          <div><p>Finishes</p><strong>${finishes.length}</strong><span>Official finisher results</span></div>
+          <div><p>Distances</p><strong>${prs.length}</strong><span>Personal bests below</span></div>
+        </div>
+        ${prs.length ? `<div class="dashboard-card"><div class="card-heading"><div><h2>Personal bests</h2><p>Fastest published finish per distance.</p></div></div>
+          <div class="athlete-pr-grid">${prs.map((pr) => `<article><b>${resultTime(pr.milliseconds)}</b><span>${escapeHtml(pr.label)}</span><small>${escapeHtml(pr.event)} · ${displayDate(pr.when)}</small></article>`).join("")}</div></div>` : ""}
+        <div class="dashboard-card">
+          <div class="card-heading"><div><h2>Race history</h2><p>Every published result, newest first.</p></div></div>
+          <div class="athlete-results">
+            ${results.length ? results.map((row) => {
+              const milliseconds = row.chip_time_ms ?? row.gun_time_ms;
+              const place = row.status === "finisher" && row.overall_place ? `${row.overall_place} / ${row.tier_finishers}` : "—";
+              const division = row.status === "finisher" && row.division_place && row.division ? `${ordinal(row.division_place)} ${escapeHtml(row.division)}` : "";
+              return `<article class="athlete-result">
+                <div class="athlete-result-main">
+                  <p>${displayDate(row.starts_at)} · ${escapeHtml(row.location_name || "")}</p>
+                  <h3>${escapeHtml(row.event_name)}</h3>
+                  <small>${escapeHtml(row.tier_name)}${row.distance_label ? ` · ${escapeHtml(row.distance_label)}` : ""}</small>
+                </div>
+                <div class="athlete-result-time">
+                  <b>${row.status === "finisher" ? resultTime(milliseconds) : row.status.toUpperCase()}</b>
+                  <span>${place}${division ? ` · ${division}` : ""}</span>
+                </div>
+              </article>`;
+            }).join("") : '<div class="empty-state">No published results yet.</div>'}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  return { auth, athleteProfile, embed, publicAthlete };
 }
