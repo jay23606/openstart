@@ -49,10 +49,11 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, organizerController, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, organizerController, lotteryViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("features/registration/controller.js"),
     read("features/organizer/controller.js"),
+    read("features/lottery/views.js"),
     read("data.js"),
     read("supabase/functions/os-create-checkout/index.ts"),
     read("supabase/functions/os-stripe-connect/index.ts"),
@@ -113,7 +114,8 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(data, /os_duplicate_event/);
   assert.match(data, /os_event_checklist_items/);
   assert.match(app, /lotteryApplicationForm/);
-  assert.match(app, /lotteryManagerForm/);
+  assert.match(lotteryViews, /function lifecycle\(event\)/);
+  assert.match(lotteryViews, /data-run-lottery/);
   assert.match(data, /os_submit_lottery_application/);
   assert.match(data, /os_lottery_applications/);
   assert.match(integrityMigration, /os_registration_email_event_active_unique/);

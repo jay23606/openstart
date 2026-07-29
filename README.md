@@ -27,6 +27,8 @@ calendar membership, public standings navigation, and standings exports.
 Its `views.js` owns the series manager and calendar/settings dialogs.
 `features/lottery/controller.js` owns organizer lottery configuration,
 application review, irreversible draw confirmation, and invitation summaries.
+Its `views.js` owns runner application, invitation checkout, and application
+status cards; organizer lifecycle views share the same feature boundary.
 `features/communications/controller.js` owns campaign composition, audience
 previews, test messages, reusable templates, scheduling, drafts, and sends.
 Its `views.js` owns the campaign composer and reuses the shared modal, list,
