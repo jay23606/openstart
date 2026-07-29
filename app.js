@@ -12,7 +12,7 @@ import {
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
-import { createOrganizerViews } from "./features/organizer/views.js?v=70";
+import { createOrganizerViews } from "./features/organizer/views.js?v=72";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -670,30 +670,9 @@ function renderAthlete(data){
 }
 
 function renderRoster(event) {
-  const registrations = eventRegistrations(event.id);
-  document.querySelector("#roster-slot").innerHTML = `
-    <div class="dashboard-card roster-card">
-      <div class="card-heading"><div><h2>${escapeHtml(event.name)} registrations</h2><p>Manage participants, volunteers, start groups, race-day details, and results.</p></div><div class="card-actions"><button class="subtle-button" data-open-setup="${event.id}" type="button">Setup guide</button><button class="subtle-button" data-lottery-manager="${event.id}" type="button">Lottery</button><button class="subtle-button" data-checklist="${event.id}" type="button">Checklist</button><button class="subtle-button" data-duplicate-event="${event.id}" type="button">Duplicate</button><button class="subtle-button" data-site-editor="${event.id}" type="button">Website</button><button class="subtle-button" data-wave-manager="${event.id}" type="button">Waves</button><button class="subtle-button" data-volunteer-manager="${event.id}" type="button">Volunteers</button><button class="subtle-button" data-results-manager="${event.id}" type="button">Results</button><button class="subtle-button" data-embed-code="${event.id}" type="button">Embed</button><button class="subtle-button" data-close-roster type="button">Close</button></div></div>
-      <div class="roster-toolbar">
-        <input data-roster-search="${event.id}" type="search" placeholder="Search name, email, or bib">
-        <select data-roster-status="${event.id}"><option value="">All statuses</option><option>confirmed</option><option>pending</option><option>reserved</option><option>cancelled</option><option>expired</option></select>
-        <button class="subtle-button" data-add-participant="${event.id}" type="button">+ Manual entry</button>
-        <button class="subtle-button" data-export-roster="${event.id}" type="button">Export CSV</button>
-        <button class="subtle-button" data-race-day="${event.id}" type="button">Race day</button>
-        <button class="subtle-button" data-product-settings="${event.id}" type="button">Products</button>
-        <button class="subtle-button" data-pricing-settings="${event.id}" type="button">Pricing</button>
-        <button class="subtle-button" data-registration-settings="${event.id}" type="button">Form settings</button>
-      </div>
-      ${registrations.length ? `<div class="roster roster-manage">${registrations.map((item) => `
-        <button data-edit-registration="${item.id}" data-search="${escapeHtml(`${item.first_name} ${item.last_name} ${item.email} ${item.bib_number || ""}`.toLowerCase())}" data-status="${item.status}" type="button"><span class="avatar">${escapeHtml(item.first_name[0])}${escapeHtml(item.last_name[0])}</span>
-        <span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)}</small></span>
-        <span>${escapeHtml(tierById(event, item.tier_id)?.name || "Entry")}<small>${item.bib_number ? `Bib ${escapeHtml(item.bib_number)}` : "No bib assigned"}</small></span><span>${item.status}</span></button>`).join("")}</div>`
-        : '<div class="empty-state">No registrations yet. Share the published event to get the first runner on the list.</div>'}
-      <div class="form-summary"><strong>${event.os_event_questions?.length || 0} custom questions</strong><span>${event.waiver_text ? "Waiver enabled" : "No waiver configured"}</span></div>
-      ${(event.os_waitlist || []).length ? `<div class="waitlist-list"><h3>Waitlist</h3>${event.os_waitlist.map((item) => `<div><span><b>${escapeHtml(item.first_name)} ${escapeHtml(item.last_name)}</b><small>${escapeHtml(item.email)} · ${escapeHtml(tierById(event, item.tier_id)?.name || "")}</small></span><select data-waitlist-id="${item.id}"><option ${item.status === "waiting" ? "selected" : ""}>waiting</option><option ${item.status === "invited" ? "selected" : ""}>invited</option><option ${item.status === "registered" ? "selected" : ""}>registered</option><option ${item.status === "removed" ? "selected" : ""}>removed</option></select></div>`).join("")}</div>` : ""}
-      ${(event.os_teams || []).length ? `<div class="team-list"><h3>Teams</h3>${event.os_teams.map((team) => { const members = registrations.filter((item) => item.team_id === team.id && item.status !== "cancelled"); return `<div><span><b>${escapeHtml(team.name)}</b><small>${escapeHtml(team.category)} · ${members.length}${team.max_members ? ` / ${team.max_members}` : ""} members</small></span><span>${members.map((member) => escapeHtml(`${member.first_name} ${member.last_name}`)).join(", ") || "No members"}</span></div>`; }).join("")}</div>` : ""}
-    </div>`;
-  document.querySelector("#roster-slot").scrollIntoView({ behavior: "smooth" });
+  const slot = document.querySelector("#roster-slot");
+  slot.innerHTML = organizerViews.roster(event);
+  slot.scrollIntoView({ behavior: "smooth" });
 }
 
 const accountViews = createAccountViews({ getBaseUri: () => document.baseURI });
@@ -793,7 +772,7 @@ async function startQrScanner(eventId) {
   requestAnimationFrame(scan);
 }
 
-const organizerViews = createOrganizerViews();
+const organizerViews = createOrganizerViews({ eventRegistrations, tierById });
 const eventForm = organizerViews.event;
 const duplicateEventForm = organizerViews.duplicate;
 const checklistForm = organizerViews.checklist;

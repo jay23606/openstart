@@ -122,6 +122,7 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(app, /checklistForm/);
   assert.match(organizerViews, /function duplicate\(source\)/);
   assert.match(organizerViews, /function checklist\(source\)/);
+  assert.match(organizerViews, /function roster\(source\)/);
   assert.match(data, /os_duplicate_event/);
   assert.match(data, /os_event_checklist_items/);
   assert.match(app, /lotteryApplicationForm/);
