@@ -49,11 +49,12 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
 });
 
 test("all persisted features use the repository and server-side payment boundaries", async () => {
-  const [app, registrationController, registrationViews, organizerController, lotteryViews, platformViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
+  const [app, registrationController, registrationViews, organizerController, organizerViews, lotteryViews, platformViews, data, checkout, connect, webhook, registrationAction, runnerMigration, integrityMigration] = await Promise.all([
     read("app.js"),
     read("features/registration/controller.js"),
     read("features/registration/views.js"),
     read("features/organizer/controller.js"),
+    read("features/organizer/views.js"),
     read("features/lottery/views.js"),
     read("features/platform/views.js"),
     read("data.js"),
@@ -119,6 +120,8 @@ test("all persisted features use the repository and server-side payment boundari
   assert.match(data, /seriesAction/);
   assert.match(app, /duplicateEventForm/);
   assert.match(app, /checklistForm/);
+  assert.match(organizerViews, /function duplicate\(source\)/);
+  assert.match(organizerViews, /function checklist\(source\)/);
   assert.match(data, /os_duplicate_event/);
   assert.match(data, /os_event_checklist_items/);
   assert.match(app, /lotteryApplicationForm/);
@@ -156,13 +159,14 @@ test("the private showcase is isolated, disposable, and server-created", async (
 });
 
 test("event publishing is guided and server-authoritative", async () => {
-  const [app,data,migration] = await Promise.all([
+  const [app,organizerViews,data,migration] = await Promise.all([
     read("app.js"),
+    read("features/organizer/views.js"),
     read("data.js"),
     read("supabase/migrations/20260729130000_event_setup_wizard.sql"),
   ]);
   assert.match(app,/function renderSetupWizard/);
-  assert.match(app,/Create draft & continue/);
+  assert.match(organizerViews,/Create draft & continue/);
   assert.match(app,/READY TO PUBLISH/);
   assert.match(app,/setup-basics-form/);
   assert.match(data,/os_event_readiness/);

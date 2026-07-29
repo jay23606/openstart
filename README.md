@@ -21,7 +21,8 @@ Its `views.js` owns participant fields, group checkout, manual entry,
 organizer editing, runner self-service, and transfer acceptance.
 `features/organizer/controller.js` owns event creation, guided setup,
 publishing, core organizer navigation, and operational checklists through the
-same dependency-driven boundary.
+same dependency-driven boundary. Its `views.js` owns event creation,
+duplication, and operational-readiness checklist dialogs.
 `features/platform/controller.js` isolates platform search, fee controls,
 event suspension, and private support notes from the public application shell.
 Its `views.js` owns the operations console, reconciliation/provider reporting,

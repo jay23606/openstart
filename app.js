@@ -12,6 +12,7 @@ import {
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
+import { createOrganizerViews } from "./features/organizer/views.js?v=70";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -828,60 +829,10 @@ async function startQrScanner(eventId) {
   requestAnimationFrame(scan);
 }
 
-function eventForm() {
-  return `
-    <section class="modal">
-      <div class="form-heading"><div><p>New event</p><h2>Create a starting line</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-      <form id="event-form">
-        <label>Event name<input name="name" placeholder="River City 10K" required></label>
-        <div class="split-fields"><label>Date<input name="date" type="date" required></label><label>Location<input name="location" placeholder="Richmond, Virginia" required></label></div>
-        <label>Description<textarea name="description" rows="3" required></textarea></label>
-        <h3>First registration option</h3>
-        <div class="split-fields"><label>Name<input name="tier_name" placeholder="10K" required></label><label>Distance<input name="distance" placeholder="6.2 miles" required></label></div>
-        <div class="split-fields"><label>Price<input name="price" type="number" min="0" step="0.01" required></label><label>Capacity<input name="capacity" type="number" min="1" required></label></div>
-        <p class="modal-note">OpenStart creates a private draft, then guides you through registration, payments, website content, optional tools, and a final readiness review.</p>
-        <button class="primary-button" type="submit">Create draft & continue</button>
-      </form>
-    </section>`;
-}
-
-function duplicateEventForm(event) {
-  const suggestedDate = new Date(new Date(event.starts_at).setFullYear(new Date(event.starts_at).getFullYear() + 1)).toISOString().slice(0,10);
-  return `<section class="modal"><div class="form-heading"><div><p>Reusable event</p><h2>Duplicate ${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <p class="modal-note">Creates a private draft with registration options, questions, waiver, website content, sponsors, products, and shifted registration deadlines. Participants, payments, results, and staff are never copied.</p>
-    <form id="duplicate-event-form" data-source-event-id="${event.id}">
-      <label>New event name<input name="name" value="${escapeHtml(event.name)}" required minlength="3" maxlength="120"></label>
-      <label>New event date<input name="date" type="date" value="${suggestedDate}" required></label>
-      <button class="primary-button" type="submit">Create draft copy</button>
-    </form></section>`;
-}
-
-function checklistForm(event) {
-  const items = [...(event.os_event_checklist_items || [])].sort((a,b) =>
-    Number(Boolean(a.completed_at)) - Number(Boolean(b.completed_at)) ||
-    new Date(a.due_at || "9999-12-31") - new Date(b.due_at || "9999-12-31") ||
-    a.sort_order - b.sort_order
-  );
-  const complete = items.filter((item) => item.completed_at).length;
-  const percent = items.length ? Math.round(complete / items.length * 100) : 0;
-  return `<section class="modal wide-modal"><div class="form-heading"><div><p>Operational readiness</p><h2>${escapeHtml(event.name)}</h2></div><button data-close-dialog aria-label="Close" type="button">×</button></div>
-    <div class="checklist-progress"><span><b>${complete} of ${items.length}</b> tasks complete</span><strong>${percent}% ready</strong><i><em style="width:${percent}%"></em></i></div>
-    <div class="checklist-list">${items.map((item) => {
-      const overdue = !item.completed_at && item.due_at && new Date(item.due_at) < new Date();
-      return `<article class="${item.completed_at ? "complete" : ""}">
-        <button class="checklist-toggle" data-toggle-checklist="${item.id}" data-event="${event.id}" data-complete="${item.completed_at ? "true" : "false"}" type="button" aria-label="${item.completed_at ? "Mark incomplete" : "Mark complete"}">${item.completed_at ? "✓" : ""}</button>
-        <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.category.replaceAll("_"," "))}${item.due_at ? ` · <time class="${overdue ? "overdue" : ""}">${overdue ? "Overdue · " : ""}${displayDate(item.due_at)}</time>` : " · No due date"}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></span>
-        <button class="icon-button" data-delete-checklist="${item.id}" data-event="${event.id}" type="button" aria-label="Delete ${escapeHtml(item.title)}">×</button>
-      </article>`;
-    }).join("") || '<div class="empty-state">No checklist tasks yet.</div>'}</div>
-    <h3>Add a task</h3>
-    <form id="checklist-item-form" data-event-id="${event.id}">
-      <label>Task<input name="title" placeholder="Confirm medical team" required maxlength="180"></label>
-      <div class="split-fields"><label>Category<select name="category"><option value="planning">Planning</option><option value="registration">Registration</option><option value="course">Course</option><option value="volunteers">Volunteers</option><option value="communications">Communications</option><option value="race_day">Race day</option><option value="post_event">Post-event</option><option value="operations">Other operations</option></select></label><label>Due date<input name="due_at" type="date"></label></div>
-      <label>Notes<input name="notes" placeholder="Optional owner, vendor, or detail"></label>
-      <button class="primary-button" type="submit">Add task</button>
-    </form></section>`;
-}
+const organizerViews = createOrganizerViews();
+const eventForm = organizerViews.event;
+const duplicateEventForm = organizerViews.duplicate;
+const checklistForm = organizerViews.checklist;
 
 function openDialog(content) {
   dialogController.open(content);
