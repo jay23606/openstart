@@ -21,6 +21,11 @@ confirmation actions while receiving its data and UI dependencies explicitly.
 publishing, organizer tools, waves, site content, pricing, and operational
 checklists through the same dependency-driven boundary.
 
+`modules/dispatcher.js` composes feature controllers for click and form
+submission handling. It processes handlers in explicit order and stops after
+the first feature accepts an action, keeping the application shell independent
+from feature-specific `data-*` attributes.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

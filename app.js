@@ -14,6 +14,7 @@ import { createOrganizerController } from "./features/organizer/controller.js?v=
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
+import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { parseResultsCsv as parseResultRows, rankResults } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
 import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
@@ -1436,6 +1437,10 @@ const organizerController = createOrganizerController({
   },
 });
 
+const featureControllers = [organizerController, registrationController];
+const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
+const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
+
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
   if (!target) return;
@@ -1548,8 +1553,7 @@ document.addEventListener("click", async (event) => {
     renderEvent(state.selectedEvent);
     scrollTo(0, 0);
   }
-  if (await organizerController.handleClick(target)) return;
-  if (await registrationController.handleClick(target)) return;
+  if (await dispatchFeatureClick(target)) return;
   if (target.dataset.lotteryManager) openDialog(lotteryLifecycleForm(eventById(target.dataset.lotteryManager)));
   if (target.dataset.runLottery) {
     if (!confirm("Finalize this lottery draw? The weighted result and waitlist order cannot be rerun or edited.")) return;
@@ -1805,8 +1809,7 @@ document.addEventListener("submit", async (event) => {
       }
     }
 
-    if (await organizerController.handleSubmit(form, data)) return;
-    if (await registrationController.handleSubmit(form, data)) return;
+    if (await dispatchFeatureSubmit(form, data)) return;
 
     if(form.id==="athlete-profile-form"){
       const payload={
