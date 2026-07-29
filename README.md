@@ -17,6 +17,9 @@ Larger product areas live under `features/`. For example,
 `features/registration/controller.js` owns registration checkout, lottery
 entry, participant management, transfers, cancellations, refunds, and
 confirmation actions while receiving its data and UI dependencies explicitly.
+`features/organizer/controller.js` owns event creation, guided setup,
+publishing, organizer tools, waves, site content, pricing, and operational
+checklists through the same dependency-driven boundary.
 
 ## Current capabilities
 

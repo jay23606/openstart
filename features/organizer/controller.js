@@ -1,0 +1,205 @@
+export function createOrganizerController({
+  state,
+  eventById,
+  openDialog,
+  forms,
+  renderSetupWizard,
+  renderDashboard,
+  renderRoster,
+  renderEvent,
+  loadDashboard,
+  publishEvent,
+  unpublishEvent,
+  updateChecklistItem,
+  deleteChecklistItem,
+  deleteEventSection,
+  deleteEventSponsor,
+  deleteScheduledPrice,
+  deleteWave,
+  wavesAction,
+  createEvent,
+  duplicateEvent,
+  createChecklistItem,
+  createEventTier,
+  updateEventSettings,
+  slugify,
+  organizerId,
+  dialog,
+  showNotice,
+  go,
+}) {
+  async function refreshDialog(eventId, form) {
+    await loadDashboard();
+    openDialog(form(eventById(eventId)));
+  }
+
+  async function handleClick(target) {
+    if (target.matches("[data-create-event]")) openDialog(forms.event());
+    else if (target.dataset.duplicateEvent) openDialog(forms.duplicateEvent(eventById(target.dataset.duplicateEvent)));
+    else if (target.dataset.roster) {
+      const race = eventById(target.dataset.roster);
+      if (race.status === "draft") await renderSetupWizard(race, 0);
+      else renderRoster(race);
+    } else if (target.dataset.openSetup) await renderSetupWizard(eventById(target.dataset.openSetup), 0);
+    else if (target.dataset.setupStep) await renderSetupWizard(eventById(target.dataset.setupEvent), Number(target.dataset.setupStep));
+    else if (target.matches("[data-exit-setup]")) {
+      state.setupEventId = null;
+      await go("dashboard");
+    } else if (target.dataset.setupPreview) {
+      state.setupEventId = target.dataset.setupPreview;
+      renderEvent(eventById(target.dataset.setupPreview), true);
+    } else if (target.dataset.publishEvent) {
+      target.disabled = true;
+      try {
+        await publishEvent(target.dataset.publishEvent);
+        await loadDashboard();
+        await renderSetupWizard(eventById(target.dataset.publishEvent), 5);
+        showNotice("Event published. Registration is now public.");
+      } catch (error) {
+        target.disabled = false;
+        showNotice(error.message || "The event is not ready to publish.");
+      }
+    } else if (target.dataset.unpublishEvent) {
+      await unpublishEvent(target.dataset.unpublishEvent);
+      await loadDashboard();
+      await renderSetupWizard(eventById(target.dataset.unpublishEvent), 5);
+      showNotice("Event returned to a private draft.");
+    } else if (target.dataset.addParticipant) openDialog(forms.manualRegistration(eventById(target.dataset.addParticipant)));
+    else if (target.dataset.registrationSettings) openDialog(forms.registrationSettings(eventById(target.dataset.registrationSettings)));
+    else if (target.dataset.pricingSettings) openDialog(forms.pricingSettings(eventById(target.dataset.pricingSettings)));
+    else if (target.dataset.productSettings) openDialog(forms.productSettings(eventById(target.dataset.productSettings)));
+    else if (target.dataset.siteEditor) openDialog(forms.siteEditor(eventById(target.dataset.siteEditor)));
+    else if (target.dataset.waveManager) openDialog(forms.waveManager(eventById(target.dataset.waveManager)));
+    else if (target.dataset.volunteerManager) openDialog(forms.volunteerManager(eventById(target.dataset.volunteerManager)));
+    else if (target.dataset.checklist) openDialog(forms.checklist(eventById(target.dataset.checklist)));
+    else if (target.dataset.toggleChecklist) {
+      await updateChecklistItem(target.dataset.toggleChecklist, {
+        completed_at: target.dataset.complete === "true" ? null : new Date().toISOString(),
+      });
+      await refreshDialog(target.dataset.event, forms.checklist);
+    } else if (target.dataset.deleteChecklist) {
+      if (!confirm("Delete this checklist task?")) return true;
+      await deleteChecklistItem(target.dataset.deleteChecklist);
+      await refreshDialog(target.dataset.event, forms.checklist);
+      showNotice("Checklist task deleted.");
+    } else if (target.dataset.deleteWave) {
+      await deleteWave(target.dataset.deleteWave);
+      await refreshDialog(target.dataset.event, forms.waveManager);
+      showNotice("Wave deleted.");
+    } else if (target.dataset.startWave) {
+      await wavesAction("start", { eventId: target.dataset.event, waveId: target.dataset.startWave });
+      await refreshDialog(target.dataset.event, forms.waveManager);
+      showNotice("Wave start time recorded.");
+    } else if (target.dataset.waveBibs) {
+      const result = await wavesAction("assign_bibs", { eventId: target.dataset.event, waveId: target.dataset.waveBibs });
+      await refreshDialog(target.dataset.event, forms.waveManager);
+      showNotice(`${result.assigned} bibs assigned.`);
+    } else if (target.dataset.deleteSiteSection) {
+      await deleteEventSection(target.dataset.deleteSiteSection);
+      await refreshDialog(target.dataset.event, forms.siteEditor);
+      showNotice("Section deleted.");
+    } else if (target.dataset.deleteSponsor) {
+      await deleteEventSponsor(target.dataset.deleteSponsor);
+      await refreshDialog(target.dataset.event, forms.siteEditor);
+      showNotice("Sponsor deleted.");
+    } else if (target.dataset.deletePrice) {
+      await deleteScheduledPrice(target.dataset.deletePrice);
+      await refreshDialog(target.dataset.eventId, forms.pricingSettings);
+      showNotice("Scheduled price removed.");
+    } else return false;
+    return true;
+  }
+
+  async function handleSubmit(form, data) {
+    if (form.id === "event-form") {
+      const name = data.get("name");
+      const created = await createEvent({
+        organizer_id: organizerId(),
+        slug: `${slugify(name)}-${Date.now().toString().slice(-6)}`,
+        name,
+        description: data.get("description"),
+        starts_at: new Date(`${data.get("date")}T12:00:00`).toISOString(),
+        location_name: data.get("location"),
+        status: "draft",
+      }, {
+        name: data.get("tier_name"),
+        distance_label: data.get("distance"),
+        price_cents: Math.round(Number(data.get("price")) * 100),
+        capacity: Number(data.get("capacity")),
+      });
+      await loadDashboard();
+      dialog.close();
+      await renderSetupWizard(eventById(created.id), 0);
+      showNotice(`${name} draft created. Your progress saves at each step.`);
+      return true;
+    }
+    if (form.id === "duplicate-event-form") {
+      const name = data.get("name").trim();
+      await duplicateEvent(form.dataset.sourceEventId, name, new Date(`${data.get("date")}T12:00:00`).toISOString());
+      dialog.close();
+      await go("dashboard");
+      showNotice(`${name} was created as a private draft.`);
+      return true;
+    }
+    if (form.id === "checklist-item-form") {
+      await createChecklistItem({
+        event_id: form.dataset.eventId,
+        title: data.get("title").trim(),
+        category: data.get("category"),
+        due_at: data.get("due_at") ? new Date(`${data.get("due_at")}T12:00:00`).toISOString() : null,
+        notes: data.get("notes").trim(),
+        sort_order: (eventById(form.dataset.eventId).os_event_checklist_items || []).length * 10 + 10,
+      });
+      await refreshDialog(form.dataset.eventId, forms.checklist);
+      showNotice("Checklist task added.");
+      return true;
+    }
+    if (form.id === "setup-basics-form") {
+      await updateEventSettings(form.dataset.eventId, {
+        name: data.get("name").trim(),
+        starts_at: new Date(data.get("starts_at")).toISOString(),
+        location_name: data.get("location_name").trim(),
+        description: data.get("description").trim(),
+        updated_at: new Date().toISOString(),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId), 1);
+      showNotice("Event details saved.");
+      return true;
+    }
+    if (form.id === "setup-tier-form") {
+      await createEventTier({
+        event_id: form.dataset.eventId,
+        name: data.get("name").trim(),
+        distance_label: data.get("distance_label").trim(),
+        price_cents: Math.round(Number(data.get("price")) * 100),
+        capacity: Number(data.get("capacity")),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId), 1);
+      showNotice("Registration option added.");
+      return true;
+    }
+    if (form.id === "setup-runner-form" || form.id === "setup-website-form") {
+      const runner = form.id === "setup-runner-form";
+      await updateEventSettings(form.dataset.eventId, runner ? {
+        waiver_text: data.get("waiver_text").trim(),
+        participant_edits_close_at: data.get("participant_edits_close_at") ? new Date(data.get("participant_edits_close_at")).toISOString() : null,
+        transfers_close_at: data.get("transfers_close_at") ? new Date(data.get("transfers_close_at")).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      } : {
+        primary_color: data.get("primary_color"),
+        contact_email: data.get("contact_email") || null,
+        website_published: data.get("website_published") === "on",
+        updated_at: new Date().toISOString(),
+      });
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId), runner ? 3 : 4);
+      showNotice(runner ? "Runner experience saved." : "Website settings saved.");
+      return true;
+    }
+    return false;
+  }
+
+  return { handleClick, handleSubmit };
+}
