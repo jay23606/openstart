@@ -14,7 +14,7 @@ import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=84";
 import { createAccountController } from "./features/account/controller.js?v=92";
-import { createPublicController } from "./features/public/controller.js?v=82";
+import { createPublicController } from "./features/public/controller.js?v=94";
 import { createOrganizerController } from "./features/organizer/controller.js?v=88";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
@@ -185,6 +185,7 @@ const publicController = createPublicController({
   stateFromCoords,
   showNotice,
   scrollToTop: () => scrollTo(0, 0),
+  patchState: appStore.patch,
 });
 const contentController = createContentController({ documentRef: document });
 const { loadDiscovery, renderDiscover, renderEvent } = publicController;

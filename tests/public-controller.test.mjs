@@ -24,6 +24,7 @@ function fixture(overrides = {}) {
   const count = { textContent: "" };
   const notices = [];
   const metadata = [];
+  const patches = [];
   const storageValues = new Map();
   const storage = {
     getItem: (key) => storageValues.get(key) ?? null,
@@ -60,9 +61,13 @@ function fixture(overrides = {}) {
     schedule: () => 1,
     cancelSchedule: () => {},
     scrollToTop: () => {},
+    patchState: (values) => {
+      patches.push(Object.keys(values));
+      Object.assign(state, values);
+    },
     ...overrides,
   });
-  return { controller, state, page, results, count, notices, metadata, storage, storageValues, publicViews };
+  return { controller, state, page, results, count, notices, metadata, patches, storage, storageValues, publicViews };
 }
 
 test("public controller ignores stale discovery responses", async () => {
@@ -82,6 +87,25 @@ test("public controller ignores stale discovery responses", async () => {
 
   assert.deepEqual(state.events.map((event) => event.id), ["new"]);
   assert.equal(state.discoverTotal, 1);
+});
+
+test("public controller patches discovery results and filters atomically", async () => {
+  const scheduled = [];
+  const { controller, patches } = fixture({
+    listPublishedEvents: async () => ({ events: [{ id: "race", status: "published" }], total: 1 }),
+    schedule: (callback) => {
+      scheduled.push(callback);
+      return scheduled.length;
+    },
+  });
+
+  controller.search("trail");
+  assert.deepEqual(patches[0], ["discoverQuery", "discoverVisible"]);
+  await scheduled[0]();
+  assert.deepEqual(patches.slice(1), [
+    ["discoverRequest"],
+    ["events", "discoverTotal"],
+  ]);
 });
 
 test("public controller debounces search and refreshes only the result region", async () => {

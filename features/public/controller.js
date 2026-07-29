@@ -14,6 +14,7 @@ export function createPublicController({
   cancelSchedule = clearTimeout,
   scrollToTop = () => scrollTo(0, 0),
   discoverPageSize = 12,
+  patchState = (values) => Object.assign(state, values),
 }) {
   let searchTimer = null;
 
@@ -46,7 +47,8 @@ export function createPublicController({
   }
 
   async function loadDiscovery() {
-    const request = ++state.discoverRequest;
+    const request = state.discoverRequest + 1;
+    patchState({ discoverRequest: request });
     const result = await listPublishedEvents({
       query: state.discoverQuery,
       region: state.discoverRegion,
@@ -54,19 +56,14 @@ export function createPublicController({
       offset: 0,
     });
     if (request !== state.discoverRequest) return false;
-    if (Array.isArray(result)) {
-      state.events = result;
-      state.discoverTotal = result.length;
-    } else {
-      state.events = result.events;
-      state.discoverTotal = result.total;
-    }
+    patchState(Array.isArray(result)
+      ? { events: result, discoverTotal: result.length }
+      : { events: result.events, discoverTotal: result.total });
     return true;
   }
 
   async function setRegion(region) {
-    state.discoverRegion = region;
-    state.discoverVisible = discoverPageSize;
+    patchState({ discoverRegion: region, discoverVisible: discoverPageSize });
     try {
       if (region) storage.setItem("openstart-region", JSON.stringify(region));
       else storage.removeItem("openstart-region");
@@ -78,20 +75,19 @@ export function createPublicController({
   function restoreRegion() {
     try {
       const saved = JSON.parse(storage.getItem("openstart-region") || "null");
-      if (saved?.state) state.discoverRegion = saved;
+      if (saved?.state) patchState({ discoverRegion: saved });
     } catch { /* ignore missing or unreadable storage */ }
     return state.discoverRegion;
   }
 
   async function showMore() {
-    state.discoverVisible += discoverPageSize;
+    patchState({ discoverVisible: state.discoverVisible + discoverPageSize });
     await loadDiscovery();
     refreshDiscover();
   }
 
   function search(value) {
-    state.discoverQuery = value;
-    state.discoverVisible = discoverPageSize;
+    patchState({ discoverQuery: value, discoverVisible: discoverPageSize });
     if (searchTimer) cancelSchedule(searchTimer);
     searchTimer = schedule(async () => {
       searchTimer = null;
@@ -141,7 +137,7 @@ export function createPublicController({
   }
 
   async function openEvent(id) {
-    state.selectedEvent = await hydrateEvent(id);
+    patchState({ selectedEvent: await hydrateEvent(id) });
     if (!state.selectedEvent) return false;
     renderEvent(state.selectedEvent);
     scrollToTop();
