@@ -55,6 +55,10 @@ request cancellation, paging, persisted location, geolocation, debounced
 search, event hydration, metadata, and focus-preserving result replacement.
 `app.js` forwards matching DOM events while templates remain isolated from
 global state and browser effects stay independently testable.
+`modules/page-lifecycle.js` is the single full-page commit boundary for markup,
+metadata, navigation state, focus, scroll restoration, and fatal errors.
+Intentional partial updates bypass it so live search does not disturb the
+runner's current focus or page position.
 `features/volunteers/controller.js` owns public shift signup and waitlisting,
 organizer role creation, roster updates, and volunteer exports. Its `views.js`
 owns the public opportunities/signup dialogs and organizer volunteer workspace.

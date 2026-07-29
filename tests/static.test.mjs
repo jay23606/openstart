@@ -24,7 +24,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.match(app, /function renderHelp\(\)/);
   assert.match(app, /function renderArchitecture\(\)/);
-  assert.match(app, /page\.innerHTML = architectureView\(\)/);
+  assert.match(app, /pageLifecycle\.render\(architectureView\(\)/);
   assert.match(contentViews, /export function architectureView\(\)/);
   assert.match(contentViews, /class="architecture-page"/);
   assert.match(contentViews, /data-view="architecture"/);
@@ -37,6 +37,9 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(app, /from "\.\/modules\/app-state\.js/);
   assert.match(app, /from "\.\/modules\/content-views\.js/);
   assert.match(app, /from "\.\/modules\/public-views\.js/);
+  assert.match(app, /from "\.\/modules\/page-lifecycle\.js/);
+  assert.match(app, /pageLifecycle\.afterNavigate/);
+  assert.doesNotMatch(app, /page\.innerHTML\s*=/);
   assert.match(app, /createPublicController/);
   assert.match(publicController, /publicViews\.discoveryPage\(discoveryModel\(\)\)/);
   assert.match(publicController, /publicViews\.eventPage\(model\)/);
@@ -54,6 +57,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /theme\.js/);
   assert.match(worker, /modules\/public-view-models\.js/);
   assert.match(worker, /modules\/public-views\.js/);
+  assert.match(worker, /modules\/page-lifecycle\.js/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);

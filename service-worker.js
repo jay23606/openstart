@@ -1,4 +1,4 @@
-const CACHE = "openstart-v80";
+const CACHE = "openstart-v81";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./core.js",
   "./data.js", "./theme.js", "./config.js", "./manifest.json", "./favicon.svg",
@@ -30,7 +30,7 @@ const APP_SHELL = [
   "./features/waves/views.js",
   "./modules/app-state.js", "./modules/content-data.js",
   "./modules/account-views.js",
-  "./modules/busy.js", "./modules/content-views.js", "./modules/discovery.js", "./modules/dispatcher.js", "./modules/public-view-models.js", "./modules/public-views.js", "./modules/results.js",
+  "./modules/busy.js", "./modules/content-views.js", "./modules/discovery.js", "./modules/dispatcher.js", "./modules/page-lifecycle.js", "./modules/public-view-models.js", "./modules/public-views.js", "./modules/results.js",
   "./modules/render.js",
   "./modules/router.js", "./modules/ui-feedback.js", "./modules/ui.js",
 ];

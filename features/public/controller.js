@@ -1,9 +1,8 @@
 export function createPublicController({
   state,
-  page,
   publicViews,
   listPublishedEvents,
-  setPageMetadata,
+  renderPage,
   hydrateEvent,
   parseRegion,
   stateFromCoords,
@@ -22,8 +21,7 @@ export function createPublicController({
   const discoveryModel = () => publicViews.discoveryModel(state, publishedEvents());
 
   function renderDiscover() {
-    setPageMetadata();
-    page.innerHTML = publicViews.discoveryPage(discoveryModel());
+    renderPage(publicViews.discoveryPage(discoveryModel()), { metadata: {} });
   }
 
   function refreshDiscover() {
@@ -38,8 +36,13 @@ export function createPublicController({
 
   function renderEvent(event, preview = false) {
     const model = publicViews.eventModel(event, preview);
-    setPageMetadata(`${event.name} — OpenStart`, event.description, event.banner_url || event.logo_url || "og.png");
-    page.innerHTML = publicViews.eventPage(model);
+    renderPage(publicViews.eventPage(model), {
+      metadata: {
+        title: `${event.name} — OpenStart`,
+        description: event.description,
+        image: event.banner_url || event.logo_url || "og.png",
+      },
+    });
   }
 
   async function loadDiscovery() {

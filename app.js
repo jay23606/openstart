@@ -40,6 +40,7 @@ import { architectureView, demoView, helpView } from "./modules/content-views.js
 import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
+import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=43";
@@ -83,24 +84,30 @@ const tierById = findTierById;
 const eventRegistrations = (id) => findEventRegistrations(state,id);
 
 function renderHelp() {
-  setPageMetadata(
-    "OpenStart Help — Guides for runners and organizers",
-    "Learn how to register, manage races, accept test payments, communicate with participants, and run race day in OpenStart.",
-  );
-  page.innerHTML = helpView();
+  pageLifecycle.render(helpView(), {
+    metadata: {
+      title: "OpenStart Help — Guides for runners and organizers",
+      description: "Learn how to register, manage races, accept test payments, communicate with participants, and run race day in OpenStart.",
+    },
+  });
 }
 
 function renderArchitecture() {
-  setPageMetadata(
-    "OpenStart Architecture — Platform overview",
-    "A concise guide to OpenStart's system design, core domains, trust boundaries, and critical workflows.",
-  );
-  page.innerHTML = architectureView();
+  pageLifecycle.render(architectureView(), {
+    metadata: {
+      title: "OpenStart Architecture — Platform overview",
+      description: "A concise guide to OpenStart's system design, core domains, trust boundaries, and critical workflows.",
+    },
+  });
 }
 
 function renderDemo() {
-  setPageMetadata("OpenStart Demo — Explore every race-management feature","Tour OpenStart features or create a private sample event with realistic demonstration data.");
-  page.innerHTML = demoView(state);
+  pageLifecycle.render(demoView(state), {
+    metadata: {
+      title: "OpenStart Demo — Explore every race-management feature",
+      description: "Tour OpenStart features or create a private sample event with realistic demonstration data.",
+    },
+  });
 }
 
 function localReadiness(event) {
@@ -116,10 +123,11 @@ function localReadiness(event) {
 async function renderSetupWizard(event, step = 0) {
   state.setupEventId = event.id;
   const readiness = configured ? await eventReadiness(event.id) : localReadiness(event);
-  setPageMetadata(`${event.name} setup — OpenStart`, "Guided event setup and publishing.");
-  page.innerHTML = organizerViews.setup(event, step, readiness, state.session?.user?.email || "");
-  syncNavigation();
-  scrollTo(0, 0);
+  pageLifecycle.render(organizerViews.setup(event, step, readiness, state.session?.user?.email || ""), {
+    metadata: { title: `${event.name} setup — OpenStart`, description: "Guided event setup and publishing." },
+    sync: true,
+    scroll: true,
+  });
 }
 
 const effectivePrice = (tier) => {
@@ -132,20 +140,6 @@ const publicViews = createPublicViews({ effectivePrice, eventRegistrations, tier
 const noticeController = createNoticeController({ notice });
 const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
 function showNotice(message, options) { noticeController.show(message, options); }
-const publicController = createPublicController({
-  state,
-  page,
-  publicViews,
-  listPublishedEvents,
-  setPageMetadata,
-  hydrateEvent,
-  parseRegion,
-  stateFromCoords,
-  showNotice,
-  scrollToTop: () => scrollTo(0, 0),
-});
-const { loadDiscovery, renderDiscover, renderEvent } = publicController;
-publicController.restoreRegion();
 
 const platformViews = createPlatformViews();
 const healthForm = platformViews.health;
@@ -168,6 +162,26 @@ function syncNavigation() {
   platformNav.classList.toggle("hidden", !state.platformAdmin?.allowed);
 }
 
+const pageLifecycle = createPageLifecycle({
+  page,
+  setPageMetadata,
+  syncNavigation,
+  scrollToTop: () => scrollTo(0, 0),
+});
+const publicController = createPublicController({
+  state,
+  publicViews,
+  listPublishedEvents,
+  renderPage: pageLifecycle.render,
+  hydrateEvent,
+  parseRegion,
+  stateFromCoords,
+  showNotice,
+  scrollToTop: () => scrollTo(0, 0),
+});
+const { loadDiscovery, renderDiscover, renderEvent } = publicController;
+publicController.restoreRegion();
+
 async function loadPlatformAccess(){
   state.platformAdmin=state.session ? await platformAdminAction("access").catch(()=>({allowed:false})) : null;
   syncNavigation();
@@ -179,15 +193,21 @@ async function loadPlatformOverview(query=""){
 
 function renderPlatformAdmin() {
   if (!state.platformData) return;
-  setPageMetadata("OpenStart Platform Operations", "Private operational controls for OpenStart.");
-  page.innerHTML = platformViews.consolePage(state.platformData);
+  pageLifecycle.render(platformViews.consolePage(state.platformData), {
+    metadata: { title: "OpenStart Platform Operations", description: "Private operational controls for OpenStart." },
+  });
 }
 
 async function renderSeries(series) {
   const standings=await seriesAction("standings",{seriesId:series.id});
   state.seriesStandings=standings;
-  setPageMetadata(`${series.name} — OpenStart`,series.description,series.banner_url || series.logo_url || "og.png");
-  page.innerHTML = seriesViews.publicPage(series, standings);
+  pageLifecycle.render(seriesViews.publicPage(series, standings), {
+    metadata: {
+      title: `${series.name} — OpenStart`,
+      description: series.description,
+      image: series.banner_url || series.logo_url || "og.png",
+    },
+  });
 }
 
 function exportSeriesStandings(series) {
@@ -197,7 +217,12 @@ function exportSeriesStandings(series) {
 }
 
 function renderDashboard() {
-  page.innerHTML = organizerViews.dashboard(state, configured, eventById);
+  pageLifecycle.render(organizerViews.dashboard(state, configured, eventById), {
+    metadata: {
+      title: "Organizer workspace — OpenStart",
+      description: "Manage OpenStart events, registrations, finances, communications, and race-day operations.",
+    },
+  });
 }
 
 const lotteryViews = createLotteryViews({ effectivePrice, safeUrl, tierById });
@@ -207,7 +232,12 @@ const lotteryCheckoutForm = lotteryViews.checkout;
 const lotteryLifecycleForm = lotteryViews.lifecycle;
 
 function renderRunnerDashboard() {
-  page.innerHTML = accountViews.runnerDashboard(state);
+  pageLifecycle.render(accountViews.runnerDashboard(state), {
+    metadata: {
+      title: "My races — OpenStart",
+      description: "Manage your OpenStart registrations, results, teams, volunteer shifts, and athlete profile.",
+    },
+  });
 }
 
 function renderAthlete(data){
@@ -215,10 +245,15 @@ function renderAthlete(data){
   state.selectedEvent=null;
   const {profile}=data;
   const name=profile.display_name || `@${profile.handle}`;
-  setPageMetadata(`${name} · OpenStart athlete`,`Race history and personal bests for ${name} on OpenStart.`);
-  page.innerHTML = accountViews.publicAthlete(data);
-  syncNavigation();
-  page.focus({preventScroll:true});
+  pageLifecycle.render(accountViews.publicAthlete(data), {
+    metadata: {
+      title: `${name} · OpenStart athlete`,
+      description: `Race history and personal bests for ${name} on OpenStart.`,
+    },
+    sync: true,
+    focus: true,
+    scroll: true,
+  });
 }
 
 function renderRoster(event) {
@@ -476,10 +511,7 @@ const { navigate: go } = createRouter({
       return () => renderDiscover();
     },
   },
-  afterNavigate: () => {
-    syncNavigation();
-    page.focus({ preventScroll: true });
-  },
+  afterNavigate: pageLifecycle.afterNavigate,
 });
 
 const registrationController = createRegistrationController({
@@ -870,7 +902,6 @@ document.addEventListener("click", async (event) => {
     if (!athlete) { showNotice("That athlete page isn't public yet."); return; }
     history.replaceState({}, "", `${location.pathname}?athlete=${target.dataset.viewAthlete}`);
     renderAthlete(athlete);
-    scrollTo(0, 0);
   }
   if (target.matches("[data-close-roster]")) document.querySelector("#roster-slot").innerHTML = "";
   if (target.matches("[data-reset-demo]")) {
@@ -931,7 +962,7 @@ document.addEventListener("submit", async (event) => {
         await loadPublic();
         state.selectedEvent = await hydrateEvent(lotteryEventId);
         renderEvent(state.selectedEvent);
-        syncNavigation();
+        pageLifecycle.afterNavigate();
         openDialog(lotteryApplicationForm(state.selectedEvent));
       } else {
         await go(state.pendingView || "runner");
@@ -1098,5 +1129,5 @@ async function boot() {
 }
 
 boot().catch((error) => {
-  page.innerHTML = `<section class="empty-state">OpenStart could not load: ${escapeHtml(error.message)}</section>`;
+  pageLifecycle.error(`<section class="empty-state">OpenStart could not load: ${escapeHtml(error.message)}</section>`);
 });

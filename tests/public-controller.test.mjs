@@ -42,10 +42,12 @@ function fixture(overrides = {}) {
   };
   const controller = createPublicController({
     state,
-    page,
     publicViews,
     listPublishedEvents: async () => [],
-    setPageMetadata: (...values) => metadata.push(values),
+    renderPage: (markup, options = {}) => {
+      page.innerHTML = markup;
+      if (options.metadata) metadata.push(options.metadata);
+    },
     hydrateEvent: async (id) => ({ id, name: "Race", description: "Description" }),
     parseRegion: (value) => value === "Boulder, CO" ? { city: "boulder", state: "CO" } : { city: value, state: "" },
     stateFromCoords: () => "CO",
