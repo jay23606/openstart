@@ -5,6 +5,12 @@ platform. It follows the same architecture as BotGarden and Mayfly: static HTML,
 CSS, and browser-native JavaScript modules on GitHub Pages, backed by Supabase.
 There is no frontend framework, bundler, or build step.
 
+The browser code is split into native ES modules: `app.js` composes navigation
+and workflows, `data.js` owns Supabase access, and `modules/` contains shared
+state, presentation utilities, discovery rules, and content catalogs. This
+keeps the static deployment inspectable while avoiding repeated helpers and
+large cross-feature dependencies.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

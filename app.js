@@ -9,6 +9,10 @@ import {
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
+import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
+import { demoView, helpView } from "./modules/content-views.js?v=40";
+import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
+import { contentHtml, localDateTime, ordinal, parseResultTime, resultTime, safeColor, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -20,59 +24,9 @@ const setupBanner = document.querySelector("#setup-banner");
 const platformNav = document.querySelector("#platform-nav");
 let draggedSectionId=null;
 
-const state = {
-  view: "discover",
-  discoverQuery: "",
-  discoverRegion: null,
-  discoverVisible: 12,
-  discoverTotal: 0,
-  discoverRequest: 0,
-  organizerMetrics: [],
-  loadedRegistrationEvents: new Set(),
-  events: [],
-  registrations: [],
-  selectedEvent: null,
-  session: null,
-  profile: null,
-  runnerRegistrations: [],
-  captainTeams: [],
-  orderItems: [],
-  campaigns: [],
-  emailTemplates: [],
-  volunteerSignups: [],
-  lotteryApplications: [],
-  auditLog: [],
-  series: [],
-  seriesStandings: null,
-  pendingView: "runner",
-  pendingTransfer: null,
-  pendingLotteryEvent: null,
-  setupEventId: null,
-  navigationId: 0,
-  platformAdmin: null,
-  platformData: null,
-  athleteProfile: null,
-};
+const state = createAppState();
 
-const helpArticles=[
-  {audience:"Start here",title:"Understanding OpenStart accounts",keywords:"account login runner organizer staff navigation",body:"One account can be a runner, organizer, team captain, volunteer, or race-day staff member. My races contains your registrations and volunteer shifts. Organizer contains events you own. Staff tools appear when an organizer assigns your verified account email."},
-  {audience:"Runners",title:"Registering and paying",keywords:"runner registration checkout stripe card payment confirmation duplicate email",body:"Open an event, choose Register now, enter each participant with a distinct email, then continue to Stripe Checkout for paid entries. One active registration is allowed per participant per event. A cancelled or expired attempt can register again. OpenStart confirms payment only after Stripe sends a verified webhook. The Sandbox badge means no real money is charged."},
-  {audience:"Runners",title:"Applying to a race lottery",keywords:"runner lottery application qualifier result selected waitlist tickets",body:"Sign in and select Apply to lottery from an eligible event. Choose a distance and provide qualifying-race evidence when required. Applying does not charge you or guarantee entry. My races shows qualification and selection status, ticket count, and organizer review notes."},
-  {audience:"Runners",title:"Teams, relays, waves, and transfers",keywords:"runner team relay corral wave pace transfer",body:"During registration you can join or create a team, enter relay legs, and select an eligible start wave. After signing in, open My races → Manage to update participant details, choose another open wave, request cancellation, or create a transfer link."},
-  {audience:"Runners",title:"QR passes and official results",keywords:"runner qr pass bib result leaderboard timing",body:"Confirmed participants can open a signed QR pass from My races. Show it at packet pickup or check-in. Once an organizer publishes results, your official time appears in My races and on the searchable public leaderboard."},
-  {audience:"Organizers",title:"Create, duplicate, and prepare an event",keywords:"organizer create wizard autosave setup duplicate template checklist readiness event publish website branding sections sponsor",body:"Open Organizer → Create event to start a private draft and guided six-step setup. Progress saves after each step. Required readiness items must pass before publishing; optional tools can be skipped and configured later. Draft events reopen the setup guide automatically. Duplicate creates a reusable private copy without participants or payments."},
-  {audience:"Organizers",title:"Stripe payments and payouts",keywords:"organizer stripe connect sandbox payment payout refund fee",body:"Select Connect Stripe sandbox and complete Stripe-hosted onboarding. The account must have charges and payouts enabled. Registration funds use destination charges; OpenStart retains the configured application fee. Use test card 4242 4242 4242 4242 in sandbox."},
-  {audience:"Organizers",title:"Registration, pricing, and merchandise",keywords:"organizer roster question waiver promo waitlist price product donation inventory",body:"From an event roster you can manage participants, questions, waivers, scheduled pricing, promo codes, waitlists, products, inventory, donations, and financial exports. Payment and capacity decisions remain server-authoritative."},
-  {audience:"Organizers",title:"Run a race lottery",keywords:"organizer lottery applications spots window qualifier review bonus tickets draw selection invitation waitlist promotion audit",body:"Open an event in Organizer and select Lottery. Configure the application window, spots, payment deadline, and qualification rules before publishing. Review every applicant before the deadline. After applications close, run the permanent weighted draw once. OpenStart records the seed, algorithm, score, and rank; emails selected runners; expires unpaid invitations; and promotes the next waitlisted runner automatically."},
-  {audience:"Organizers",title:"Communications",keywords:"organizer email campaign resend template audience unsubscribe",body:"Open Communications to preview an audience, send yourself a test, save templates, schedule messages, and review deliveries. Participant delivery requires a verified Resend sending domain. Marketing campaigns respect unsubscribe records."},
-  {audience:"Organizers",title:"Volunteers and race-day operations",keywords:"organizer volunteer shift staff scanner checkin packet pickup walkup bib",body:"Create volunteer roles and capacity-limited shifts from Volunteers. Race-day tools support staff roles, participant lookup, QR scanning, bib assignment, packet pickup, check-in, walk-up entries, and merchandise fulfillment."},
-  {audience:"Organizers",title:"Results, waves, and race series",keywords:"organizer result csv timing wave corral series points standings",body:"Use Waves to configure corrals, start times, capacity, pace guidance, and bib ranges. Results accepts manual times or CSV imports. After publishing official results, Series automatically calculates individual and team championship standings."},
-  {audience:"Race-day staff",title:"Using assigned staff tools",keywords:"staff scanner lookup packet pickup registration desk admin permissions",body:"Sign in with the exact verified email assigned by the organizer. Scanner staff can verify QR passes; packet-pickup staff can locate participants and mark packets; registration staff can assist walk-ups; race-day admins receive all operational permissions."},
-  {audience:"Platform operators",title:"Monitoring and intervention",keywords:"platform admin operator reconciliation webhook email failure suspend fee support note",body:"Authorized operators see a private Platform tab. Use reconciliation alerts to investigate payment mismatches, review Stripe webhook and email failures, inspect organizer readiness, record private support notes, and manage platform fees. Event suspension immediately removes public discovery and blocks new registrations without deleting financial history."},
-  {audience:"Troubleshooting",title:"Common setup and browser issues",keywords:"help error cache refresh stripe resend email supabase camera",body:"If a recent release looks stale, perform one hard refresh so the service worker retrieves the newest assets. Camera scanning requires HTTPS and a current Chrome or Edge browser. Stripe Connect errors normally indicate incomplete onboarding or capabilities. Email errors commonly indicate an unverified Resend domain."},
-];
-
-const eventById = (id) => state.events.find((event) => event.id === id);
+const eventById = (id) => findEventById(state,id);
 
 // Discovery loads a light card-only record per event. Anything that renders an
 // event's detail must first pull the full record (questions, products, waves,
@@ -93,54 +47,15 @@ const hydrateEvent = async (id) => {
     return existing;
   }
 };
-const tierById = (event, id) => event?.os_event_tiers?.find((tier) => tier.id === id);
-const eventRegistrations = (id) => state.registrations.filter((registration) => registration.event_id === id);
+const tierById = findTierById;
+const eventRegistrations = (id) => findEventRegistrations(state,id);
 
 function renderHelp() {
   setPageMetadata(
     "OpenStart Help — Guides for runners and organizers",
     "Learn how to register, manage races, accept test payments, communicate with participants, and run race day in OpenStart.",
   );
-  const audiences = ["All", ...new Set(helpArticles.map((article) => article.audience))];
-  page.innerHTML = `
-    <section class="help-page">
-      <div class="help-hero">
-        <p class="eyebrow">OPENSTART HELP</p>
-        <h1>How can we help?</h1>
-        <p>Quick, plain-language guides for runners, organizers, volunteers, and race-day staff.</p>
-        <label class="help-search">
-          <span>Search help</span>
-          <input data-help-search type="search" placeholder="Try “Stripe”, “transfer”, or “results”" autocomplete="off">
-        </label>
-      </div>
-      <div class="help-content">
-        <div class="help-filters" aria-label="Filter help topics">
-          ${audiences.map((audience, index) => `<button class="${index === 0 ? "active" : ""}" data-help-filter="${escapeHtml(audience)}" type="button">${escapeHtml(audience)}</button>`).join("")}
-        </div>
-        <p class="help-count" aria-live="polite">${helpArticles.length} guides</p>
-        <div class="help-grid">
-          ${helpArticles.map((article) => `
-            <details data-help-article data-help-audience="${escapeHtml(article.audience)}" data-help-searchable="${escapeHtml(`${article.audience} ${article.title} ${article.keywords} ${article.body}`.toLowerCase())}">
-              <summary><span>${escapeHtml(article.audience)}</span>${escapeHtml(article.title)}</summary>
-              <p>${escapeHtml(article.body)}</p>
-            </details>
-          `).join("")}
-        </div>
-        <aside class="architecture-promo">
-          <div>
-            <p class="eyebrow">FOR BUILDERS &amp; OPERATORS</p>
-            <h2>See how OpenStart fits together.</h2>
-            <p>A concise architecture paper covering the application, data model, trust boundaries, payments, communications, and race-day operations.</p>
-          </div>
-          <button class="primary-button" data-view="architecture" type="button">Read the architecture paper</button>
-        </aside>
-        <aside class="help-support">
-          <div><p class="eyebrow">STILL STUCK?</p><h2>Tell us what happened.</h2></div>
-          <p>Include the page you were on and the exact error message. Never include passwords, Stripe secret keys, or other credentials.</p>
-          <a class="primary-button" href="https://github.com/jay23606/openstart/issues/new" target="_blank" rel="noreferrer">Open a GitHub issue</a>
-        </aside>
-      </div>
-    </section>`;
+  page.innerHTML = helpView();
 }
 
 function renderArchitecture() {
@@ -229,47 +144,16 @@ function renderArchitecture() {
           <div class="deployment-strip" aria-label="Deployment sequence">
             <span><b>Static assets</b>HTML, CSS, JavaScript, manifest</span><i>→</i><span><b>Supabase project</b>Auth, Postgres, storage, functions</span><i>→</i><span><b>Providers</b>Stripe and Resend credentials</span><i>→</i><span><b>Operations</b>Migrations, monitoring, reconciliation</span>
           </div>
-          <div class="paper-note"><b>Why this shape?</b><p>The static client is inexpensive to host and easy to inspect. Postgres centralizes consistency. Edge Functions keep secrets and privileged workflows out of the browser. Each layer has one clear job.</p></div>
+          <div class="paper-note"><b>Why this shape?</b><p>The static client is inexpensive to host and easy to inspect. Native ES modules separate state, content, discovery, shared presentation, and workflow composition without adding a build system. Postgres centralizes consistency, while Edge Functions keep secrets and privileged workflows out of the browser.</p></div>
         </section>
         <section class="paper-close"><p class="eyebrow">THE OPERATING IDEA</p><blockquote>Keep the experience welcoming. Keep the important decisions verifiable.</blockquote><button class="subtle-button" data-view="help" type="button">Return to Help</button></section>
       </div>
     </article>`;
 }
 
-const showcaseFeatures = [
-  ["roster","Roster & participants","Search, filter, edit, add manual entries, assign bibs, and export a realistic sample roster."],
-  ["registration","Registration form","Inspect custom questions, waiver text, pricing, promo codes, and participant settings."],
-  ["website","Event website","Edit branded sections, schedules, course details, FAQs, sponsors, and publishing controls."],
-  ["pricing","Pricing & promotions","Explore scheduled price changes, promo codes, capacity, and waitlist controls."],
-  ["products","Merchandise","See products, size variants, inventory, fulfillment, donations, and fundraising settings."],
-  ["waves","Waves & corrals","Configure start groups, pace ranges, capacity, bib ranges, and wave start times."],
-  ["volunteers","Volunteers","Create roles and shifts, manage capacity, and review volunteer assignments."],
-  ["race-day","Race-day operations","Try participant lookup, bib assignment, packet pickup, check-in, and staff access."],
-  ["results","Results & timing","Enter or import finish times, inspect rankings, and preview publishing controls."],
-  ["lottery","Lottery & qualifiers","Configure lottery windows, available spots, qualification rules, and application review."],
-  ["checklist","Readiness checklist","Track permits, course planning, communications, race-day tasks, and deadlines."],
-  ["communications","Communications","Preview campaigns, audience tools, templates, scheduling, and delivery reporting without sending."],
-];
-
 function renderDemo() {
-  const showcase = state.events.find((event) => event.is_showcase);
   setPageMetadata("OpenStart Demo — Explore every race-management feature","Tour OpenStart features or create a private sample event with realistic demonstration data.");
-  page.innerHTML = `
-    <section class="demo-page">
-      <div class="demo-hero">
-        <div><p class="eyebrow">OPENSTART DEMO</p><h1>See the whole platform without building a race first.</h1><p>Explore what each tool does, then create one private showcase event to open the working organizer screens with sample data.</p></div>
-        <aside><b>Safe by design</b><span>Private draft</span><span>No real payments</span><span>No participant emails</span><span>Excluded from reports</span></aside>
-      </div>
-      <div class="demo-setup">
-        ${!state.session ? `<div><h2>Want to try the working tools?</h2><p>Sign in or create an account, then OpenStart will build a disposable private showcase for you.</p></div><button class="primary-button" data-demo-sign-in type="button">Sign in to create showcase</button>` :
-          showcase ? `<div><p class="eyebrow">YOUR PRIVATE SHOWCASE</p><h2>${escapeHtml(showcase.name)}</h2><p>Sample data is ready. Use any “Open tool” button below, or remove the showcase when you are finished.</p></div><span><button class="subtle-button" data-demo-roster="${showcase.id}" type="button">Open full workspace</button><button class="danger-button" data-delete-showcase="${showcase.id}" type="button">Remove showcase</button></span>` :
-          `<div><h2>Create your private feature showcase</h2><p>This adds one clearly labeled draft event to your account with sample runners, results, products, waves, volunteers, and website content.</p></div><button class="primary-button" data-create-showcase type="button">Create showcase</button>`}
-      </div>
-      <div class="demo-heading"><div><p class="eyebrow">FEATURE EXPLORER</p><h2>Everything in one place</h2></div><p>Each card explains what the feature unlocks. Working launchers appear after your showcase is created.</p></div>
-      <div class="demo-grid">
-        ${showcaseFeatures.map(([key,title,description],index) => `<article><span>${String(index+1).padStart(2,"0")}</span><h3>${title}</h3><p>${description}</p>${showcase && key !== "communications" ? `<button class="text-button" data-demo-feature="${key}" data-event-id-demo="${showcase.id}" type="button">Open tool →</button>` : key === "communications" ? `<small>Guided preview only — sending is disabled in the showcase.</small>` : `<small>${state.session ? "Create the showcase to open this tool." : "Sign in to unlock the working demo."}</small>`}</article>`).join("")}
-      </div>
-    </section>`;
+  page.innerHTML = demoView(state);
 }
 
 const setupSteps = ["Basics","Registration options","Runner experience","Website","Optional tools","Review & publish"];
@@ -344,35 +228,6 @@ const effectivePrice = (tier) => {
     .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   return active[0]?.price_cents ?? tier.price_cents;
 };
-const localDateTime = (value) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
-const resultTime = (milliseconds) => {
-  if (milliseconds === null || milliseconds === undefined) return "—";
-  const total=Math.floor(Number(milliseconds)/1000);
-  const hours=Math.floor(total/3600);
-  const minutes=Math.floor((total%3600)/60);
-  const seconds=total%60;
-  return `${hours ? `${hours}:` : ""}${String(minutes).padStart(hours ? 2 : 1,"0")}:${String(seconds).padStart(2,"0")}`;
-};
-const parseResultTime = (value) => {
-  const clean=String(value || "").trim();
-  if(!clean) return null;
-  if(/^\d+$/.test(clean)) return Number(clean)*1000;
-  const parts=clean.split(":").map(Number);
-  if(parts.some(Number.isNaN) || parts.length<2 || parts.length>3) throw new Error(`Invalid time: ${clean}`);
-  return (parts.length===3 ? parts[0]*3600+parts[1]*60+parts[2] : parts[0]*60+parts[1])*1000;
-};
-const ordinal=(value)=>{const suffixes=["th","st","nd","rd"];const remainder=value%100;return `${value}${suffixes[(remainder-20)%10]||suffixes[remainder]||suffixes[0]}`;};
-const safeColor=(value)=>/^#[0-9a-f]{6}$/i.test(value || "") ? value : "#0f6b4f";
-const safeUrl=(value)=>{try{const url=new URL(value);return ["http:","https:"].includes(url.protocol) ? url.href : "";}catch{return "";}};
-const contentHtml=(value)=>escapeHtml(value || "").replace(/\n/g,"<br>");
-function setPageMetadata(title="OpenStart — Open-source race registration",description="Great race days start in the open.",image="og.png"){
-  document.title=title;
-  document.querySelector('meta[name="description"]').content=description;
-  document.querySelector('meta[property="og:title"]').content=title;
-  document.querySelector('meta[property="og:description"]').content=description;
-  document.querySelector('meta[property="og:image"]').content=image || "og.png";
-}
-
 function showNotice(message) {
   notice.querySelector("span").textContent = message;
   notice.classList.remove("hidden");
@@ -457,76 +312,6 @@ function renderPlatformAdmin(){
   </section>`;
 }
 
-// Discovery: region matching, search, and paging.
-//
-// Events store only free-text location_name, so there are no coordinates to
-// measure true distance against. Instead we extract a city/state from that text
-// and rank same-city above same-state above everything else. Browser geolocation
-// returns coordinates, so a compact bounding-box table maps them back to a state
-// offline — no geocoding service, no API key, and nothing added to connect-src.
-const STATE_BOXES = `AL 30.2 35.0 -88.5 -84.9|AK 51.2 71.4 -179.1 -129.9|AZ 31.3 37.0 -114.8 -109.0|AR 33.0 36.5 -94.6 -89.6|CA 32.5 42.0 -124.4 -114.1|CO 37.0 41.0 -109.1 -102.0|CT 40.9 42.1 -73.7 -71.8|DE 38.4 39.8 -75.8 -75.0|DC 38.8 39.0 -77.1 -76.9|FL 24.5 31.0 -87.6 -80.0|GA 30.4 35.0 -85.6 -80.8|HI 18.9 22.2 -160.2 -154.8|ID 42.0 49.0 -117.2 -111.0|IL 36.9 42.5 -91.5 -87.5|IN 37.8 41.8 -88.1 -84.8|IA 40.4 43.5 -96.6 -90.1|KS 37.0 40.0 -102.1 -94.6|KY 36.5 39.1 -89.6 -81.9|LA 28.9 33.0 -94.0 -88.8|ME 43.1 47.5 -71.1 -66.9|MD 37.9 39.7 -79.5 -75.0|MA 41.2 42.9 -73.5 -69.9|MI 41.7 48.3 -90.4 -82.4|MN 43.5 49.4 -97.2 -89.5|MS 30.2 35.0 -91.7 -88.1|MO 36.0 40.6 -95.8 -89.1|MT 44.4 49.0 -116.1 -104.0|NE 40.0 43.0 -104.1 -95.3|NV 35.0 42.0 -120.0 -114.0|NH 42.7 45.3 -72.6 -70.7|NJ 38.9 41.4 -75.6 -73.9|NM 31.3 37.0 -109.1 -103.0|NY 40.5 45.0 -79.8 -71.9|NC 33.8 36.6 -84.3 -75.5|ND 45.9 49.0 -104.1 -96.6|OH 38.4 42.0 -84.8 -80.5|OK 33.6 37.0 -103.0 -94.4|OR 42.0 46.3 -124.6 -116.5|PA 39.7 42.3 -80.5 -74.7|RI 41.1 42.0 -71.9 -71.1|SC 32.0 35.2 -83.4 -78.5|SD 42.5 45.9 -104.1 -96.4|TN 35.0 36.7 -90.3 -81.6|TX 25.8 36.5 -106.6 -93.5|UT 37.0 42.0 -114.1 -109.0|VT 42.7 45.0 -73.4 -71.5|VA 36.5 39.5 -83.7 -75.2|WA 45.5 49.0 -124.8 -116.9|WV 37.2 40.6 -82.6 -77.7|WI 42.5 47.1 -92.9 -86.8|WY 41.0 45.0 -111.1 -104.1`
-  .split("|").map((row) => {
-    const [code, minLat, maxLat, minLng, maxLng] = row.split(" ");
-    return { code, minLat: +minLat, maxLat: +maxLat, minLng: +minLng, maxLng: +maxLng };
-  });
-
-const STATE_NAMES = {
-  alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",
-  delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",
-  indiana:"IN",iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",
-  massachusetts:"MA",michigan:"MI",minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",
-  nebraska:"NE",nevada:"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY",
-  "north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",oregon:"OR",pennsylvania:"PA",
-  "rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",utah:"UT",
-  vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY",
-};
-const STATE_CODES = new Set(STATE_BOXES.map((box) => box.code));
-
-const stateFromCoords = (latitude, longitude) => {
-  const inside = STATE_BOXES.filter((box) =>
-    latitude >= box.minLat && latitude <= box.maxLat && longitude >= box.minLng && longitude <= box.maxLng);
-  if (inside.length === 1) return inside[0].code;
-  // Boxes overlap around irregular borders; fall back to the nearest centre.
-  const candidates = inside.length ? inside : STATE_BOXES;
-  let best = null;
-  let bestDistance = Infinity;
-  for (const box of candidates) {
-    const dLat = latitude - (box.minLat + box.maxLat) / 2;
-    const dLng = (longitude - (box.minLng + box.maxLng) / 2) * Math.cos(latitude * Math.PI / 180);
-    const distance = dLat * dLat + dLng * dLng;
-    if (distance < bestDistance) { bestDistance = distance; best = box.code; }
-  }
-  return best;
-};
-
-// "Boulder, CO" / "Central Park, New York, NY" / "Austin, Texas" -> { city, state }
-const parseRegion = (value) => {
-  const parts = String(value || "").split(",").map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return { city: "", state: "" };
-  let state = "";
-  let cityIndex = parts.length - 1;
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    // A trailing ZIP ("Beverly Hills, CA 90210") still carries the state code.
-    const token = parts[index].replace(/\s+\d{5}(-\d{4})?$/, "").trim();
-    const upper = token.toUpperCase();
-    if (STATE_CODES.has(upper)) { state = upper; cityIndex = index - 1; break; }
-    if (STATE_NAMES[token.toLowerCase()]) { state = STATE_NAMES[token.toLowerCase()]; cityIndex = index - 1; break; }
-  }
-  return { city: (parts[cityIndex] || "").toLowerCase(), state };
-};
-
-const regionLabel = (region) =>
-  [region.city ? region.city.replace(/\b\w/g, (character) => character.toUpperCase()) : "", region.state]
-    .filter(Boolean).join(", ");
-
-// 0 = same city and state, 1 = same state, 2 = elsewhere.
-const proximityRank = (event, region) => {
-  if (!region || !region.state) return 2;
-  const eventRegion = parseRegion(event.location_name);
-  if (!eventRegion.state || eventRegion.state !== region.state) return 2;
-  return region.city && eventRegion.city === region.city ? 0 : 1;
-};
-
 const DISCOVER_PAGE_SIZE = 12;
 
 const discoverEvents = () => {
@@ -596,16 +381,12 @@ try {
 
 function publicEventCard(event, index) {
   const tiers = event.os_event_tiers || [];
-  const distances = tiers.map((tier) => String(tier.distance_label || "").toLowerCase()).join(" ");
-  const raceType = distances.includes("marathon") || distances.includes("26.2") ? ["26.2","marathon"] :
-    distances.includes("trail") || distances.includes("ultra") ? ["TR","trail"] :
-    distances.includes("10k") || distances.includes("6.2") ? ["10K","road"] :
-    distances.includes("5k") || distances.includes("3.1") ? ["5K","road"] : ["RUN","open"];
+  const raceType = raceTypeFor(tiers);
   return `
     <article class="event-card event-tone-${index % 3}" style="--event-accent:${safeColor(event.primary_color)}">
       <div class="event-date"><span>${eventMonth(event.starts_at)}</span><strong>${eventDay(event.starts_at)}</strong></div>
       <div class="event-card-content">
-        <div class="event-card-kicker"><p>${escapeHtml(event.location_name)}</p><span class="race-type race-type-${raceType[1]}" title="${raceType[1]} race">${raceType[0]}</span></div>
+        <div class="event-card-kicker"><p>${escapeHtml(event.location_name)}</p><span class="race-type race-type-${raceType.kind}" title="${raceType.kind} race">${raceType.label}</span></div>
         <h3>${escapeHtml(event.name)}</h3>
         <div class="tier-pills">${tiers.map((tier) => `<span>${escapeHtml(tier.distance_label)}</span>`).join("")}</div>
         <button data-event-id="${event.id}" type="button">View event <span>→</span></button>

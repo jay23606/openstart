@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, theme, and service worker", async () => {
-  const [html, app, worker, theme] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js")]);
+  const [html, app, worker, theme, appState, contentViews] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js"), read("theme.js"), read("modules/app-state.js"), read("modules/content-views.js")]);
   // Assert the wiring, not a specific cache-bust number: pinning the literal
   // version meant every routine bump failed this test. What actually matters is
   // that both assets are busted together and the service-worker cache name is
@@ -18,19 +18,25 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.ok(cacheVersion, "service-worker.js must define a versioned CACHE name");
   assert.equal(styleVersion[1], scriptVersion[1], "app.js and styles.css must share a cache-bust version");
   assert.equal(cacheVersion[1], scriptVersion[1], "service-worker CACHE must match the shell asset version");
-  assert.match(app, /pendingView:\s*"runner"/);
+  assert.match(appState, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(app, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.match(app, /function renderHelp\(\)/);
   assert.match(app, /function renderArchitecture\(\)/);
-  assert.match(app, /data-view="architecture"/);
+  assert.match(contentViews, /data-view="architecture"/);
   assert.match(app, /Postgres \+ RLS/);
   assert.match(app, /PAYMENT FLOW/);
   assert.match(html, /data-view="help"/);
   assert.match(html, /data-view="architecture"/);
   assert.match(html, /data-view="demo"/);
   assert.match(app, /function renderDemo\(\)/);
+  assert.match(app, /from "\.\/modules\/app-state\.js/);
+  assert.match(app, /from "\.\/modules\/content-views\.js/);
+  assert.match(app, /from "\.\/modules\/discovery\.js/);
+  assert.match(app, /from "\.\/modules\/ui\.js/);
+  assert.doesNotMatch(app, /const STATE_BOXES/);
+  assert.doesNotMatch(app, /const helpArticles=/);
   assert.match(html, /id="theme-toggle"/);
   assert.match(html, /src="theme\.js\?v=/);
   assert.match(worker, /theme\.js/);
@@ -120,14 +126,15 @@ test("all persisted features use the repository and server-side payment boundari
 });
 
 test("the private showcase is isolated, disposable, and server-created", async () => {
-  const [app, data, migration] = await Promise.all([
+  const [app, data, migration, contentViews] = await Promise.all([
     read("app.js"),
     read("data.js"),
     read("supabase/migrations/20260729120000_showcase_demo.sql"),
+    read("modules/content-views.js"),
   ]);
   assert.match(app, /const realEvents = state\.events\.filter\(\(event\) => !event\.is_showcase\)/);
-  assert.match(app, /No real payments/);
-  assert.match(app, /No participant emails/);
+  assert.match(contentViews, /No real payments/);
+  assert.match(contentViews, /No participant emails/);
   assert.match(data, /os_create_showcase_event/);
   assert.match(data, /os_delete_showcase_event/);
   assert.match(migration, /is_showcase boolean not null default false/);

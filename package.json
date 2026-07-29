@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --check app.js && node --check core.js && node --check data.js && node --test tests/*.test.mjs",
+    "test": "node --check app.js && node --check core.js && node --check data.js && node --check modules/app-state.js && node --check modules/content-data.js && node --check modules/content-views.js && node --check modules/discovery.js && node --check modules/ui.js && node --test tests/*.test.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

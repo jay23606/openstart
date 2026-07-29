@@ -1,21 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-// The discovery helpers live in app.js, which is a browser module wired to the
-// DOM. Pull the pure region helpers out by evaluating just their source so the
-// matching rules can be verified without a browser.
-const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
-const slice = (start, end) => {
-  const from = source.indexOf(start);
-  const to = source.indexOf(end, from);
-  assert.ok(from !== -1 && to !== -1, `could not locate ${start} in app.js`);
-  return source.slice(from, to);
-};
-const helpers = slice("const STATE_BOXES", "const DISCOVER_PAGE_SIZE");
-const { parseRegion, stateFromCoords, proximityRank, regionLabel } =
-  await import(`data:text/javascript,${encodeURIComponent(`${helpers}
-    export { parseRegion, stateFromCoords, proximityRank, regionLabel };`)}`);
+import { parseRegion, proximityRank, regionLabel, stateFromCoords } from "../modules/discovery.js";
 
 test("parseRegion reads city and state from the free-text location field", () => {
   assert.deepEqual(parseRegion("Boulder, CO"), { city: "boulder", state: "CO" });
