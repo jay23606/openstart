@@ -1340,7 +1340,18 @@ async function loadRunnerDashboard() {
   ]);
 }
 
-async function go(view) {
+const topLevelViews = new Set(["discover", "demo", "runner", "dashboard", "platform", "help", "architecture"]);
+
+function syncViewUrl(view) {
+  const url = new URL(location.href);
+  ["athlete", "series", "results"].forEach((key) => url.searchParams.delete(key));
+  if (view === "discover") url.searchParams.delete("view");
+  else url.searchParams.set("view", view);
+  history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function go(view, { syncUrl = true } = {}) {
+  if (!topLevelViews.has(view)) view = "discover";
   if (["dashboard", "runner", "platform"].includes(view) && configured && !state.session) {
     state.pendingView = view;
     openDialog(authForm());
@@ -1383,6 +1394,7 @@ async function go(view) {
     renderDiscover();
   }
   if(navigationId!==state.navigationId) return;
+  if (syncUrl) syncViewUrl(view);
   syncNavigation();
   page.focus({ preventScroll: true });
 }
@@ -2710,7 +2722,8 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   state.pendingTransfer = params.get("transfer");
   if (state.pendingTransfer) state.pendingView = "runner";
-  await go(state.pendingTransfer ? "runner" : params.get("view") === "architecture" ? "architecture" : "discover");
+  const requestedView = state.pendingTransfer ? "runner" : params.get("view") || "discover";
+  await go(requestedView, { syncUrl: false });
   if (params.get("athlete")) {
     const athlete=await getAthleteProfile(params.get("athlete"));
     if(athlete) renderAthlete(athlete);

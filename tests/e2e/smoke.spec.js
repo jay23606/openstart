@@ -92,3 +92,16 @@ test("dark mode keeps inverted information panels readable", async ({ page }) =>
   expect(colors.background).toBe("rgb(10, 73, 55)");
   expect(colors.color).toBe("rgb(255, 255, 255)");
 });
+
+test("the selected navigation tab survives a page reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button",{name:"Demo",exact:true}).click();
+  await expect(page).toHaveURL(/\?view=demo$/);
+  await expect(page.getByRole("heading",{name:"See the whole platform without building a race first.",exact:true})).toBeVisible();
+
+  await page.reload();
+
+  await expect(page).toHaveURL(/\?view=demo$/);
+  await expect(page.getByRole("heading",{name:"See the whole platform without building a race first.",exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Demo",exact:true})).toHaveClass(/nav-active/);
+});
