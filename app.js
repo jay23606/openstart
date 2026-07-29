@@ -13,6 +13,7 @@ import { createRegistrationController } from "./features/registration/controller
 import { createOrganizerController } from "./features/organizer/controller.js?v=45";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createSeriesController } from "./features/series/controller.js?v=50";
+import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -1474,7 +1475,20 @@ const seriesController = createSeriesController({
   },
 });
 
-const featureControllers = [platformController, seriesController, organizerController, registrationController];
+const lotteryController = createLotteryController({
+  state,
+  eventById,
+  openDialog,
+  lifecycleForm: lotteryLifecycleForm,
+  lotteryAction,
+  updateEventSettings,
+  reviewLotteryApplication,
+  loadDashboard,
+  showNotice,
+  confirmDraw: () => confirm("Finalize this lottery draw? The weighted result and waitlist order cannot be rerun or edited."),
+});
+
+const featureControllers = [platformController, seriesController, lotteryController, organizerController, registrationController];
 const busyController = createBusyController();
 const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
 const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
@@ -1592,23 +1606,6 @@ document.addEventListener("click", async (event) => {
     scrollTo(0, 0);
   }
   if (await dispatchFeatureClick(target)) return;
-  if (target.dataset.lotteryManager) openDialog(lotteryLifecycleForm(eventById(target.dataset.lotteryManager)));
-  if (target.dataset.runLottery) {
-    if (!confirm("Finalize this lottery draw? The weighted result and waitlist order cannot be rerun or edited.")) return;
-    target.disabled=true;
-    try {
-      const result=await lotteryAction("draw",{eventId:target.dataset.runLottery});
-      await loadDashboard();
-      openDialog(lotteryLifecycleForm(eventById(target.dataset.runLottery)));
-      const emailSummary=result.emailsFailed
-        ? `${result.emailsSent} invitations sent · ${result.emailsFailed} email delivery failures`
-        : `${result.emailsSent} invitations sent`;
-      showNotice(`Draw finalized: ${result.selected} selected · ${emailSummary}.`);
-    } catch(error) {
-      target.disabled=false;
-      showNotice(error.message || "The lottery draw could not be completed.", { type: "error", duration: 0 });
-    }
-  }
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
   if (target.matches("[data-export-account]")) {
     const accountExport=await accountAction("export");
@@ -1828,37 +1825,6 @@ document.addEventListener("submit", async (event) => {
           : (error.message || "The profile could not be saved.");
       }
       return;
-    }
-
-    if (form.id === "lottery-settings-form") {
-      const opens = data.get("lottery_opens_at");
-      const closes = data.get("lottery_closes_at");
-      if (opens && closes && new Date(opens) >= new Date(closes)) throw new Error("Lottery closing time must be after opening time.");
-      if (data.get("registration_mode") === "lottery" && !data.get("lottery_spots")) throw new Error("Enter the number of available lottery spots.");
-      await updateEventSettings(form.dataset.eventId, {
-        registration_mode: data.get("registration_mode"),
-        lottery_spots: data.get("lottery_spots") ? Number(data.get("lottery_spots")) : null,
-        lottery_opens_at: opens ? new Date(opens).toISOString() : null,
-        lottery_closes_at: closes ? new Date(closes).toISOString() : null,
-        qualifier_required: data.get("qualifier_required") === "on",
-        qualifier_instructions: data.get("qualifier_instructions").trim(),
-        lottery_invitation_hours: Number(data.get("lottery_invitation_hours")) || 48,
-      });
-      await loadDashboard();
-      openDialog(lotteryLifecycleForm(eventById(form.dataset.eventId)));
-      showNotice("Lottery settings saved.");
-    }
-
-    if (form.matches(".lottery-review-form")) {
-      await reviewLotteryApplication(form.dataset.applicationId, {
-        status: data.get("status"),
-        bonus_tickets: Number(data.get("bonus_tickets")) || 0,
-        review_notes: data.get("review_notes").trim(),
-        reviewed_by: state.session.user.id,
-      });
-      await loadDashboard();
-      openDialog(lotteryLifecycleForm(eventById(form.dataset.eventId)));
-      showNotice("Application review saved.");
     }
 
     if (form.id === "registration-settings-form") {

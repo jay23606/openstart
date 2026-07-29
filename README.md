@@ -24,6 +24,8 @@ checklists through the same dependency-driven boundary.
 event suspension, and private support notes from the public application shell.
 `features/series/controller.js` owns championship creation, configuration,
 calendar membership, public standings navigation, and standings exports.
+`features/lottery/controller.js` owns organizer lottery configuration,
+application review, irreversible draw confirmation, and invitation summaries.
 
 `modules/dispatcher.js` composes feature controllers for click and form
 submission handling. It processes handlers in explicit order and stops after
