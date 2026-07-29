@@ -1,4 +1,8 @@
-export function createStore(initialState = {}, { historyLimit = 50, now = () => Date.now() } = {}) {
+export function createStore(initialState = {}, {
+  historyLimit = 50,
+  now = () => Date.now(),
+  strict = true,
+} = {}) {
   const listeners = new Set();
   const history = [];
   let batchDepth = 0;
@@ -32,10 +36,16 @@ export function createStore(initialState = {}, { historyLimit = 50, now = () => 
 
   const state = new Proxy({ ...initialState }, {
     set(target, key, value) {
+      if (strict && !Reflect.has(target, key)) {
+        throw new Error(`Unknown state key: ${String(key)}`);
+      }
       const previous = target[key];
       target[key] = value;
       record(key, previous, value);
       return true;
+    },
+    deleteProperty(_target, key) {
+      throw new Error(`State keys cannot be deleted: ${String(key)}`);
     },
   });
 
@@ -88,5 +98,17 @@ export function createStore(initialState = {}, { historyLimit = 50, now = () => 
   const getHistory = () => history.map((entry) => ({ ...entry, keys: [...entry.keys] }));
   const clearHistory = () => { history.length = 0; };
 
-  return { state, subscribe, patch, batch, action, getHistory, clearHistory };
+  function select(selector, listener, options = {}) {
+    let selected = selector(state);
+    if (options.immediate) listener(selected, undefined, [], { action: null });
+    return subscribe(null, (currentState, changes, meta) => {
+      const next = selector(currentState);
+      if ((options.equals || Object.is)(selected, next)) return;
+      const previous = selected;
+      selected = next;
+      listener(next, previous, changes, meta);
+    });
+  }
+
+  return { state, subscribe, select, patch, batch, action, getHistory, clearHistory };
 }

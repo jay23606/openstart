@@ -167,7 +167,11 @@ function syncNavigation() {
   signOutButton.classList.toggle("hidden", !state.session);
   platformNav.classList.toggle("hidden", !state.platformAdmin?.allowed);
 }
-appStore.subscribe(["view", "session", "platformAdmin"], syncNavigation);
+appStore.select(
+  (current) => `${current.view}:${current.session?.user?.id || ""}:${Boolean(current.platformAdmin?.allowed)}`,
+  syncNavigation,
+  { immediate: true },
+);
 
 const pageLifecycle = createPageLifecycle({
   page,

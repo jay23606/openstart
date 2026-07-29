@@ -77,3 +77,32 @@ test("named actions create bounded metadata-only history", () => {
   store.clearHistory();
   assert.deepEqual(store.getHistory(), []);
 });
+
+test("strict stores reject misspelled and deleted state keys", () => {
+  const store = createStore({ view: "discover" });
+  assert.throws(() => { store.state.veiw = "runner"; }, /Unknown state key: veiw/);
+  assert.throws(() => { delete store.state.view; }, /State keys cannot be deleted: view/);
+  assert.equal(store.state.view, "discover");
+});
+
+test("selectors react only when their derived value changes", () => {
+  const store = createStore({ session: null, view: "discover", events: [] });
+  const selected = [];
+  const unsubscribe = store.select(
+    (state) => `${state.view}:${Boolean(state.session)}`,
+    (value, previous) => selected.push([value, previous]),
+    { immediate: true },
+  );
+
+  store.patch({ events: [{ id: "race" }] }, "events.loaded");
+  store.patch({ view: "runner" }, "route.navigate");
+  store.patch({ session: { user: { id: "runner" } } }, "auth.signed-in");
+  unsubscribe();
+  store.patch({ view: "discover" }, "route.navigate");
+
+  assert.deepEqual(selected, [
+    ["discover:false", undefined],
+    ["runner:false", "discover:false"],
+    ["runner:true", "runner:false"],
+  ]);
+});
