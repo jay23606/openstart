@@ -5,9 +5,19 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the static shell connects the app, stylesheet, manifest, and service worker", async () => {
-  const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<script type="module" src="app\.js\?v=32"><\/script>/);
-  assert.match(html, /href="styles\.css\?v=32"/);
+  const [html, app, worker] = await Promise.all([read("index.html"), read("app.js"), read("service-worker.js")]);
+  // Assert the wiring, not a specific cache-bust number: pinning the literal
+  // version meant every routine bump failed this test. What actually matters is
+  // that both assets are busted together and the service-worker cache name is
+  // bumped to match, so a release cannot serve a stale shell.
+  const scriptVersion = html.match(/<script type="module" src="app\.js\?v=(\d+)"><\/script>/);
+  const styleVersion = html.match(/href="styles\.css\?v=(\d+)"/);
+  const cacheVersion = worker.match(/const CACHE = "openstart-v(\d+)"/);
+  assert.ok(scriptVersion, "index.html must load app.js with a ?v= cache-bust");
+  assert.ok(styleVersion, "index.html must load styles.css with a ?v= cache-bust");
+  assert.ok(cacheVersion, "service-worker.js must define a versioned CACHE name");
+  assert.equal(styleVersion[1], scriptVersion[1], "app.js and styles.css must share a cache-bust version");
+  assert.equal(cacheVersion[1], scriptVersion[1], "service-worker CACHE must match the shell asset version");
   assert.match(app, /pendingView:\s*"runner"/);
   assert.match(html, /rel="manifest" href="manifest\.json"/);
   assert.match(html, /Content-Security-Policy/);
