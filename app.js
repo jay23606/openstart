@@ -14,6 +14,7 @@ import { createOrganizerController } from "./features/organizer/controller.js?v=
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
+import { createCommunicationsController } from "./features/communications/controller.js?v=52";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -1488,7 +1489,28 @@ const lotteryController = createLotteryController({
   confirmDraw: () => confirm("Finalize this lottery draw? The weighted result and waitlist order cannot be rerun or edited."),
 });
 
-const featureControllers = [platformController, seriesController, lotteryController, organizerController, registrationController];
+const communicationsController = createCommunicationsController({
+  state,
+  openDialog,
+  campaignForm,
+  communicationsAction,
+  createEmailTemplate,
+  loadDashboard,
+  showNotice,
+  escapeHtml,
+  dialog,
+  go,
+  confirmSend: () => confirm("Send this campaign now to the selected audience?"),
+});
+
+const featureControllers = [
+  platformController,
+  seriesController,
+  lotteryController,
+  communicationsController,
+  organizerController,
+  registrationController,
+];
 const busyController = createBusyController();
 const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
 const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
@@ -1620,7 +1642,6 @@ document.addEventListener("click", async (event) => {
     await go("discover");
     showNotice("Your account was deleted and participant data was anonymized.");
   }
-  if (target.matches("[data-compose-campaign]")) openDialog(campaignForm());
   if (target.dataset.runnerWave) openDialog(runnerWaveForm(state.runnerRegistrations.find((item)=>item.id===target.dataset.runnerWave)));
   if (target.dataset.previewSite) {
     const race=eventById(target.dataset.previewSite);
@@ -1804,7 +1825,7 @@ document.addEventListener("submit", async (event) => {
       }
     }
 
-    if (await dispatchFeatureSubmit(form, data)) return;
+    if (await dispatchFeatureSubmit(form, data, event.submitter)) return;
 
     if(form.id==="athlete-profile-form"){
       const payload={
@@ -1943,40 +1964,6 @@ document.addEventListener("submit", async (event) => {
       await loadDashboard();
       openDialog(productSettingsForm(eventById(form.dataset.eventId)));
       showNotice("Fundraising settings saved.");
-    }
-
-    if (form.id === "campaign-form") {
-      const intent=event.submitter?.value || "preview";
-      const audience={type:data.get("audience_type"),tierId:data.get("tier_id") || null,waveId:data.get("wave_id") || null,teamId:data.get("team_id") || null};
-      const common={eventId:data.get("event_id"),audience,subject:data.get("subject"),htmlBody:data.get("html_body")};
-      if(intent==="template"){
-        await createEmailTemplate({
-          organizer_id:state.session.user.id,name:data.get("name"),
-          subject:data.get("subject"),html_body:data.get("html_body"),
-        });
-        await loadDashboard();
-        showNotice("Email template saved.");
-        return;
-      }
-      if(intent==="preview"){
-        const result=await communicationsAction("preview",common);
-        form.querySelector("#audience-preview").innerHTML=`<b>${result.count} recipients</b>${result.sample?.length ? `<span>${result.sample.map(escapeHtml).join(", ")}</span>` : ""}`;
-        return;
-      }
-      if(intent==="test"){
-        await communicationsAction("test",common);
-        showNotice("Test email sent to your account.");
-        return;
-      }
-      if(intent==="send" && !confirm("Send this campaign now to the selected audience?")) return;
-      await communicationsAction("create",{
-        ...common,name:data.get("name"),messageType:data.get("message_type"),
-        scheduledAt:data.get("scheduled_at") ? new Date(data.get("scheduled_at")).toISOString() : null,
-        sendNow:intent==="send",
-      });
-      dialog.close();
-      await go("dashboard");
-      showNotice(intent==="send" ? "Campaign sending started." : data.get("scheduled_at") ? "Campaign scheduled." : "Campaign saved as a draft.");
     }
 
     if (form.id === "results-form") {

@@ -26,6 +26,8 @@ event suspension, and private support notes from the public application shell.
 calendar membership, public standings navigation, and standings exports.
 `features/lottery/controller.js` owns organizer lottery configuration,
 application review, irreversible draw confirmation, and invitation summaries.
+`features/communications/controller.js` owns campaign composition, audience
+previews, test messages, reusable templates, scheduling, drafts, and sends.
 
 `modules/dispatcher.js` composes feature controllers for click and form
 submission handling. It processes handlers in explicit order and stops after
