@@ -15,6 +15,7 @@ import { createPlatformController } from "./features/platform/controller.js?v=49
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createLotteryController } from "./features/lottery/controller.js?v=51";
 import { createCommunicationsController } from "./features/communications/controller.js?v=52";
+import { createResultsController } from "./features/results/controller.js?v=53";
 import { createAppState, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=40";
 import { demoView, helpView } from "./modules/content-views.js?v=40";
 import { parseRegion, proximityRank, raceTypeFor, regionLabel, stateFromCoords } from "./modules/discovery.js?v=40";
@@ -1503,17 +1504,33 @@ const communicationsController = createCommunicationsController({
   confirmSend: () => confirm("Send this campaign now to the selected audience?"),
 });
 
+const resultsController = createResultsController({
+  eventById,
+  openDialog,
+  managerForm: resultsManagerForm,
+  renderResults,
+  parseResultsCsv,
+  parseResultTime,
+  resultsAction,
+  loadDashboard,
+  showNotice,
+  documentRoot: document,
+});
+
 const featureControllers = [
   platformController,
   seriesController,
   lotteryController,
   communicationsController,
+  resultsController,
   organizerController,
   registrationController,
 ];
 const busyController = createBusyController();
 const dispatchFeatureClick = createDispatcher(handlersFrom(featureControllers, "handleClick"));
 const dispatchFeatureSubmit = createDispatcher(handlersFrom(featureControllers, "handleSubmit"));
+const dispatchFeatureChange = createDispatcher(handlersFrom(featureControllers, "handleChange"));
+const dispatchFeatureInput = createDispatcher(handlersFrom(featureControllers, "handleInput"));
 
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button");
@@ -1652,8 +1669,6 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.volunteer) openDialog(volunteerOpportunitiesForm(eventById(target.dataset.volunteer)));
   if (target.dataset.volunteerShift) openDialog(volunteerSignupForm(eventById(target.dataset.event),target.dataset.volunteerShift));
   if (target.dataset.exportVolunteers) exportVolunteers(eventById(target.dataset.exportVolunteers));
-  if (target.dataset.viewResults) renderResults(eventById(target.dataset.viewResults));
-  if (target.dataset.resultsManager) openDialog(resultsManagerForm(eventById(target.dataset.resultsManager)));
   if (target.dataset.embedCode) openDialog(embedSnippetForm(eventById(target.dataset.embedCode)));
   if (target.matches("[data-copy-embed]")) {
     const textarea = document.querySelector("#embed-snippet");
@@ -1661,32 +1676,6 @@ document.addEventListener("click", async (event) => {
       textarea.select();
       navigator.clipboard?.writeText(textarea.value).then(() => showNotice("Embed code copied.")).catch(() => {});
     }
-  }
-  if (target.dataset.importResults) {
-    const race=eventById(target.dataset.importResults);
-    const rows=parseResultsCsv(document.querySelector("#results-csv").value,race);
-    await resultsAction("save_many",{eventId:race.id,results:rows});
-    await loadDashboard();
-    openDialog(resultsManagerForm(eventById(race.id)));
-    showNotice(`${rows.length} results imported.`);
-  }
-  if (target.dataset.publishResults) {
-    const eventId=target.dataset.publishResults;
-    await resultsAction("publish",{eventId,sendEmail:false});
-    await loadDashboard();
-    openDialog(resultsManagerForm(eventById(eventId)));
-    showNotice("Official results are now public.");
-  }
-  if (target.dataset.unpublishResults) {
-    const eventId=target.dataset.unpublishResults;
-    await resultsAction("unpublish",{eventId});
-    await loadDashboard();
-    openDialog(resultsManagerForm(eventById(eventId)));
-    showNotice("Results unpublished.");
-  }
-  if (target.dataset.notifyResults) {
-    const result=await resultsAction("notify",{eventId:target.dataset.notifyResults});
-    showNotice(`${result.email?.sent || 0} result emails sent${result.email?.failed ? ` · ${result.email.failed} failed` : ""}.`);
   }
   if (target.matches("[data-connect-stripe]")) {
     target.disabled = true;
@@ -1966,21 +1955,6 @@ document.addEventListener("submit", async (event) => {
       showNotice("Fundraising settings saved.");
     }
 
-    if (form.id === "results-form") {
-      const results=[...form.querySelectorAll(".result-entry")].map((row)=>({
-        registrationId:row.dataset.registrationId,
-        chipTimeMs:parseResultTime(row.querySelector('[name="chip_time"]').value),
-        gunTimeMs:parseResultTime(row.querySelector('[name="gun_time"]').value),
-        status:row.querySelector('[name="result_status"]').value,
-        division:row.querySelector('[name="division"]').value || null,
-      })).filter((item)=>item.status!=="finisher" || item.chipTimeMs!==null || item.gunTimeMs!==null);
-      if(!results.length) throw new Error("Enter at least one finish time or non-finisher status");
-      await resultsAction("save_many",{eventId:form.dataset.eventId,results});
-      await loadDashboard();
-      openDialog(resultsManagerForm(eventById(form.dataset.eventId)));
-      showNotice(`${results.length} results saved.`);
-    }
-
     if (form.id === "volunteer-signup-form") {
       const signup=await joinVolunteerShift({
         shiftId:form.dataset.shiftId,firstName:data.get("first_name"),lastName:data.get("last_name"),
@@ -2106,7 +2080,8 @@ document.addEventListener("submit", async (event) => {
   }
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("change", async (event) => {
+  if (await dispatchFeatureChange(event.target)) return;
   if (event.target.matches("[data-field='tier_id']")) {
     const block=event.target.closest(".participant-block");
     const waveSelect=block?.querySelector("[data-field='wave_id']");
@@ -2116,13 +2091,6 @@ document.addEventListener("change", (event) => {
     }
     return;
   }
-  if (event.target.id === "results-csv-file" && event.target.files?.[0]) {
-    event.target.files[0].text().then((text)=>{
-      const textarea=document.querySelector("#results-csv");
-      if(textarea) textarea.value=text;
-    });
-    return;
-  }
   if (event.target.name !== "template_id") return;
   const template=state.emailTemplates.find((item)=>item.id===event.target.value);
   if (!template) return;
@@ -2130,7 +2098,8 @@ document.addEventListener("change", (event) => {
   form.elements.subject.value=template.subject;
   form.elements.html_body.value=template.html_body;
 });
-document.addEventListener("input", (event) => {
+document.addEventListener("input", async (event) => {
+  if (await dispatchFeatureInput(event.target)) return;
   if (event.target.matches("[data-help-search]")) {
     const search = event.target.value.trim().toLowerCase();
     document.querySelectorAll("[data-help-filter]").forEach((button) => button.classList.toggle("active", button.dataset.helpFilter === "All"));
@@ -2141,12 +2110,6 @@ document.addEventListener("input", (event) => {
     document.querySelector(".help-count").textContent = `${visible} guide${visible === 1 ? "" : "s"}`;
     return;
   }
-  if(!event.target.matches("[data-results-search],[data-results-tier]")) return;
-  const search=(document.querySelector("[data-results-search]")?.value || "").trim().toLowerCase();
-  const tier=document.querySelector("[data-results-tier]")?.value || "";
-  document.querySelectorAll(".result-row").forEach((row)=>{
-    row.classList.toggle("hidden",Boolean(search && !row.dataset.resultSearch.includes(search)) || Boolean(tier && row.dataset.resultTier!==tier));
-  });
 });
 document.addEventListener("dragstart",(event)=>{
   const row=event.target.closest("[data-site-section-id]");
