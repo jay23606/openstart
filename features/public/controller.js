@@ -148,7 +148,43 @@ export function createPublicController({
     return true;
   }
 
+  async function handleClick(target) {
+    if (target.matches("[data-show-more]")) {
+      await showMore();
+      return true;
+    }
+    if (target.matches("[data-clear-location]")) {
+      await setRegion(null);
+      return true;
+    }
+    if (target.matches("[data-use-location]")) {
+      await useLocation(target);
+      return true;
+    }
+    if (target.dataset.eventId) {
+      await openEvent(target.dataset.eventId);
+      return true;
+    }
+    return false;
+  }
+
+  function handleInput(target) {
+    if (target.id !== "discover-search") return false;
+    search(target.value);
+    return true;
+  }
+
+  function handleKeydown(target, event) {
+    if (target.id !== "discover-place" || event.key !== "Enter") return false;
+    event.preventDefault();
+    resolvePlace(target.value);
+    return true;
+  }
+
   return {
+    handleClick,
+    handleInput,
+    handleKeydown,
     loadDiscovery,
     openEvent,
     refreshDiscover,

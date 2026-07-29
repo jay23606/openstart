@@ -139,3 +139,37 @@ test("public controller handles unavailable location and opens hydrated events",
   assert.equal(page.innerHTML, "event:event-1:false");
   assert.equal(scrolled, true);
 });
+
+test("public controller claims only its own delegated DOM actions", async () => {
+  const scheduled = [];
+  const { controller, state, page } = fixture({
+    hydrateEvent: async (id) => ({ id, name: "Race", description: "Details" }),
+    schedule: (callback) => {
+      scheduled.push(callback);
+      return scheduled.length;
+    },
+  });
+  const eventButton = {
+    dataset: { eventId: "event-9" },
+    matches: () => false,
+  };
+  const unrelated = { dataset: {}, matches: () => false };
+  const search = { id: "discover-search", value: "trail" };
+  let prevented = false;
+
+  assert.equal(await controller.handleClick(unrelated), false);
+  assert.equal(await controller.handleClick(eventButton), true);
+  assert.equal(page.innerHTML, "event:event-9:false");
+  assert.equal(controller.handleInput({ id: "other" }), false);
+  assert.equal(controller.handleInput(search), true);
+  assert.equal(state.discoverQuery, "trail");
+  assert.equal(controller.handleKeydown(
+    { id: "discover-place", value: "Boulder, CO" },
+    { key: "Enter", preventDefault: () => { prevented = true; } },
+  ), true);
+  assert.equal(prevented, true);
+  assert.equal(controller.handleKeydown(
+    { id: "discover-place", value: "Boulder, CO" },
+    { key: "Escape", preventDefault: () => {} },
+  ), false);
+});

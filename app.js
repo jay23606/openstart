@@ -11,7 +11,7 @@ import {
 } from "./data.js?v=36";
 import { createRegistrationController } from "./features/registration/controller.js?v=48";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
-import { createPublicController } from "./features/public/controller.js?v=80";
+import { createPublicController } from "./features/public/controller.js?v=82";
 import { createOrganizerController } from "./features/organizer/controller.js?v=57";
 import { createOrganizerViews } from "./features/organizer/views.js?v=78";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
@@ -759,6 +759,7 @@ const wavesController = createWavesController({
 });
 
 const featureControllers = [
+  publicController,
   platformController,
   seriesController,
   lotteryController,
@@ -786,9 +787,6 @@ document.addEventListener("click", async (event) => {
     if(eventId) await ensureEventRegistrations(eventId);
   }
   if (target.matches("[data-view]")) await go(target.dataset.view);
-  if (target.matches("[data-show-more]")) await publicController.showMore();
-  if (target.matches("[data-clear-location]")) await publicController.setRegion(null);
-  if (target.matches("[data-use-location]")) await publicController.useLocation(target);
   if (target.matches("[data-help-filter]")) {
     const searchInput = document.querySelector("[data-help-search]");
     if (searchInput) searchInput.value = "";
@@ -858,9 +856,6 @@ document.addEventListener("click", async (event) => {
     };
     launchers[target.dataset.demoFeature]?.();
   }
-  if (target.dataset.eventId) {
-    await publicController.openEvent(target.dataset.eventId);
-  }
   if (await dispatchFeatureClick(target)) return;
   if (target.matches("[data-system-health]")) openDialog(healthForm(await accountAction("health")));
   if (target.matches("[data-export-account]")) {
@@ -913,17 +908,11 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.dataset.rosterSearch) filterRoster(event.target.dataset.rosterSearch);
-  if (event.target.id === "discover-search") {
-    publicController.search(event.target.value);
-  }
 });
 
 // Enter (or blur) on the manual place field resolves a typed city/state.
 document.addEventListener("keydown", (event) => {
-  if (event.target.id === "discover-place" && event.key === "Enter") {
-    event.preventDefault();
-    publicController.resolvePlace(event.target.value);
-  }
+  publicController.handleKeydown(event.target, event);
 });
 document.addEventListener("change", (event) => {
   if (event.target.dataset.rosterStatus) filterRoster(event.target.dataset.rosterStatus);
