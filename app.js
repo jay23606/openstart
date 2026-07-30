@@ -9,14 +9,14 @@ import {
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
 } from "./data.js?v=36";
-import { createRegistrationController } from "./features/registration/controller.js?v=95";
+import { createRegistrationController } from "./features/registration/controller.js?v=102";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=95";
-import { createAccountController } from "./features/account/controller.js?v=92";
+import { createAccountController } from "./features/account/controller.js?v=103";
 import { createPublicController } from "./features/public/controller.js?v=94";
 import { createOrganizerController } from "./features/organizer/controller.js?v=95";
-import { createOrganizerViews } from "./features/organizer/views.js?v=78";
+import { createOrganizerViews } from "./features/organizer/views.js?v=102";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -38,7 +38,7 @@ import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppStore, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=91";
-import { createAccountViews } from "./modules/account-views.js?v=77";
+import { createAccountViews } from "./modules/account-views.js?v=103";
 import { architectureView, demoView, helpView } from "./modules/content-views.js?v=99";
 import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
@@ -47,6 +47,8 @@ import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createShellController } from "./modules/shell-controller.js?v=86";
 import { mountNavigationComponent } from "./modules/navigation-component.js?v=100";
 import { mountDiscoveryResultsComponent } from "./modules/discovery-results-component.js?v=101";
+import { mountOrganizerDashboardComponent } from "./modules/organizer-dashboard-component.js?v=102";
+import { mountRunnerDashboardComponent } from "./modules/runner-dashboard-component.js?v=103";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=95";
@@ -240,6 +242,7 @@ function renderDashboard() {
       description: "Manage OpenStart events, registrations, finances, communications, and race-day operations.",
     },
   });
+  organizerDashboardComponent.refresh();
 }
 
 const lotteryViews = createLotteryViews({ effectivePrice, safeUrl, tierById });
@@ -255,6 +258,7 @@ function renderRunnerDashboard() {
       description: "Manage your OpenStart registrations, results, teams, volunteer shifts, and athlete profile.",
     },
   });
+  runnerDashboardComponent.refresh();
 }
 
 function renderAthlete(data){
@@ -376,6 +380,18 @@ async function startQrScanner(eventId) {
 }
 
 const organizerViews = createOrganizerViews({ eventRegistrations, tierById });
+const organizerDashboardComponent = mountOrganizerDashboardComponent({
+  store: appStore,
+  organizerViews,
+  configured,
+  eventById,
+  documentRef: document,
+});
+const runnerDashboardComponent = mountRunnerDashboardComponent({
+  store: appStore,
+  accountViews,
+  documentRef: document,
+});
 const eventForm = organizerViews.event;
 const duplicateEventForm = organizerViews.duplicate;
 const checklistForm = organizerViews.checklist;
@@ -557,7 +573,6 @@ const registrationController = createRegistrationController({
   hydrateEvent,
   renderEvent,
   loadDashboard,
-  renderDashboard,
   renderRoster,
   loadRunnerDashboard,
   go,
@@ -843,7 +858,6 @@ const accountController = createAccountController({
   afterNavigate: () => pageLifecycle.afterNavigate(),
   lotteryApplicationForm,
   saveAthleteProfile,
-  renderRunnerDashboard,
   configured,
   authForm,
 });

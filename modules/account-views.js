@@ -99,7 +99,7 @@ export function createAccountViews({ getBaseUri, lotteryRunnerCard }) {
   function runnerDashboard(state) {
     const confirmed = state.runnerRegistrations.filter((registration) => registration.status === "confirmed");
     return `
-      <section class="dashboard">
+      <section class="dashboard" data-runner-dashboard>
         <div class="dashboard-header">
           <div><p class="eyebrow">Runner account</p><h1>My races</h1><p>Entries connected to ${escapeHtml(state.session?.user?.email || "your account")}.</p></div>
         </div>

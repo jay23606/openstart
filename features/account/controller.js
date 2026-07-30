@@ -27,7 +27,6 @@ export function createAccountController({
   afterNavigate,
   lotteryApplicationForm,
   saveAthleteProfile,
-  renderRunnerDashboard,
   configured = true,
   authForm,
   patchState = (values) => Object.assign(state, values),
@@ -148,7 +147,6 @@ export function createAccountController({
       try {
         patchState({ athleteProfile: await saveAthleteProfile(payload) }, "athlete.saved");
         closeDialog();
-        renderRunnerDashboard();
         showNotice("Athlete profile saved.");
       } catch (error) {
         form.querySelector(".form-message").textContent = /duplicate|unique/i.test(error.message || "")

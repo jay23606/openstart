@@ -18,7 +18,6 @@ export function createRegistrationController({
   hydrateEvent,
   renderEvent,
   loadDashboard,
-  renderDashboard,
   renderRoster,
   loadRunnerDashboard,
   go,
@@ -244,7 +243,6 @@ export function createRegistrationController({
       });
       dialog.close();
       await loadDashboard();
-      renderDashboard();
       renderRoster(eventById(race.id));
       showNotice("Manual registration added.");
       return true;
@@ -262,7 +260,6 @@ export function createRegistrationController({
       });
       dialog.close();
       await loadDashboard();
-      renderDashboard();
       renderRoster(eventById(item.event_id));
       showNotice("Registration updated.");
       return true;

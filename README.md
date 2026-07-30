@@ -104,6 +104,17 @@ platform visibility without coupling those effects to `app.js`.
 result count. Search, location, and pagination actions update store state; the
 component reacts to the resulting model without replacing the surrounding page
 or disturbing the focused search control.
+`modules/organizer-dashboard-component.js` updates the organizer header,
+metrics, events, financials, communications, series, and audit regions
+independently while deliberately preserving the currently open roster.
+`modules/runner-dashboard-component.js` owns the signed-in runner surface, so
+registration and athlete-profile state changes no longer require a second
+full-page render. Both dashboard components skip a region that currently owns
+keyboard focus.
+
+Forms, setup steps, and modal editors intentionally remain event-driven views.
+Making those surfaces reactive requires a separate draft-state and validation
+design so background data refreshes cannot erase partially entered values.
 
 ## Current capabilities
 
