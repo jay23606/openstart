@@ -326,10 +326,25 @@ export async function deleteEventQuestion(id) {
   if (error) throw error;
 }
 
-export async function updateEventSettings(eventId, changes) {
+export async function updateEventSettings(eventId, changes, { expectedUpdatedAt = null } = {}) {
   if (!configured) throw new Error("Event settings require Supabase");
-  const { error } = await supabase.from("os_events").update(changes).eq("id", eventId);
+  const updatedAt = new Date().toISOString();
+  let query = supabase.from("os_events")
+    .update({ ...changes, updated_at: updatedAt })
+    .eq("id", eventId);
+  if (expectedUpdatedAt) query = query.eq("updated_at", expectedUpdatedAt);
+  const { data, error } = await query.select().maybeSingle();
   if (error) throw error;
+  if (!data && expectedUpdatedAt) {
+    const { data: latest, error: latestError } = await supabase.from("os_events")
+      .select("*").eq("id", eventId).single();
+    if (latestError) throw latestError;
+    const conflict = new Error("This event was changed after you opened it.");
+    conflict.code = "OS_STALE_WRITE";
+    conflict.latest = latest;
+    throw conflict;
+  }
+  return data;
 }
 
 export async function createEventTier(tier) {

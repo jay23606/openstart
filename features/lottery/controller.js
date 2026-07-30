@@ -9,10 +9,39 @@ export function createLotteryController({
   loadDashboard,
   showNotice,
   confirmDraw,
+  updateEventWithConflict = null,
+  markFormSaved = () => {},
 }) {
   async function refresh(eventId) {
     await loadDashboard();
     openDialog(lifecycleForm(eventById(eventId)));
+  }
+
+  async function saveLotterySettings(form, changes) {
+    const base = eventById(form.dataset.eventId);
+    const finish = async () => {
+      markFormSaved(form);
+      await refresh(form.dataset.eventId);
+      showNotice("Lottery settings saved.");
+    };
+    if (!updateEventWithConflict) {
+      await updateEventSettings(form.dataset.eventId, changes);
+      await finish();
+      return;
+    }
+    await updateEventWithConflict({
+      eventId: form.dataset.eventId,
+      expectedUpdatedAt: base.updated_at,
+      base,
+      changes,
+      eventName: base.name,
+      onSaved: finish,
+      onReload: async () => {
+        markFormSaved(form);
+        await refresh(form.dataset.eventId);
+      },
+      onKeep: async () => openDialog(lifecycleForm(base)),
+    });
   }
 
   async function handleClick(target) {
@@ -48,7 +77,7 @@ export function createLotteryController({
       if (data.get("registration_mode") === "lottery" && !data.get("lottery_spots")) {
         throw new Error("Enter the number of available lottery spots.");
       }
-      await updateEventSettings(form.dataset.eventId, {
+      await saveLotterySettings(form, {
         registration_mode: data.get("registration_mode"),
         lottery_spots: data.get("lottery_spots") ? Number(data.get("lottery_spots")) : null,
         lottery_opens_at: opens ? new Date(opens).toISOString() : null,
@@ -57,8 +86,6 @@ export function createLotteryController({
         qualifier_instructions: data.get("qualifier_instructions").trim(),
         lottery_invitation_hours: Number(data.get("lottery_invitation_hours")) || 48,
       });
-      await refresh(form.dataset.eventId);
-      showNotice("Lottery settings saved.");
       return true;
     }
     if (form.matches?.(".lottery-review-form")) {

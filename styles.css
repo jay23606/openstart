@@ -1022,3 +1022,39 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .78; }
 .form-save-state[data-state="dirty"] {
   color: var(--accent);
 }
+
+.conflict-list {
+  display: grid;
+  gap: .75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.conflict-row {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .9rem;
+}
+
+.conflict-row h3 {
+  margin: 0 0 .65rem;
+  text-transform: capitalize;
+}
+
+.conflict-row > div {
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.conflict-row span {
+  overflow-wrap: anywhere;
+}
+
+.conflict-row b {
+  color: var(--muted);
+  display: block;
+  font-size: .75rem;
+  margin-bottom: .2rem;
+  text-transform: uppercase;
+}

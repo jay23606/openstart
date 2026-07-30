@@ -10,10 +10,39 @@ export function createEventCommerceController({
   createProduct,
   loadDashboard,
   showNotice,
+  updateEventWithConflict = null,
+  markFormSaved = () => {},
 }) {
   async function refresh(eventId, form) {
     await loadDashboard();
     openDialog(form(eventById(eventId)));
+  }
+
+  async function saveVersionedSettings(form, changes, view, notice) {
+    const base = eventById(form.dataset.eventId);
+    const finish = async () => {
+      markFormSaved(form);
+      await refresh(form.dataset.eventId, view);
+      showNotice(notice);
+    };
+    if (!updateEventWithConflict) {
+      await updateEventSettings(form.dataset.eventId, changes);
+      await finish();
+      return;
+    }
+    await updateEventWithConflict({
+      eventId: form.dataset.eventId,
+      expectedUpdatedAt: base.updated_at,
+      base,
+      changes,
+      eventName: base.name,
+      onSaved: finish,
+      onReload: async () => {
+        markFormSaved(form);
+        await refresh(form.dataset.eventId, view);
+      },
+      onKeep: async () => openDialog(view(base)),
+    });
   }
 
   async function handleClick(target) {
@@ -27,16 +56,14 @@ export function createEventCommerceController({
   async function handleSubmit(form, data) {
     if (form.id === "registration-settings-form") {
       const asIso = (name) => data.get(name) ? new Date(data.get(name)).toISOString() : null;
-      await updateEventSettings(form.dataset.eventId, {
+      await saveVersionedSettings(form, {
         waiver_text: data.get("waiver_text") || "",
         participant_edits_close_at: asIso("participant_edits_close_at"),
         transfers_close_at: asIso("transfers_close_at"),
         refunds_close_at: asIso("refunds_close_at"),
         allow_transfers: data.get("allow_transfers") === "on",
         allow_refund_requests: data.get("allow_refund_requests") === "on",
-      });
-      await refresh(form.dataset.eventId, forms.registration);
-      showNotice("Waiver settings saved.");
+      }, forms.registration, "Waiver settings saved.");
       return true;
     }
     if (form.id === "question-form") {

@@ -18,6 +18,7 @@ export function createOrganizerController({
   createChecklistItem,
   createEventTier,
   updateEventSettings,
+  updateEventWithConflict = null,
   slugify,
   organizerId,
   dialog,
@@ -32,6 +33,34 @@ export function createOrganizerController({
   async function refreshDialog(eventId, form) {
     await loadDashboard();
     openDialog(form(eventById(eventId)));
+  }
+
+  async function saveSetupForm(form, changes, { currentStep, nextStep, notice }) {
+    const base = eventById(form.dataset.eventId);
+    const finish = async () => {
+      markFormSaved(form);
+      await loadDashboard();
+      await renderSetupWizard(eventById(form.dataset.eventId), nextStep);
+      showNotice(notice);
+    };
+    if (!updateEventWithConflict) {
+      await updateEventSettings(form.dataset.eventId, changes);
+      await finish();
+      return;
+    }
+    await updateEventWithConflict({
+      eventId: form.dataset.eventId,
+      expectedUpdatedAt: base.updated_at,
+      base,
+      changes,
+      eventName: base.name,
+      onSaved: finish,
+      onReload: async () => {
+        markFormSaved(form);
+        await loadDashboard();
+        await renderSetupWizard(eventById(form.dataset.eventId), currentStep);
+      },
+    });
   }
 
   async function handleClick(target) {
@@ -139,17 +168,16 @@ export function createOrganizerController({
       return true;
     }
     if (form.id === "setup-basics-form") {
-      await updateEventSettings(form.dataset.eventId, {
+      await saveSetupForm(form, {
         name: data.get("name").trim(),
         starts_at: new Date(data.get("starts_at")).toISOString(),
         location_name: data.get("location_name").trim(),
         description: data.get("description").trim(),
-        updated_at: new Date().toISOString(),
+      }, {
+        currentStep: 0,
+        nextStep: 1,
+        notice: "Event details saved.",
       });
-      markFormSaved(form);
-      await loadDashboard();
-      await renderSetupWizard(eventById(form.dataset.eventId), 1);
-      showNotice("Event details saved.");
       return true;
     }
     if (form.id === "setup-tier-form") {
@@ -168,21 +196,19 @@ export function createOrganizerController({
     }
     if (form.id === "setup-runner-form" || form.id === "setup-website-form") {
       const runner = form.id === "setup-runner-form";
-      await updateEventSettings(form.dataset.eventId, runner ? {
+      await saveSetupForm(form, runner ? {
         waiver_text: data.get("waiver_text").trim(),
         participant_edits_close_at: data.get("participant_edits_close_at") ? new Date(data.get("participant_edits_close_at")).toISOString() : null,
         transfers_close_at: data.get("transfers_close_at") ? new Date(data.get("transfers_close_at")).toISOString() : null,
-        updated_at: new Date().toISOString(),
       } : {
         primary_color: data.get("primary_color"),
         contact_email: data.get("contact_email") || null,
         website_published: data.get("website_published") === "on",
-        updated_at: new Date().toISOString(),
+      }, {
+        currentStep: runner ? 2 : 3,
+        nextStep: runner ? 3 : 4,
+        notice: runner ? "Runner experience saved." : "Website settings saved.",
       });
-      markFormSaved(form);
-      await loadDashboard();
-      await renderSetupWizard(eventById(form.dataset.eventId), runner ? 3 : 4);
-      showNotice(runner ? "Runner experience saved." : "Website settings saved.");
       return true;
     }
     return false;

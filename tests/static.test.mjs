@@ -103,6 +103,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /modules\/organizer-dashboard-component\.js/);
   assert.match(worker, /modules\/runner-dashboard-component\.js/);
   assert.match(worker, /modules\/form-state\.js/);
+  assert.match(worker, /modules\/conflicts\.js/);
   assert.doesNotMatch(publicController, /results\.innerHTML/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);

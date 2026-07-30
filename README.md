@@ -122,6 +122,14 @@ after refreshes, exposes saved/unsaved status, warns before navigation or modal
 closure, and clears drafts after successful submission. Passwords, uploads,
 payment details, and participant forms are explicitly excluded.
 
+`modules/conflicts.js` adds optimistic concurrency for event configuration.
+Every protected save includes the `updated_at` version that the organizer
+originally loaded. Non-overlapping changes are merged automatically; overlapping
+changes open a side-by-side review with options to keep editing, load the latest
+saved values, or deliberately overwrite. The event setup wizard, registration
+self-service settings, and lottery settings use this boundary. Upload forms are
+excluded until files can be staged independently from their surrounding form.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

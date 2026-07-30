@@ -8,21 +8,21 @@ import {
   getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, getPublishedEvent, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations, organizerEventMetrics,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
   platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=36";
+} from "./data.js?v=105";
 import { createRegistrationController } from "./features/registration/controller.js?v=102";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
 import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=95";
 import { createAccountController } from "./features/account/controller.js?v=103";
 import { createPublicController } from "./features/public/controller.js?v=94";
-import { createOrganizerController } from "./features/organizer/controller.js?v=104";
+import { createOrganizerController } from "./features/organizer/controller.js?v=105";
 import { createOrganizerViews } from "./features/organizer/views.js?v=104";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createSeriesViews } from "./features/series/views.js?v=75";
-import { createLotteryController } from "./features/lottery/controller.js?v=51";
-import { createLotteryViews } from "./features/lottery/views.js?v=66";
+import { createLotteryController } from "./features/lottery/controller.js?v=105";
+import { createLotteryViews } from "./features/lottery/views.js?v=105";
 import { createCommunicationsController } from "./features/communications/controller.js?v=88";
 import { createCommunicationsViews } from "./features/communications/views.js?v=62";
 import { createResultsController } from "./features/results/controller.js?v=53";
@@ -31,8 +31,8 @@ import { createVolunteersController } from "./features/volunteers/controller.js?
 import { createVolunteerViews } from "./features/volunteers/views.js?v=60";
 import { createRaceDayController } from "./features/race-day/controller.js?v=55";
 import { createRaceDayViews } from "./features/race-day/views.js?v=61";
-import { createEventCommerceController } from "./features/event-commerce/controller.js?v=56";
-import { createEventCommerceViews } from "./features/event-commerce/views.js?v=65";
+import { createEventCommerceController } from "./features/event-commerce/controller.js?v=105";
+import { createEventCommerceViews } from "./features/event-commerce/views.js?v=105";
 import { createEventSiteController } from "./features/event-site/controller.js?v=89";
 import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
@@ -50,6 +50,7 @@ import { mountDiscoveryResultsComponent } from "./modules/discovery-results-comp
 import { mountOrganizerDashboardComponent } from "./modules/organizer-dashboard-component.js?v=102";
 import { mountRunnerDashboardComponent } from "./modules/runner-dashboard-component.js?v=103";
 import { createFormStateController } from "./modules/form-state.js?v=104";
+import { createConflictController } from "./modules/conflicts.js?v=105";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=104";
@@ -408,6 +409,15 @@ const checklistForm = organizerViews.checklist;
 function openDialog(content) {
   dialogController.open(content);
 }
+const conflictController = createConflictController({
+  updateEventSettings,
+  openDialog: (content) => {
+    if (dialog.open) dialog.close();
+    dialogController.open(content);
+  },
+  closeDialog: () => dialogController.close(),
+  showNotice,
+});
 function stopScanner() {
   const video = document.querySelector("#qr-scanner");
   video?.srcObject?.getTracks().forEach((track) => track.stop());
@@ -617,6 +627,7 @@ const organizerController = createOrganizerController({
   createChecklistItem,
   createEventTier,
   updateEventSettings,
+  updateEventWithConflict: conflictController.updateEvent,
   slugify,
   organizerId: () => state.session?.user?.id || DEMO_ORGANIZER_ID,
   dialog,
@@ -687,6 +698,8 @@ const lotteryController = createLotteryController({
   loadDashboard,
   showNotice,
   confirmDraw: () => confirm("Finalize this lottery draw? The weighted result and waitlist order cannot be rerun or edited."),
+  updateEventWithConflict: conflictController.updateEvent,
+  markFormSaved: (form) => formStateController.markSaved(form),
 });
 
 const communicationsController = createCommunicationsController({
@@ -774,6 +787,8 @@ const eventCommerceController = createEventCommerceController({
   createProduct,
   loadDashboard,
   showNotice,
+  updateEventWithConflict: conflictController.updateEvent,
+  markFormSaved: (form) => formStateController.markSaved(form),
   forms: {
     registration: registrationSettingsForm,
     pricing: pricingSettingsForm,
@@ -875,6 +890,7 @@ const accountController = createAccountController({
 });
 
 const featureControllers = [
+  conflictController,
   publicController,
   contentController,
   demoController,
