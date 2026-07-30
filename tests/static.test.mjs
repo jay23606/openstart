@@ -21,6 +21,7 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(appState, /pendingView:\s*"runner"/);
   assert.match(appState, /createAppStore/);
   assert.match(app, /mountNavigationComponent/);
+  assert.match(app, /mountDiscoveryResultsComponent/);
   assert.doesNotMatch(app, /appStore\.select\(/);
   assert.match(app, /actionState: appStore\.action/);
   assert.match(app, /appStore\.patch\(\{\s*events,\s*discoverTotal:/);
@@ -98,6 +99,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /modules\/store\.js/);
   assert.match(worker, /modules\/view-runtime\.js/);
   assert.match(worker, /modules\/navigation-component\.js/);
+  assert.match(worker, /modules\/discovery-results-component\.js/);
+  assert.doesNotMatch(publicController, /results\.innerHTML/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);

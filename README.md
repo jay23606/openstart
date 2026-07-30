@@ -100,6 +100,10 @@ targeted DOM commits rather than automatic HTML replacement, preserving focus
 and existing event listeners. `modules/navigation-component.js` is the first
 production component and controls active navigation, account actions, and
 platform visibility without coupling those effects to `app.js`.
+`modules/discovery-results-component.js` owns the live event-card region and
+result count. Search, location, and pagination actions update store state; the
+component reacts to the resulting model without replacing the surrounding page
+or disturbing the focused search control.
 
 ## Current capabilities
 

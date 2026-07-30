@@ -7,7 +7,6 @@ export function createPublicController({
   parseRegion,
   stateFromCoords,
   showNotice,
-  documentRef = document,
   storage = localStorage,
   geolocation = navigator.geolocation,
   schedule = setTimeout,
@@ -15,6 +14,7 @@ export function createPublicController({
   scrollToTop = () => scrollTo(0, 0),
   discoverPageSize = 12,
   patchState = (values) => Object.assign(state, values),
+  refreshResults = () => false,
 }) {
   let searchTimer = null;
 
@@ -23,16 +23,11 @@ export function createPublicController({
 
   function renderDiscover() {
     renderPage(publicViews.discoveryPage(discoveryModel()), { metadata: {} });
+    refreshResults();
   }
 
   function refreshDiscover() {
-    const results = documentRef.querySelector("#discover-results");
-    if (!results) return false;
-    const model = discoveryModel();
-    results.innerHTML = publicViews.discoveryResults(model);
-    const count = documentRef.querySelector("#discover-count");
-    if (count) count.textContent = model.countLabel;
-    return true;
+    return refreshResults();
   }
 
   function renderEvent(event, preview = false) {
@@ -83,7 +78,6 @@ export function createPublicController({
   async function showMore() {
     patchState({ discoverVisible: state.discoverVisible + discoverPageSize }, "discovery.page-expanded");
     await loadDiscovery();
-    refreshDiscover();
   }
 
   function search(value) {
@@ -92,7 +86,6 @@ export function createPublicController({
     searchTimer = schedule(async () => {
       searchTimer = null;
       await loadDiscovery();
-      refreshDiscover();
     }, 250);
   }
 

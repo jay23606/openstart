@@ -53,8 +53,11 @@ function fixture(overrides = {}) {
     parseRegion: (value) => value === "Boulder, CO" ? { city: "boulder", state: "CO" } : { city: value, state: "" },
     stateFromCoords: () => "CO",
     showNotice: (message) => notices.push(message),
-    documentRef: {
-      querySelector: (selector) => selector === "#discover-results" ? results : selector === "#discover-count" ? count : null,
+    refreshResults: () => {
+      const model = publicViews.discoveryModel(state, state.events.filter((event) => event.status === "published"));
+      results.innerHTML = publicViews.discoveryResults(model);
+      count.textContent = model.countLabel;
+      return true;
     },
     storage,
     geolocation: null,
@@ -108,7 +111,7 @@ test("public controller patches discovery results and filters atomically", async
   ]);
 });
 
-test("public controller debounces search and refreshes only the result region", async () => {
+test("public controller debounces search without replacing the page", async () => {
   const scheduled = [];
   const cancelled = [];
   const { controller, state, page, results, count } = fixture({
@@ -130,8 +133,7 @@ test("public controller debounces search and refreshes only the result region", 
   assert.equal(state.discoverQuery, "second");
   assert.equal(state.discoverVisible, 12);
   assert.equal(page.innerHTML, "unchanged");
-  assert.equal(results.innerHTML, "results:second");
-  assert.equal(count.textContent, "1 events");
+  assert.deepEqual(state.events.map((event) => event.id), ["second"]);
 });
 
 test("public controller persists valid regions and restores them safely", async () => {

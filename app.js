@@ -46,6 +46,7 @@ import { createBusyController } from "./modules/busy.js?v=48";
 import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createShellController } from "./modules/shell-controller.js?v=86";
 import { mountNavigationComponent } from "./modules/navigation-component.js?v=100";
+import { mountDiscoveryResultsComponent } from "./modules/discovery-results-component.js?v=101";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=95";
@@ -144,6 +145,11 @@ const effectivePrice = (tier) => {
   return active[0]?.price_cents ?? tier.price_cents;
 };
 const publicViews = createPublicViews({ effectivePrice, eventRegistrations, tierById });
+const discoveryResultsComponent = mountDiscoveryResultsComponent({
+  store: appStore,
+  publicViews,
+  documentRef: document,
+});
 const noticeController = createNoticeController({ notice });
 const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
 function showNotice(message, options) { noticeController.show(message, options); }
@@ -186,6 +192,7 @@ const publicController = createPublicController({
   showNotice,
   scrollToTop: () => scrollTo(0, 0),
   patchState: appStore.patch,
+  refreshResults: discoveryResultsComponent.refresh,
 });
 const contentController = createContentController({ documentRef: document });
 const { loadDiscovery, renderDiscover, renderEvent } = publicController;
