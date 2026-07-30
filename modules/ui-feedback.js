@@ -7,21 +7,31 @@ const formFocusSelector = [
   "select:not([disabled])", "textarea:not([disabled])",
 ].join(",");
 
-export function createDialogController({ dialog, content, onClose = () => {} }) {
+export function createDialogController({
+  dialog,
+  content,
+  onClose = () => {},
+  beforeClose = () => true,
+  afterOpen = () => {},
+}) {
   let returnFocus = null;
 
   const close = () => {
+    if (!beforeClose(content)) return false;
     if (dialog.open) dialog.close();
+    return true;
   };
 
   const open = (html, trigger = document.activeElement) => {
-    if (dialog.open) close();
+    if (dialog.open && !close()) return false;
     returnFocus = trigger instanceof HTMLElement ? trigger : null;
     content.innerHTML = html;
     dialog.showModal();
+    afterOpen(content);
     requestAnimationFrame(() => {
       (dialog.querySelector(formFocusSelector) || dialog.querySelector(focusableSelector))?.focus();
     });
+    return true;
   };
 
   dialog.addEventListener("click", (event) => {
@@ -40,6 +50,10 @@ export function createDialogController({ dialog, content, onClose = () => {} }) 
       event.preventDefault();
       first.focus();
     }
+  });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    close();
   });
   dialog.addEventListener("close", () => {
     onClose();

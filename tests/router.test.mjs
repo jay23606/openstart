@@ -88,3 +88,25 @@ test("router labels protected and completed transitions", async () => {
   await router.navigate("discover", { syncUrl: false });
   assert.deepEqual(actions, ["route.auth-required", "route.navigate"]);
 });
+
+test("router leaves route state untouched when a dirty form blocks navigation", async () => {
+  const state = { navigationId: 4, session: {}, selectedEvent: { id: "event-1" }, view: "dashboard" };
+  let routeCalls = 0;
+  const router = createRouter({
+    state,
+    configured: true,
+    routes: { discover: async () => { routeCalls += 1; } },
+    protectedViews: [],
+    onAuthRequired: () => {},
+    afterNavigate: () => {},
+    beforeNavigate: () => false,
+  });
+  assert.equal(await router.navigate("discover", { syncUrl: false }), false);
+  assert.deepEqual(state, {
+    navigationId: 4,
+    session: {},
+    selectedEvent: { id: "event-1" },
+    view: "dashboard",
+  });
+  assert.equal(routeCalls, 0);
+});

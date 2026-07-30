@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createOrganizerController } from "../features/organizer/controller.js";
 
-function fixture() {
+function fixture(overrides = {}) {
   const opened = [];
   const notices = [];
   const waitlistUpdates = [];
+  const setupRenders = [];
   const state = { setupEventId: null };
   const rows = [
     { dataset: { search: "ada runner@example.com", status: "confirmed" }, classList: { hidden: false, toggle(_name, value) { this.hidden = value; } } },
@@ -20,7 +21,7 @@ function fixture() {
     eventById: (id) => ({ id, status: "draft", os_event_checklist_items: [] }),
     openDialog: (value) => opened.push(value),
     forms: { event: () => "event-form" },
-    renderSetupWizard: async () => {},
+    renderSetupWizard: async (...args) => setupRenders.push(args),
     renderDashboard: () => {},
     renderRoster: () => {},
     renderEvent: () => {},
@@ -49,8 +50,9 @@ function fixture() {
       querySelector: (selector) => fields.get(selector),
       querySelectorAll: () => rows,
     },
+    ...overrides,
   });
-  return { controller, notices, opened, rows, waitlistUpdates };
+  return { controller, notices, opened, rows, setupRenders, waitlistUpdates };
 }
 
 test("organizer actions open event creation without leaking into app.js", async () => {
@@ -79,4 +81,13 @@ test("organizer roster filters and waitlist changes are feature-owned", async ()
   assert.equal(waitlistUpdates[0][1].status, "invited");
   assert.match(waitlistUpdates[0][1].invited_at, /^\d{4}-\d{2}-\d{2}T/);
   assert.deepEqual(notices, ["Waitlist status updated."]);
+});
+
+test("setup navigation preserves a dirty draft when discard is declined", async () => {
+  const { controller, setupRenders } = fixture({ confirmLeaveDraft: () => false });
+  assert.equal(await controller.handleClick({
+    dataset: { setupStep: "2", setupEvent: "event-1" },
+    matches: () => false,
+  }), true);
+  assert.equal(setupRenders.length, 0);
 });

@@ -25,6 +25,8 @@ export function createOrganizerController({
   go,
   updateWaitlist,
   documentRef = globalThis.document,
+  confirmLeaveDraft = () => true,
+  markFormSaved = () => {},
   patchState = (values) => Object.assign(state, values),
 }) {
   async function refreshDialog(eventId, form) {
@@ -40,11 +42,16 @@ export function createOrganizerController({
       if (race.status === "draft") await renderSetupWizard(race, 0);
       else renderRoster(race);
     } else if (target.dataset.openSetup) await renderSetupWizard(eventById(target.dataset.openSetup), 0);
-    else if (target.dataset.setupStep) await renderSetupWizard(eventById(target.dataset.setupEvent), Number(target.dataset.setupStep));
+    else if (target.dataset.setupStep) {
+      if (!confirmLeaveDraft()) return true;
+      await renderSetupWizard(eventById(target.dataset.setupEvent), Number(target.dataset.setupStep));
+    }
     else if (target.matches("[data-exit-setup]")) {
+      if (!confirmLeaveDraft()) return true;
       patchState({ setupEventId: null }, "setup.closed");
       await go("dashboard");
     } else if (target.dataset.setupPreview) {
+      if (!confirmLeaveDraft()) return true;
       patchState({ setupEventId: target.dataset.setupPreview }, "setup.previewed");
       renderEvent(eventById(target.dataset.setupPreview), true);
     } else if (target.dataset.publishEvent) {
@@ -139,6 +146,7 @@ export function createOrganizerController({
         description: data.get("description").trim(),
         updated_at: new Date().toISOString(),
       });
+      markFormSaved(form);
       await loadDashboard();
       await renderSetupWizard(eventById(form.dataset.eventId), 1);
       showNotice("Event details saved.");
@@ -152,6 +160,7 @@ export function createOrganizerController({
         price_cents: Math.round(Number(data.get("price")) * 100),
         capacity: Number(data.get("capacity")),
       });
+      markFormSaved(form);
       await loadDashboard();
       await renderSetupWizard(eventById(form.dataset.eventId), 1);
       showNotice("Registration option added.");
@@ -170,6 +179,7 @@ export function createOrganizerController({
         website_published: data.get("website_published") === "on",
         updated_at: new Date().toISOString(),
       });
+      markFormSaved(form);
       await loadDashboard();
       await renderSetupWizard(eventById(form.dataset.eventId), runner ? 3 : 4);
       showNotice(runner ? "Runner experience saved." : "Website settings saved.");

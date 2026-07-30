@@ -15,8 +15,8 @@ import { createContentController } from "./features/content/controller.js?v=83";
 import { createDemoController } from "./features/demo/controller.js?v=95";
 import { createAccountController } from "./features/account/controller.js?v=103";
 import { createPublicController } from "./features/public/controller.js?v=94";
-import { createOrganizerController } from "./features/organizer/controller.js?v=95";
-import { createOrganizerViews } from "./features/organizer/views.js?v=102";
+import { createOrganizerController } from "./features/organizer/controller.js?v=104";
+import { createOrganizerViews } from "./features/organizer/views.js?v=104";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
 import { createPlatformViews } from "./features/platform/views.js?v=69";
 import { createSeriesController } from "./features/series/controller.js?v=50";
@@ -38,21 +38,22 @@ import { createEventSiteViews } from "./features/event-site/views.js?v=67";
 import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppStore, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=91";
-import { createAccountViews } from "./modules/account-views.js?v=103";
+import { createAccountViews } from "./modules/account-views.js?v=104";
 import { architectureView, demoView, helpView } from "./modules/content-views.js?v=99";
 import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
-import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
+import { createPageLifecycle } from "./modules/page-lifecycle.js?v=104";
 import { createShellController } from "./modules/shell-controller.js?v=86";
 import { mountNavigationComponent } from "./modules/navigation-component.js?v=100";
 import { mountDiscoveryResultsComponent } from "./modules/discovery-results-component.js?v=101";
 import { mountOrganizerDashboardComponent } from "./modules/organizer-dashboard-component.js?v=102";
 import { mountRunnerDashboardComponent } from "./modules/runner-dashboard-component.js?v=103";
+import { createFormStateController } from "./modules/form-state.js?v=104";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
-import { createRouter } from "./modules/router.js?v=95";
-import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=47";
+import { createRouter } from "./modules/router.js?v=104";
+import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=104";
 import { localDateTime, parseResultTime, resultTime, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
 
 const page = document.querySelector("#page-content");
@@ -66,6 +67,7 @@ const platformNav = document.querySelector("#platform-nav");
 
 const appStore = createAppStore();
 const { state } = appStore;
+const formStateController = createFormStateController();
 
 const eventById = (id) => findEventById(state,id);
 
@@ -153,7 +155,13 @@ const discoveryResultsComponent = mountDiscoveryResultsComponent({
   documentRef: document,
 });
 const noticeController = createNoticeController({ notice });
-const dialogController = createDialogController({ dialog, content: dialogContent, onClose: stopScanner });
+const dialogController = createDialogController({
+  dialog,
+  content: dialogContent,
+  onClose: stopScanner,
+  beforeClose: (root) => formStateController.confirmLeave(root),
+  afterOpen: (root) => formStateController.hydrate(root),
+});
 function showNotice(message, options) { noticeController.show(message, options); }
 
 const platformViews = createPlatformViews();
@@ -182,6 +190,7 @@ const pageLifecycle = createPageLifecycle({
   setPageMetadata,
   syncNavigation,
   scrollToTop: () => scrollTo(0, 0),
+  afterRender: (root) => formStateController.hydrate(root),
 });
 const publicController = createPublicController({
   state,
@@ -552,6 +561,7 @@ const { navigate: go } = createRouter({
   afterNavigate: pageLifecycle.afterNavigate,
   batchState: appStore.batch,
   actionState: appStore.action,
+  beforeNavigate: () => formStateController.confirmLeave(page),
 });
 
 const registrationController = createRegistrationController({
@@ -613,6 +623,8 @@ const organizerController = createOrganizerController({
   showNotice,
   go,
   updateWaitlist,
+  confirmLeaveDraft: () => formStateController.confirmLeave(page),
+  markFormSaved: (form) => formStateController.markSaved(form),
   forms: {
     checklist: checklistForm,
     duplicateEvent: duplicateEventForm,
@@ -914,7 +926,10 @@ document.addEventListener("submit", async (event) => {
   const releaseBusy = busyController.begin(form, event.submitter);
   if (!releaseBusy) return;
   try {
-    if (await dispatchFeatureSubmit(form, data, event.submitter)) return;
+    if (await dispatchFeatureSubmit(form, data, event.submitter)) {
+      formStateController.markSaved(form);
+      return;
+    }
   } catch (error) {
     const message = error.message || "Something went wrong.";
     const formMessage = form.querySelector(".form-message");
@@ -926,9 +941,11 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  formStateController.capture(event.target);
   await dispatchFeatureChange(event.target);
 });
 document.addEventListener("input", async (event) => {
+  formStateController.capture(event.target);
   if (await dispatchFeatureInput(event.target)) return;
 });
 document.addEventListener("dragstart",(event)=>{

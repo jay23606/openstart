@@ -1011,3 +1011,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .78; }
   .hero-photo-caption { bottom: 86px; left: 24px; right: 24px; }
   .hero-photo .hero-meta { bottom: 20px; left: 24px; right: 24px; }
 }
+.form-save-state {
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 700;
+  margin: 0 0 .75rem;
+  text-align: right;
+}
+
+.form-save-state[data-state="dirty"] {
+  color: var(--accent);
+}

@@ -23,7 +23,8 @@ export function createAccountViews({ getBaseUri, lotteryRunnerCard }) {
 
   function athleteProfile(profile) {
     const current = profile || {};
-    const body = `<form id="athlete-profile-form">
+    const body = `<form id="athlete-profile-form" data-draft-key="athlete-profile:${escapeHtml(current.id || current.handle || "new")}">
+      <p class="form-save-state" data-form-state data-state="saved" aria-live="polite">All changes saved</p>
       <label>Public handle<input name="handle" value="${escapeHtml(current.handle || "")}" pattern="[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])" minlength="3" maxlength="32" placeholder="jane-runner" required ${profile ? "readonly" : ""}></label>
       <p class="form-hint">Lowercase letters, numbers, and hyphens. Your page lives at <code>?athlete=your-handle</code>.${profile ? " Handles can't be changed once set." : ""}</p>
       <label>Display name<input name="display_name" value="${escapeHtml(current.display_name || "")}" maxlength="80" placeholder="Jane Runner"></label>

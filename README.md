@@ -115,6 +115,12 @@ keyboard focus.
 Forms, setup steps, and modal editors intentionally remain event-driven views.
 Making those surfaces reactive requires a separate draft-state and validation
 design so background data refreshes cannot erase partially entered values.
+`modules/form-state.js` now provides that first draft boundary for the event
+setup wizard, new-event flow, event duplication, and athlete-profile editor.
+It stores non-sensitive drafts in tab-scoped session storage, restores them
+after refreshes, exposes saved/unsaved status, warns before navigation or modal
+closure, and clears drafts after successful submission. Passwords, uploads,
+payment details, and participant forms are explicitly excluded.
 
 ## Current capabilities
 

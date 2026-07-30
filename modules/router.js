@@ -21,11 +21,13 @@ export function createRouter({
   afterNavigate,
   batchState = (action) => action(),
   actionState = (_name, action) => batchState(action),
+  beforeNavigate = () => true,
 }) {
   const views = Object.keys(routes);
 
   async function navigate(requestedView, { syncUrl = true } = {}) {
     const view = normalizeView(requestedView, views);
+    if (!beforeNavigate(view)) return false;
     if (protectedViews.includes(view) && configured && !state.session) {
       actionState("route.auth-required", () => { state.pendingView = view; });
       onAuthRequired(view);

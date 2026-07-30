@@ -5,6 +5,7 @@ export function createPageLifecycle({
   setPageMetadata,
   syncNavigation,
   scrollToTop = () => scrollTo(0, 0),
+  afterRender = () => {},
 }) {
   function render(markup, {
     metadata,
@@ -16,6 +17,7 @@ export function createPageLifecycle({
       setPageMetadata(metadata.title, metadata.description, metadata.image);
     }
     renderMarkup(page, markup);
+    afterRender(page);
     if (sync) syncNavigation();
     if (scroll) scrollToTop();
     if (focus) page.focus({ preventScroll: true });
