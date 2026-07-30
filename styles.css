@@ -124,6 +124,11 @@ nav button.nav-active::after { background: var(--orange); bottom: -19px; content
 .architecture-toc a { color: var(--muted); flex: 0 0 auto; font-size: 12px; font-weight: 800; text-decoration: none; }
 .architecture-toc a:hover { color: var(--green); }
 .architecture-body { margin: 0 auto; max-width: 1180px; padding: 10px 24px 90px; }
+.paper-abstract { display: grid; gap: 16px; }
+.paper-abstract > p { margin: 0; }
+.paper-keywords { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; padding-top: 16px; }
+.paper-keywords b { color: var(--ink); }
+.section-conclusion { font-family: Georgia, "Times New Roman", serif; font-size: clamp(20px, 2.4vw, 28px); line-height: 1.55; margin: 0; max-width: 900px; }
 .paper-section { border-bottom: 1px solid var(--line); padding: 72px 0; scroll-margin-top: 135px; }
 .paper-section > div:first-child > h2, .paper-intro h2 { font-family: Georgia, serif; font-size: clamp(34px, 4vw, 52px); font-weight: 500; letter-spacing: -1.5px; margin-bottom: 14px; }
 .section-number { color: var(--orange); font-size: 11px; font-weight: 900; letter-spacing: 1px; margin-bottom: 12px; }
