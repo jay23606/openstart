@@ -1,359 +1,252 @@
 # OpenStart
 
-OpenStart is a minimal, open-source race registration and event-management
-platform. It follows the same architecture as BotGarden and Mayfly: static HTML,
-CSS, and browser-native JavaScript modules on GitHub Pages, backed by Supabase.
-There is no frontend framework, bundler, or build step.
+OpenStart is an open-source race registration and event-operations platform for
+organizers, runners, volunteers, race-day staff, and timing teams.
 
-The browser code is split into native ES modules: `app.js` composes screens and
-workflows, `data.js` owns Supabase access, `modules/router.js` owns navigation,
-and feature modules such as `modules/results.js` contain independently tested
-domain behavior. The remaining modules contain shared state, presentation
-utilities, discovery rules, and content catalogs. This keeps the static
-deployment inspectable while avoiding repeated helpers and cross-feature
-dependencies.
+It covers the full event lifecycle—from publishing a race and accepting
+registrations to check-in, results, communications, and series standings—while
+keeping the client simple: static HTML, CSS, and browser-native JavaScript backed
+by Supabase.
 
-Larger product areas live under `features/`. For example,
-`features/registration/controller.js` owns registration checkout, lottery
-entry, participant management, transfers, cancellations, refunds, and
-confirmation actions while receiving its data and UI dependencies explicitly.
-Its `views.js` owns participant fields, group checkout, manual entry,
-organizer editing, runner self-service, and transfer acceptance.
-`features/organizer/controller.js` owns event creation, guided setup,
-publishing, core organizer navigation, and operational checklists through the
-same dependency-driven boundary. Its `views.js` owns event creation,
-duplication, operational-readiness checklists, and the participant/team/waitlist
-roster workspace, plus the six-step event setup and publishing page.
-`features/platform/controller.js` isolates platform search, fee controls,
-event suspension, and private support notes from the public application shell.
-Its `views.js` owns the operations console, reconciliation/provider reporting,
-system health, event safety, fee, and support-note surfaces.
-`features/series/controller.js` owns championship creation, configuration,
-calendar membership, public standings navigation, and standings exports.
-Its `views.js` owns the series manager and calendar/settings dialogs.
-`features/lottery/controller.js` owns organizer lottery configuration,
-application review, irreversible draw confirmation, and invitation summaries.
-Its `views.js` owns runner application, invitation checkout, and application
-status cards; organizer lifecycle views share the same feature boundary.
-`features/communications/controller.js` owns campaign composition, audience
-previews, test messages, reusable templates, scheduling, drafts, and sends.
-Its `views.js` owns the campaign composer and reuses the shared modal, list,
-and action-toolbar primitives.
-`features/results/controller.js` owns timing imports, manual corrections,
-publication state, runner notifications, and public leaderboard filtering.
-Its `views.js` contains the public leaderboard and organizer dialog markup.
-`modules/render.js` supplies the intentionally small, framework-free rendering
-layer: target replacement, list rendering, escaped empty states, and modal
-shells. Feature views remain plain functions with explicit escaping.
-`modules/account-views.js` owns sign-in, athlete-profile, and embeddable-widget
-dialogs plus the runner dashboard and public athlete page.
-`modules/public-view-models.js` derives immutable discovery and event-detail
-models without browser or provider dependencies. `modules/public-views.js`
-renders those models as the public landing, result-list, and event pages.
-`features/public/controller.js` owns asynchronous discovery loading, stale
-request cancellation, paging, persisted location, geolocation, debounced
-search, event hydration, metadata, and focus-preserving result replacement.
-`app.js` forwards matching DOM events while templates remain isolated from
-global state and browser effects stay independently testable.
-`modules/page-lifecycle.js` is the single full-page commit boundary for markup,
-metadata, navigation state, focus, scroll restoration, and fatal errors.
-Intentional partial updates bypass it so live search does not disturb the
-runner's current focus or page position.
-`features/volunteers/controller.js` owns public shift signup and waitlisting,
-organizer role creation, roster updates, and volunteer exports. Its `views.js`
-owns the public opportunities/signup dialogs and organizer volunteer workspace.
-`features/race-day/controller.js` owns participant lookup, QR passes, packet
-pickup, check-in, bibs, walk-ups, staff, fulfillment, and operational exports.
-Its `views.js` owns the operations workspace, lookup results, and signed pass.
-`features/event-commerce/controller.js` owns waivers, custom registration
-questions, scheduled pricing, promotions, merchandise, and donations.
-Its `views.js` owns the registration settings, pricing, promotion, product,
-inventory, and fundraising dialogs.
-`features/event-site/controller.js` owns event branding, content sections,
-sponsors, publishing previews, and asset uploads. Its `views.js` owns the
-branding, publishing, section, and sponsor editor. `features/waves/controller.js`
-owns wave creation, assignments, runner selection, starts, and bib allocation.
-Its `views.js` owns the organizer corral manager and runner wave picker.
+[Live application](https://jay23606.github.io/openstart/) ·
+[Architecture report](https://jay23606.github.io/openstart/?view=architecture) ·
+[Help center](https://jay23606.github.io/openstart/?view=help) ·
+[Interactive demo](https://jay23606.github.io/openstart/?view=demo)
 
-`modules/dispatcher.js` composes feature controllers for click and form
-submission handling. It processes handlers in explicit order and stops after
-the first feature accepts an action, keeping the application shell independent
-from feature-specific `data-*` attributes.
+## Why OpenStart?
 
-`modules/ui-feedback.js` owns modal focus, focus restoration, keyboard trapping,
-backdrop/close behavior, cleanup hooks, and accessible status/error notices.
-`modules/busy.js` gives every submitted form the same duplicate-submit guard,
-accessible busy state, progress label, and reliable control restoration.
+Race platforms often combine public websites, registration, payments, participant
+management, and race-day tooling in a closed system. OpenStart makes those
+workflows inspectable and self-hostable without requiring a frontend framework,
+bundler, or application server.
 
-`modules/store.js` provides the framework-free reactive state layer. Top-level
-state keys are schema-checked, related changes publish atomically, and keyed or
-derived subscriptions update browser effects without rerendering unrelated
-surfaces. Named actions retain a bounded metadata-only history containing the
-action name and changed keys—never session tokens or participant values.
-Controllers receive the store's patch boundary explicitly, so they remain easy
-to test without a browser or global singleton.
+- **Simple to deploy:** static assets run on GitHub Pages or any static host.
+- **Server-authoritative:** PostgreSQL and Edge Functions enforce permissions,
+  capacity, pricing, payments, and other critical rules.
+- **Operationally complete:** organizers can work from event setup through
+  published results in one platform.
+- **Open and auditable:** application code, database migrations, and privileged
+  workflows live in the repository.
 
-`modules/view-runtime.js` is the deliberately small reactive view runtime. A
-component selects the smallest state model it needs, renders only when that
-model changes, and owns cleanup for any effects it creates. Updates are explicit
-targeted DOM commits rather than automatic HTML replacement, preserving focus
-and existing event listeners. `modules/navigation-component.js` is the first
-production component and controls active navigation, account actions, and
-platform visibility without coupling those effects to `app.js`.
-`modules/discovery-results-component.js` owns the live event-card region and
-result count. Search, location, and pagination actions update store state; the
-component reacts to the resulting model without replacing the surrounding page
-or disturbing the focused search control.
-`modules/organizer-dashboard-component.js` updates the organizer header,
-metrics, events, financials, communications, series, and audit regions
-independently while deliberately preserving the currently open roster.
-`modules/runner-dashboard-component.js` owns the signed-in runner surface, so
-registration and athlete-profile state changes no longer require a second
-full-page render. Both dashboard components skip a region that currently owns
-keyboard focus.
+## What it supports
 
-Forms, setup steps, and modal editors intentionally remain event-driven views.
-Making those surfaces reactive requires a separate draft-state and validation
-design so background data refreshes cannot erase partially entered values.
-`modules/form-state.js` now provides that first draft boundary for the event
-setup wizard, new-event flow, event duplication, and athlete-profile editor.
-It stores non-sensitive drafts in tab-scoped session storage, restores them
-after refreshes, exposes saved/unsaved status, warns before navigation or modal
-closure, and clears drafts after successful submission. Passwords, uploads,
-payment details, and participant forms are explicitly excluded.
+### For organizers
 
-`modules/conflicts.js` adds optimistic concurrency for event configuration.
-Every protected save includes the `updated_at` version that the organizer
-originally loaded. Non-overlapping changes are merged automatically; overlapping
-changes open a side-by-side review with options to keep editing, load the latest
-saved values, or deliberately overwrite. The event setup wizard, registration
-self-service settings, and lottery settings use this boundary. Upload forms are
-excluded until files can be staged independently from their surrounding form.
+- Guided event setup, readiness checks, publishing, duplication, and branded pages
+- Registration options, scheduled pricing, promo codes, waivers, and custom questions
+- Participant rosters, teams, transfers, cancellation requests, refunds, and waitlists
+- Lotteries with qualification review, weighted draws, invitations, and immutable audit data
+- Merchandise, inventory, donations, financial reporting, and Stripe Connect payouts
+- Email campaigns, audience previews, templates, scheduling, and delivery reporting
+- Waves, corrals, bib ranges, volunteers, staff roles, and race-day operations
+- Timing imports, manual corrections, official results, and race-series standings
 
-## Current capabilities
+### For runners and volunteers
 
-- Public feature explorer plus a private, disposable organizer showcase with
-  realistic sample data that stays out of real event and financial totals
-- Guided six-step event setup with progressive saving, optional-tool shortcuts,
-  preview, server-authoritative readiness checks, and protected publishing
-- Auditable weighted lottery draws with immutable ranks, selected-runner Stripe
-  checkout, expiring invitations, waitlist promotion, and runner deadlines
-- Private platform-operations console with owner/finance/support roles, payment
-  reconciliation alerts, provider and email failure monitoring, organizer search,
-  fee controls, event suspension, support notes, and immutable intervention history
-- Public event discovery and event detail pages
-- Registration tiers, prices, capacity, and participant registration
-- Supabase email/password authentication for organizers
-- Organizer event creation, metrics, and participant rosters
-- Searchable registration management, custom questions, waivers, and CSV exports
-- Scheduled pricing, promotion codes, waitlists, and financial reporting
-- Runner-managed participant details, cancellation requests, transfers, and refunds
-- Registration activity history and automatic waitlist invitations
-- Multi-person orders, itemized Stripe Checkout, teams, clubs, and relay legs
-- Signed QR passes, camera scanning, bib assignment, packet pickup, and race-day check-in
-- Event staff roles, walk-up registration, and race-day audit history
-- Products, variants, atomic inventory, donations, and packet-pickup fulfillment
-- Row-level security for organizer and participant data
-- A provider-neutral payment boundary that leaves paid entries pending
-- Installable PWA shell with an offline cache
-- Organizer email campaigns with audience previews, reusable templates,
-  scheduled delivery, delivery reporting, and marketing unsubscribe handling
-- Official race results with CSV timing imports, manual corrections, searchable
-  public leaderboards, division places, runner result views, and email notices
-- Volunteer roles and shifts with atomic capacity enforcement, public signup,
-  waitlists, waivers, organizer check-in, hours tracking, and CSV exports
-- Branded event websites with image uploads, custom colors, ordered content
-  sections, sponsors, draft previews, publishing controls, and social metadata
-- Start waves and corrals with runner selection, capacity enforcement, pace
-  guidance, bulk assignment, bib ranges, start controls, and targeted messaging
-- Production safeguards including immutable audit history, server-side rate
-  limits, health checks, account export/deletion, CSP, and Playwright smoke tests
-- Burst-ready capacity accounting with per-tier atomic counters, narrow lock
-  domains, reconciliation checks, worker-safe email claims, server-paged public
-  discovery, lazy organizer rosters, and scheduled reservation cleanup
-- Branded race series with event calendars, configurable placement points,
-  eligibility rules, tie-breakers, individual/team standings, and CSV reporting
-- Private event duplication that carries reusable registration, website,
-  sponsor, merchandise, and deadline configuration into a new race date
-- Operational readiness checklists with due dates, completion tracking,
-  starter tasks, custom tasks, and organizer audit history
-- Configurable race lotteries with application windows, distance selection,
-  qualifying-result evidence, organizer review, bonus tickets, and runner
-  status tracking
-- Opt-in public athlete profiles that gather a runner's published results across
-  every event, with personal bests per distance and per-race placement
-- An embeddable registration widget that drops OpenStart checkout onto any
-  external website with a single script tag
-- Device-local demo mode when Supabase has not been configured
+- Public race discovery and event pages
+- Individual and group registration with hosted Stripe Checkout
+- Self-service registration management, transfers, teams, and lottery status
+- Signed QR passes, packet-pickup status, results, and public athlete profiles
+- Volunteer opportunities, waitlists, assignments, and service history
 
-## Athlete profiles
+### For platform operators
 
-Signed-in runners can open **My races → Athlete profile** to claim a public
-handle. Their page — `?athlete=<handle>` — aggregates every published result
-they earned across OpenStart events, computes a personal best per distance, and
-shows overall and division placement for each race. Profiles are opt-in and can
-be made private at any time. Cross-event linkage runs through a security-definer
-function, so a public page never exposes private registration rows; only
-published results for opted-in athletes are returned.
+- Role-based owner, finance, and support access
+- Payment and email failure monitoring
+- Organizer search, reconciliation, fee controls, support notes, and event suspension
+- Immutable audit history and operational health reporting
 
-Placement is derived from recorded finish times. Age-graded ranking is
-intentionally not offered yet: the schema does not capture runner age or gender,
-so any age grade would be guesswork.
+The built-in demo can create a private, disposable showcase with sample
+participants, results, products, waves, volunteers, and website content. It is
+excluded from real event totals and never sends payments or participant email.
+
+## Architecture
+
+OpenStart uses a deliberately small browser stack:
+
+```text
+Browser-native HTML, CSS, and ES modules
+                    │
+                    ▼
+        Supabase Auth and PostgreSQL
+       Row Level Security + SQL functions
+                    │
+                    ▼
+          Supabase Edge Functions
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+     Stripe Connect         Resend
+```
+
+The browser owns presentation and reversible workflow state. PostgreSQL owns
+durable records and invariants. Edge Functions own secrets, privileged actions,
+and provider integrations.
+
+The client includes a small observable store and targeted reactive components
+without introducing a framework. Unsaved non-sensitive forms use tab-scoped
+draft storage, and compatible event settings use optimistic concurrency to
+prevent stale editors from silently overwriting newer work.
+
+Read the
+[architecture report](https://jay23606.github.io/openstart/?view=architecture)
+for the system model, transaction protocols, quality attributes, deployment
+tradeoffs, and current limitations.
+
+## Repository layout
+
+```text
+app.js                 Application composition and delegated browser events
+core.js                Supabase configuration and shared helpers
+data.js                Browser persistence boundary
+features/              Domain controllers and views
+modules/               State, routing, rendering, forms, and shared behavior
+supabase/migrations/   PostgreSQL schema, policies, functions, and hardening
+supabase/functions/    Stripe, email, platform, and race-operation boundaries
+tests/                 Node and Playwright coverage
+styles.css             Responsive light and dark themes
+service-worker.js      PWA shell and offline asset cache
+```
+
+Feature controllers receive their dependencies explicitly and own a bounded
+workflow. Views remain plain rendering functions with explicit escaping.
+`app.js` composes those parts rather than containing every product behavior.
+
+## Run locally
+
+Requirements:
+
+- A modern browser
+- Node.js for tests
+- Python, or another static file server, for local development
+- Supabase CLI when deploying the backend
+
+```bash
+git clone https://github.com/jay23606/openstart.git
+cd openstart
+npm install
+python -m http.server 8000
+```
+
+Then open `http://localhost:8000`.
+
+Without a configured Supabase project, OpenStart runs in a device-local demo
+mode. To connect a backend, copy `config.example.js` to `config.js` and provide
+the Supabase project URL and public publishable key.
+
+Never place a service-role key or provider secret in `config.js`.
+
+## Configure Supabase
+
+1. Create a Supabase project.
+2. Link the repository with the Supabase CLI.
+3. Apply all migrations:
+
+   ```bash
+   supabase db push
+   ```
+
+4. Deploy the Edge Functions used by your installation.
+5. Add local and production URLs to the Supabase Auth redirect allow-list.
+6. Configure email confirmation according to your account policy.
+
+The publishable key is expected to be visible in the browser. Security comes
+from Row Level Security, database constraints, and server-side authorization.
+
+## Payments and email
+
+Free registrations can be confirmed immediately. Paid registrations use Stripe
+Connect destination charges:
+
+1. PostgreSQL atomically reserves capacity.
+2. An Edge Function creates an idempotent hosted Checkout Session.
+3. Stripe routes the organizer amount and OpenStart application fee.
+4. A signed webhook confirms or expires the registration.
+
+Store provider credentials only as Supabase secrets:
+
+```bash
+supabase secrets set STRIPE_SECRET_KEY=sk_test_...
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set RESEND_API_KEY=re_...
+supabase secrets set RESEND_FROM_EMAIL="OpenStart <registrations@your-domain.com>"
+```
+
+The Stripe webhook should subscribe to:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+- `account.updated`
+
+For sandbox checkout, use Stripe's standard test card `4242 4242 4242 4242`,
+any future expiration date, any three-digit CVC, and a valid postal code.
+
+Resend's test sender is limited to the account owner. Verify a sending domain
+before delivering confirmations or campaigns to participants.
+
+## Registration integrity
+
+Critical registration rules are enforced at the database boundary, including:
+
+- one active registration per participant email and event;
+- one active registration per signed-in account and event;
+- atomic tier, team, wave, volunteer, product, and promotion capacity;
+- event ownership checks across tiers, teams, waitlists, and orders;
+- server-calculated pricing, discounts, and application fees;
+- idempotent checkout and webhook processing; and
+- safe release of expired registration and inventory reservations.
+
+The browser cannot mark its own registration as paid.
 
 ## Embedding registration
 
-Organizers can place OpenStart registration on their own website. Open an event
-roster and choose **Embed** to copy a snippet:
+Organizers can embed registration on another website:
 
 ```html
 <div data-openstart-embed="your-event-slug"></div>
 <script src="https://your-openstart-host/embed.js"></script>
 ```
 
-`embed.js` injects an `<iframe>` served from the OpenStart host, so the entire
-registration and Stripe Checkout flow runs inside OpenStart's own origin. No
-CORS rules, allowed-origin entries, or API keys need to be configured on the
-host site. Add `data-openstart-accent="#0f6b4f"` to match a brand colour. The
-widget auto-resizes its height via a same-origin `postMessage` handshake, and
-paid entries break out to Stripe Checkout and return to a hosted confirmation
-page. Because return URLs stay on the OpenStart origin, the server-side
-allowed-origin check on `os-create-checkout` remains fully enforced.
+Add `data-openstart-accent="#0f6b4f"` to customize the accent color. The widget
+uses an iframe served from the OpenStart origin, keeping registration and
+Checkout inside the same security boundary without exposing API keys to the
+host site.
 
-## Help and sandbox use
+## Deploy to GitHub Pages
 
-The live app includes a searchable **Help** screen for runners, organizers,
-volunteers, and race-day staff. It covers registration, payments, transfers,
-results, event setup, communications, and common troubleshooting.
+Enable GitHub Pages with **GitHub Actions** as the source. The workflow in
+`.github/workflows/pages.yml` publishes the repository root without a build
+step. Relative asset paths and the service-worker scope support project URLs
+such as `https://owner.github.io/openstart/`.
 
-The **Sandbox** label in the header means Stripe is running in test mode and no
-real money is charged. Use Stripe's test card `4242 4242 4242 4242`, any future
-expiration date, any three-digit CVC, and a valid postal code. Do not enter real
-card details until OpenStart is deliberately switched to live Stripe keys.
+Deploy Supabase migrations and functions separately before enabling persistent
+features in production.
 
-## Files
+## Test
 
-`index.html` is the static shell. `styles.css` contains the complete responsive
-design. `app.js` composes UI workflows and delegates reusable behavior to
-`modules/`. `data.js` is the browser persistence boundary. `core.js` configures
-Supabase and shared helpers. Supabase Edge
-Functions own Stripe secrets, Checkout, Connect onboarding, and webhooks.
-`service-worker.js` and `manifest.json` provide PWA
-support. `supabase/migrations/20260728150000_initial_openstart.sql` creates the
-database and RLS policies.
-
-## Supabase setup
-
-1. Create a Supabase project.
-2. Run `supabase db push` or apply the SQL migration in the SQL editor.
-3. Copy `config.example.js` to `config.js` and add the project URL and
-   publishable key. Never put a service-role key in browser code.
-4. Add the local and GitHub Pages URLs to the Supabase Auth redirect allow-list.
-5. Decide whether email confirmation should be required.
-
-The public publishable key is intentionally delivered to the browser. Security
-comes from the RLS policies, not from hiding that key.
-
-## GitHub Pages
-
-Push the repository to GitHub and enable Pages with **GitHub Actions** as the
-source. `.github/workflows/pages.yml` deploys the repository root without a
-build step.
-
-For a project page such as `https://owner.github.io/openstart/`, all asset URLs
-are relative and the service worker scope remains inside the repository path.
-
-## Payments
-
-Free registrations are confirmed immediately. Paid registrations use Stripe
-Connect destination charges in sandbox mode:
-
-1. Postgres atomically reserves capacity for 30 minutes.
-2. `os-create-checkout` creates a hosted Checkout Session with an idempotency key.
-3. The charge is routed to the organizer and OpenStart retains the configured
-   application fee.
-4. `os-stripe-webhook` verifies Stripe's signature before confirming payment.
-5. `os-stripe-connect` sends signed-in organizers through Stripe-hosted onboarding.
-
-The browser must never be allowed to mark its own registration as paid.
-The browser also never calculates an authoritative discount or scheduled price;
-the atomic reservation function validates those values before Checkout is created.
-
-### Registration integrity
-
-The database, rather than the interface, enforces the core registration rules:
-
-- one active registration per normalized participant email and event;
-- one active registration per signed-in account and event;
-- cancelled and expired checkout attempts may safely try again;
-- open registration is rejected for lottery or closed events;
-- tiers, teams, and waitlists must belong to the same event;
-- tier, team, wave, volunteer, product, and promotion capacities are serialized
-  at their server-side write boundaries;
-- an accepted transfer cannot create a second active registration for its new
-  owner; and
-- expired registrations release order and inventory reservations.
-
-Group orders remain supported, but every participant must use a distinct email.
-
-### Stripe sandbox setup
-
-OpenStart's database migration and Edge Functions are deployed. To activate
-sandbox checkout:
-
-1. Create a Stripe sandbox and enable Connect with Express accounts.
-2. Store its sandbox secret key in Supabase:
-   `supabase secrets set STRIPE_SECRET_KEY=sk_test_...`
-3. In Stripe Workbench, create a webhook endpoint pointing to:
-   `https://zbtgonklxweikgukzukg.supabase.co/functions/v1/os-stripe-webhook`
-4. Subscribe it to `checkout.session.completed`,
-   `checkout.session.async_payment_succeeded`,
-   `checkout.session.async_payment_failed`, `checkout.session.expired`, and
-   `account.updated`.
-5. Store the endpoint signing secret in Supabase:
-   `supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...`
-6. To send paid-registration confirmations, verify a sending domain with
-   [Resend](https://resend.com), then store:
-   `supabase secrets set RESEND_API_KEY=re_... RESEND_FROM_EMAIL="OpenStart <registrations@your-domain.com>"`
-
-The secrets take effect without a redeploy. They must never be committed to
-GitHub or placed in `config.js`.
-
-## Organizer communications
-
-Organizers can send transactional race updates or opted-out-aware marketing
-campaigns to confirmed runners, registration options, teams, captains,
-waitlists, and race-day status groups. Sends are materialized into delivery
-rows for reporting and processed in batches by `os-communications`.
-
-The scheduled GitHub Action requires the same random secret in both places:
-
-`supabase secrets set CAMPAIGN_CRON_SECRET=...`
-
-`gh secret set CAMPAIGN_CRON_SECRET`
-
-Resend's test sender can only deliver to the account owner. Verify a sending
-domain and set `RESEND_FROM_EMAIL` before sending campaigns to participants.
-
-New events default to a 5% OpenStart application fee. The value is stored as
-`platform_fee_bps` on each event and can be changed before registrations open.
-
-## Platform operations
-
-The private **Platform** navigation item is returned only to active members of
-`os_platform_admins`. Bootstrap the first owner from the Supabase SQL editor,
-then manage future access deliberately:
-
-```sql
-insert into public.os_platform_admins(user_id, role)
-select id, 'owner' from auth.users where email = 'owner@example.com';
+```bash
+npm test
+npm run test:e2e
+npm audit --audit-level=high
 ```
 
-Roles are `owner`, `finance`, and `support`. Only owners can suspend or restore
-events. Owner and finance roles can change platform fees. The Edge Function
-rechecks the role for every request; hiding the navigation item is not the
-security boundary.
+The GitHub quality workflow runs syntax checks, unit and static tests, the
+dependency audit, and Playwright browser tests before deployment.
 
-## Tests
+## Security and production notes
 
-Run `npm test`. The package contains no runtime dependencies; Node is used only
-for syntax and connection tests.
+- Keep Stripe, Resend, cron, and service-role secrets out of browser code.
+- Treat interface visibility as presentation, never authorization.
+- Bootstrap the first platform owner deliberately through the Supabase SQL editor.
+- Run representative load tests before opening a high-demand registration window.
+- Configure monitoring, reservation cleanup, payment reconciliation, backups,
+  and provider alerts for production use.
+
+## Contributing
+
+OpenStart is intended to be inspectable, adaptable, and community maintained.
+Issues and pull requests are welcome. Before contributing, run the complete
+test suite and keep privileged decisions at the database or Edge Function
+boundary.
