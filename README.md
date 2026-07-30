@@ -93,6 +93,14 @@ action name and changed keys—never session tokens or participant values.
 Controllers receive the store's patch boundary explicitly, so they remain easy
 to test without a browser or global singleton.
 
+`modules/view-runtime.js` is the deliberately small reactive view runtime. A
+component selects the smallest state model it needs, renders only when that
+model changes, and owns cleanup for any effects it creates. Updates are explicit
+targeted DOM commits rather than automatic HTML replacement, preserving focus
+and existing event listeners. `modules/navigation-component.js` is the first
+production component and controls active navigation, account actions, and
+platform visibility without coupling those effects to `app.js`.
+
 ## Current capabilities
 
 - Public feature explorer plus a private, disposable organizer showcase with

@@ -45,6 +45,7 @@ import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
 import { createPageLifecycle } from "./modules/page-lifecycle.js?v=81";
 import { createShellController } from "./modules/shell-controller.js?v=86";
+import { mountNavigationComponent } from "./modules/navigation-component.js?v=100";
 import { createPublicViews } from "./modules/public-views.js?v=79";
 import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=95";
@@ -159,19 +160,14 @@ function downloadJson(filename,value){
   link.download=filename; link.click(); URL.revokeObjectURL(link.href);
 }
 
-function syncNavigation() {
-  document.querySelectorAll("[data-view]").forEach((button) => {
-    button.classList.toggle("nav-active", button.dataset.view === state.view);
-  });
-  authButton.classList.toggle("hidden", Boolean(state.session));
-  signOutButton.classList.toggle("hidden", !state.session);
-  platformNav.classList.toggle("hidden", !state.platformAdmin?.allowed);
-}
-appStore.select(
-  (current) => `${current.view}:${current.session?.user?.id || ""}:${Boolean(current.platformAdmin?.allowed)}`,
-  syncNavigation,
-  { immediate: true },
-);
+const navigationComponent = mountNavigationComponent({
+  store: appStore,
+  documentRef: document,
+  authButton,
+  signOutButton,
+  platformNav,
+});
+const syncNavigation = () => navigationComponent.refresh();
 
 const pageLifecycle = createPageLifecycle({
   page,

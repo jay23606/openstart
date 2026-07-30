@@ -20,8 +20,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.equal(cacheVersion[1], scriptVersion[1], "service-worker CACHE must match the shell asset version");
   assert.match(appState, /pendingView:\s*"runner"/);
   assert.match(appState, /createAppStore/);
-  assert.match(app, /appStore\.select\(/);
-  assert.match(app, /\{ immediate: true \}/);
+  assert.match(app, /mountNavigationComponent/);
+  assert.doesNotMatch(app, /appStore\.select\(/);
   assert.match(app, /actionState: appStore\.action/);
   assert.match(app, /appStore\.patch\(\{\s*events,\s*discoverTotal:/);
   assert.match(app, /loadedRegistrationEvents: new Set\(\[\.\.\.state\.loadedRegistrationEvents, eventId\]\)/);
@@ -96,6 +96,8 @@ test("the static shell connects the app, stylesheet, manifest, theme, and servic
   assert.match(worker, /modules\/page-lifecycle\.js/);
   assert.match(worker, /modules\/shell-controller\.js/);
   assert.match(worker, /modules\/store\.js/);
+  assert.match(worker, /modules\/view-runtime\.js/);
+  assert.match(worker, /modules\/navigation-component\.js/);
   assert.match(theme, /prefers-color-scheme: dark/);
   assert.match(theme, /openstart-theme/);
   assert.match(theme, /aria-label/);
