@@ -41,6 +41,24 @@ test("regionLabel renders a readable chip for state-only and city results", () =
   assert.equal(regionLabel({ city: "boulder", state: "CO" }), "Boulder, CO");
 });
 
+test("the discovery RPC matches regions against real 'City, State' text", async () => {
+  const migrations = new URL("../supabase/migrations/", import.meta.url);
+  const fix = await readFile(new URL("20260730000000_fix_discovery_region_match.sql", migrations), "utf8");
+
+  // The original build was '%,' || state || '%', which demands that the state
+  // follow the comma with no space. Locations are written "Richmond, Virginia",
+  // so every row fell through to the unranked branch.
+  assert.ok(!/like\s*'%,'\s*\|\|/.test(fix),
+    "region matching must not rely on a comma-adjacent LIKE needle");
+  assert.match(fix, /regexp_replace\(e\.location_name,'\^\.\*,',''\)/,
+    "region matching should compare the final comma-separated segment");
+  // Equality against the last segment, so ',MO' cannot match ',Montana'.
+  assert.match(fix, /in \(t\.code_match,t\.name_match\)/);
+  // Free-text search must treat % and _ literally.
+  assert.ok(!/e\.name ilike/.test(fix), "free-text search should use position(), not ilike");
+  assert.match(fix, /position\(lower\(t\.query\) in lower\(e\.name\)\)/);
+});
+
 test("the discovery list stays light and detail data is fetched per event", async () => {
   const data = await readFile(new URL("../data.js", import.meta.url), "utf8");
   const cardSelect = data.match(/const EVENT_CARD_SELECT = "([^"]+)"/);
