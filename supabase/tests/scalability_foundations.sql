@@ -11,6 +11,7 @@ declare
   v_blocked boolean:=false;
   v_claimed integer;
   v_discovered integer;
+  v_first text;
 begin
   select id into v_owner from auth.users order by created_at limit 1;
   if v_owner is null then raise exception 'A test owner is required'; end if;
@@ -51,6 +52,39 @@ begin
 
   select count(*) into v_discovered from public.os_discover_events('Scalability','VA','Richmond',1,0);
   if v_discovered<>1 then raise exception 'Server-side discovery did not return its bounded page'; end if;
+
+  -- Bounded paging alone passed even while region matching matched nothing, so
+  -- assert the ranking itself. The control event starts soonest and matches no
+  -- queried state, so it wins on date alone: each assertion below can only pass
+  -- if region ranking actually outranks the date ordering. Both the full-name
+  -- and state-code spellings are covered, because organizers write either form.
+  insert into public.os_events(id,organizer_id,slug,name,description,starts_at,location_name,status)
+  values
+    (gen_random_uuid(),v_owner,'rankprobe-ctl-'||substr(replace(gen_random_uuid()::text,'-',''),1,8),
+      'RankProbe Control','Ranking fixture',now()+interval '5 days','Boise, Idaho','published'),
+    (gen_random_uuid(),v_owner,'rankprobe-name-'||substr(replace(gen_random_uuid()::text,'-',''),1,8),
+      'RankProbe FullName','Ranking fixture',now()+interval '10 days','Roanoke, Virginia','published'),
+    (gen_random_uuid(),v_owner,'rankprobe-code-'||substr(replace(gen_random_uuid()::text,'-',''),1,8),
+      'RankProbe Code','Ranking fixture',now()+interval '20 days','Austin, TX','published');
+
+  select d.event->>'location_name' into v_first
+  from public.os_discover_events('RankProbe','VA',null,5,0) d limit 1;
+  if v_first is distinct from 'Roanoke, Virginia' then
+    raise exception 'Full-name region ranking failed (got %)',coalesce(v_first,'<none>');
+  end if;
+
+  select d.event->>'location_name' into v_first
+  from public.os_discover_events('RankProbe','TX',null,5,0) d limit 1;
+  if v_first is distinct from 'Austin, TX' then
+    raise exception 'State-code region ranking failed (got %)',coalesce(v_first,'<none>');
+  end if;
+
+  -- ',MO' must not match ',Montana': an unrelated state ranks nothing.
+  select d.event->>'location_name' into v_first
+  from public.os_discover_events('RankProbe','MO',null,5,0) d limit 1;
+  if v_first is distinct from 'Boise, Idaho' then
+    raise exception 'Unmatched state should fall back to date order (got %)',coalesce(v_first,'<none>');
+  end if;
 
   insert into public.os_campaigns(id,event_id,organizer_id,name,subject,html_body,status,scheduled_at)
   values(v_campaign,v_event,v_owner,'Scale campaign','Subject','Body','sending',now());
