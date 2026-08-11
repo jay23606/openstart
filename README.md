@@ -279,6 +279,10 @@ The manual [controlled load-test workflow](docs/load-testing.md) uses the same
 isolated project to measure discovery and registration spikes, validate
 idempotency, and prove that capacity counters never exceed their limits.
 
+See the [accessibility baseline](docs/accessibility.md) for the WCAG target,
+automated coverage, supported browsers, and the remaining manual screen-reader
+checks required before public beta.
+
 ## Security and production notes
 
 - Keep Stripe, Resend, cron, and service-role secrets out of browser code.

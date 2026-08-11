@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { FIXTURES } from "./supabase-test-env.mjs";
 
 async function signIn(page, view, email) {
@@ -26,6 +27,24 @@ test("runner can see and manage a seeded registration", async ({ page }) => {
   await expect(page.getByText("confirmed", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("authenticated organizer and runner surfaces pass automated accessibility checks", async ({ browser }) => {
+  const organizerContext = await browser.newContext();
+  const organizer = await organizerContext.newPage();
+  await signIn(organizer, "dashboard", FIXTURES.organizerEmail);
+  expect((await new AxeBuilder({ page: organizer }).analyze()).violations).toEqual([]);
+  await organizer.getByRole("button", { name: new RegExp(FIXTURES.publishedEventName) }).click();
+  expect((await new AxeBuilder({ page: organizer }).analyze()).violations).toEqual([]);
+
+  const runnerContext = await browser.newContext();
+  const runner = await runnerContext.newPage();
+  await signIn(runner, "runner", FIXTURES.runnerEmail);
+  expect((await new AxeBuilder({ page: runner }).analyze()).violations).toEqual([]);
+  await runner.getByRole("button", { name: "Manage", exact: true }).click();
+  expect((await new AxeBuilder({ page: runner }).include("dialog").analyze()).violations).toEqual([]);
+  await organizerContext.close();
+  await runnerContext.close();
 });
 
 test("a stale organizer edit opens the conflict resolver", async ({ browser }) => {

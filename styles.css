@@ -10,7 +10,7 @@
   --green-dark: #0a4937;
   --lime: #d5f36b;
   --line: #d9ded8;
-  --orange: #f47b45;
+  --orange: #b74718;
   --header: rgba(255, 253, 248, .9);
   --hover: #f0f3ed;
   --input: #ffffff;
@@ -88,6 +88,7 @@ nav button.nav-active::after { background: var(--orange); bottom: -19px; content
 
 .help-page { min-height: 75vh; }
 .help-hero { background: var(--green-dark); color: white; padding: 76px clamp(24px, 10vw, 150px) 66px; }
+.help-hero .eyebrow { color: var(--lime); }
 .help-hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 6vw, 76px); font-weight: 500; letter-spacing: -3px; margin-bottom: 18px; }
 .help-hero > p:not(.eyebrow) { color: #c7d6cf; font-size: 17px; line-height: 1.6; }
 .help-search { display: block; margin-top: 32px; max-width: 720px; }
@@ -815,8 +816,17 @@ footer b { color: white; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --motion-disabled: 1; }
   html { scroll-behavior: auto; }
-  * { transition: none !important; }
+  *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+.skip-link { background: var(--ink); color: var(--paper); font-weight: 800; left: 12px; padding: 12px 16px; position: fixed; top: 10px; transform: translateY(-150%); z-index: 1000; }
+.skip-link:focus { transform: translateY(0); }
+
+@media (forced-colors: active) {
+  :where(button,a,input,select,textarea,summary):focus-visible { outline: 3px solid Highlight; }
+  .status-dot,.brand-mark { forced-color-adjust: none; }
 }
 
 .platform-console { margin: 0 auto; max-width: 1440px; padding: 64px 5vw 100px; }
