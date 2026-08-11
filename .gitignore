@@ -2,6 +2,7 @@
 /coverage
 /test-results
 /playwright-report
+/tests/.auth
 /.vinext
 /.wrangler
 /dist

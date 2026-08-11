@@ -235,6 +235,31 @@ npm audit --audit-level=high
 The GitHub quality workflow runs syntax checks, unit and static tests, the
 dependency audit, and Playwright browser tests before deployment.
 
+### Authenticated browser tests
+
+The opt-in authenticated suite verifies organizer access, runner self-service,
+and concurrent-edit conflict handling against a dedicated Supabase test project.
+It creates deterministic fixtures before the run and removes only those fixtures
+afterward. It will refuse to run against the Supabase URL in `config.js`.
+
+Apply the repository migrations to a separate test project, then provide:
+
+```bash
+E2E_SUPABASE_URL=https://your-test-project.supabase.co
+E2E_SUPABASE_ANON_KEY=your_test_publishable_key
+E2E_SUPABASE_SERVICE_ROLE_KEY=your_test_service_role_key
+E2E_CONFIRM_PROJECT_REF=your-test-project
+E2E_TEST_PASSWORD=a-long-test-only-password
+E2E_ALLOW_RESET=true
+npm run test:e2e:auth
+```
+
+Never aim this suite at a project containing real accounts or registrations.
+For GitHub Actions, add the five credential values as repository secrets except
+`E2E_CONFIRM_PROJECT_REF`, which is a repository variable. Set the repository
+variable `E2E_TESTS_ENABLED` to `true` to enable the isolated CI job. The job is
+disabled for pull requests so forked code cannot access test credentials.
+
 ## Security and production notes
 
 - Keep Stripe, Resend, cron, and service-role secrets out of browser code.
