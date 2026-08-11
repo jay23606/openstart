@@ -44,7 +44,7 @@ test("a stale organizer edit opens the conflict resolver", async ({ browser }) =
   await expect(first.getByText("Event details saved.", { exact: true })).toBeVisible();
   await second.getByRole("button", { name: "Save and continue" }).click();
   await expect(second.getByRole("heading", { name: "This event changed elsewhere" })).toBeVisible();
-  await expect(second.getByRole("button", { name: "Reload latest saved" })).toBeVisible();
+  await expect(second.getByRole("button", { name: "Use latest saved" })).toBeVisible();
 
   await first.close();
   await second.close();
