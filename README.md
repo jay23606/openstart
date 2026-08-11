@@ -229,6 +229,7 @@ features in production.
 ```bash
 npm test
 npm run test:e2e
+npm run test:load # dedicated Supabase test project only
 npm audit --audit-level=high
 ```
 
@@ -273,6 +274,10 @@ For GitHub Actions, add the five credential values as repository secrets except
 `E2E_CONFIRM_PROJECT_REF`, which is a repository variable. Set the repository
 variable `E2E_TESTS_ENABLED` to `true` to enable the isolated CI job. The job is
 disabled for pull requests so forked code cannot access test credentials.
+
+The manual [controlled load-test workflow](docs/load-testing.md) uses the same
+isolated project to measure discovery and registration spikes, validate
+idempotency, and prove that capacity counters never exceed their limits.
 
 ## Security and production notes
 

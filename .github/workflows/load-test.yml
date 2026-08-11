@@ -1,0 +1,32 @@
+name: Controlled load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      capacity:
+        description: Registration capacity to fill (10-200)
+        required: false
+        default: "40"
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-load-test:
+    runs-on: ubuntu-latest
+    env:
+      E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+      E2E_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+      E2E_CONFIRM_PROJECT_REF: ${{ vars.E2E_CONFIRM_PROJECT_REF }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+      E2E_ALLOW_RESET: "true"
+      LOAD_CAPACITY: ${{ inputs.capacity }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:load
