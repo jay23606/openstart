@@ -283,6 +283,12 @@ See the [accessibility baseline](docs/accessibility.md) for the WCAG target,
 automated coverage, supported browsers, and the remaining manual screen-reader
 checks required before public beta.
 
+Use the [public beta launch checklist](docs/beta-launch-checklist.md) as the
+go/no-go release gate. The [operator incident runbook](docs/operator-runbook.md)
+covers payment, email, refund, duplicate-registration, outage, and suspension
+response. Users can submit privacy-filtered feedback from the public Help screen;
+platform operators see those reports in the private operations console.
+
 ## Security and production notes
 
 - Keep Stripe, Resend, cron, and service-role secrets out of browser code.

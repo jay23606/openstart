@@ -7,18 +7,18 @@ import {
   deleteChecklistItem, deleteEventQuestion, deleteEventSection, deleteEventSponsor, deleteScheduledPrice, deleteShowcaseEvent, deleteWave, DEMO_ORGANIZER_ID, duplicateEvent, removeSeriesEvent,
   getAthleteProfile, getMyAthleteProfile, getOrganizerProfile, getPublishedEvent, listAuditLog, listCaptainTeams, listEmailTemplates, listMyLotteryApplications, listOrganizerCampaigns, listOrganizerEvents, listOrganizerOrderItems, listOrganizerSeries, listPublishedEvents, listPublishedSeries, listRegistrations, organizerEventMetrics,
   eventReadiness, listMyVolunteerSignups, listRunnerRegistrations, lotteryAction, publishEvent, raceDayAction, registrationAction, resendConfirmation, resetDemo, resultsAction, unpublishEvent, updateEventSettings,
-  platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
-} from "./data.js?v=105";
+  platformAdminAction, reviewLotteryApplication, saveAthleteProfile, seriesAction, submitFeedback, submitLotteryApplication, updateChecklistItem, updateEventSections, updateOrderItem, updateRegistration, updateSeries, updateVolunteerSignup, updateWaitlist, withdrawLotteryApplication, joinVolunteerShift, uploadEventAsset, wavesAction,
+} from "./data.js?v=109";
 import { createRegistrationController } from "./features/registration/controller.js?v=102";
 import { createRegistrationViews } from "./features/registration/views.js?v=68";
-import { createContentController } from "./features/content/controller.js?v=83";
+import { createContentController } from "./features/content/controller.js?v=109";
 import { createDemoController } from "./features/demo/controller.js?v=95";
 import { createAccountController } from "./features/account/controller.js?v=103";
 import { createPublicController } from "./features/public/controller.js?v=94";
 import { createOrganizerController } from "./features/organizer/controller.js?v=105";
 import { createOrganizerViews } from "./features/organizer/views.js?v=104";
 import { createPlatformController } from "./features/platform/controller.js?v=49";
-import { createPlatformViews } from "./features/platform/views.js?v=69";
+import { createPlatformViews } from "./features/platform/views.js?v=109";
 import { createSeriesController } from "./features/series/controller.js?v=50";
 import { createSeriesViews } from "./features/series/views.js?v=75";
 import { createLotteryController } from "./features/lottery/controller.js?v=105";
@@ -39,7 +39,7 @@ import { createWavesController } from "./features/waves/controller.js?v=57";
 import { createWaveViews } from "./features/waves/views.js?v=64";
 import { createAppStore, eventById as findEventById, eventRegistrations as findEventRegistrations, tierById as findTierById } from "./modules/app-state.js?v=91";
 import { createAccountViews } from "./modules/account-views.js?v=104";
-import { architectureView, demoView, helpView } from "./modules/content-views.js?v=106";
+import { architectureView, demoView, feedbackForm, helpView } from "./modules/content-views.js?v=109";
 import { parseRegion, stateFromCoords } from "./modules/discovery.js?v=40";
 import { createDispatcher, handlersFrom } from "./modules/dispatcher.js?v=46";
 import { createBusyController } from "./modules/busy.js?v=48";
@@ -209,7 +209,15 @@ const publicController = createPublicController({
   patchState: appStore.patch,
   refreshResults: discoveryResultsComponent.refresh,
 });
-const contentController = createContentController({ documentRef: document });
+const contentController = createContentController({
+  documentRef: document,
+  openDialog,
+  closeDialog: () => dialogController.close(),
+  feedbackForm,
+  submitFeedback,
+  showNotice,
+  route: () => state.view || "unknown",
+});
 const { loadDiscovery, renderDiscover, renderEvent } = publicController;
 publicController.restoreRegion();
 

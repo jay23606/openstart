@@ -66,3 +66,27 @@ test("content controller searches all guides and ignores unrelated inputs", () =
   assert.equal(articles[2].classList.contains("hidden"), false);
   assert.equal(count.textContent, "2 guides");
 });
+
+test("content controller opens and submits privacy-safe feedback", async () => {
+  let opened = "";
+  let closed = false;
+  let submitted;
+  let notice = "";
+  const controller = createContentController({
+    documentRef: {},
+    openDialog: (content) => { opened = content; },
+    closeDialog: () => { closed = true; },
+    feedbackForm: () => "feedback markup",
+    submitFeedback: async (payload) => { submitted = payload; },
+    showNotice: (message) => { notice = message; },
+    route: () => "help",
+  });
+  assert.equal(controller.handleClick({ matches: (selector) => selector === "[data-open-feedback]" }), true);
+  assert.equal(opened, "feedback markup");
+
+  const values = new Map([["category", "idea"], ["message", "  Add family registration  "]]);
+  assert.equal(await controller.handleSubmit({ id: "feedback-form" }, { get: (key) => values.get(key) }), true);
+  assert.deepEqual(submitted, { category: "idea", message: "Add family registration", route: "help" });
+  assert.equal(closed, true);
+  assert.match(notice, /feedback was sent/i);
+});

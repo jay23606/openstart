@@ -347,6 +347,10 @@ export async function updateEventSettings(eventId, changes, { expectedUpdatedAt 
   return data;
 }
 
+export async function submitFeedback(payload) {
+  return functionResult("os-feedback",payload);
+}
+
 export async function createEventTier(tier) {
   const { data, error } = await supabase.from("os_event_tiers").insert(tier).select().single();
   if (error) throw error;

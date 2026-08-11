@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.os-observability]
 verify_jwt = false
+
+[functions.os-feedback]
+verify_jwt = false

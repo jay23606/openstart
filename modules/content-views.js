@@ -1,5 +1,12 @@
 import { escapeHtml } from "../core.js?v=36";
 import { helpArticles, showcaseFeatures } from "./content-data.js?v=40";
+import { modalShell } from "./render.js?v=62";
+
+export function feedbackForm() {
+  const body = `<p class="modal-note">Tell us what blocked you or could work better. Reports may be linked to your account when signed in.</p>
+    <form id="feedback-form"><label>Type<select name="category"><option value="bug">Something broke</option><option value="confusing">Something was confusing</option><option value="idea">Feature idea</option><option value="accessibility">Accessibility problem</option><option value="other">Other</option></select></label><label>What happened?<textarea name="message" minlength="20" maxlength="2000" rows="7" required placeholder="What were you trying to do, what happened, and what did you expect?"></textarea></label><p class="form-hint">Do not include names, email addresses, passwords, payment information, API keys, or participant data. Common sensitive patterns are removed automatically.</p><p class="form-message" aria-live="polite"></p><button class="primary-button" type="submit">Send feedback</button></form>`;
+  return modalShell({ eyebrow:"Private beta feedback", title:"Help improve OpenStart", body },escapeHtml);
+}
 
 export function helpView() {
   const audiences=["All",...new Set(helpArticles.map((article)=>article.audience))];
@@ -33,7 +40,7 @@ export function helpView() {
         <aside class="help-support">
           <div><p class="eyebrow">STILL STUCK?</p><h2>Tell us what happened.</h2></div>
           <p>Include the page you were on and the exact error message. Never include passwords, Stripe secret keys, or other credentials.</p>
-          <a class="primary-button" href="https://github.com/jay23606/openstart/issues/new" target="_blank" rel="noreferrer">Open a GitHub issue</a>
+          <span><button class="primary-button" data-open-feedback type="button">Send private feedback</button><a class="subtle-button" href="https://github.com/jay23606/openstart/issues/new" target="_blank" rel="noreferrer">Open a public GitHub issue</a></span>
         </aside>
       </div>
     </section>`;
