@@ -56,6 +56,7 @@ import { parseResultsCsv as parseResultRows } from "./modules/results.js?v=43";
 import { createRouter } from "./modules/router.js?v=104";
 import { createDialogController, createNoticeController } from "./modules/ui-feedback.js?v=104";
 import { localDateTime, parseResultTime, resultTime, safeUrl, setPageMetadata } from "./modules/ui.js?v=40";
+import { captureException, initObservability } from "./modules/observability.js?v=107";
 
 const page = document.querySelector("#page-content");
 const dialog = document.querySelector("#app-dialog");
@@ -65,6 +66,8 @@ const authButton = document.querySelector("#auth-button");
 const signOutButton = document.querySelector("#sign-out");
 const setupBanner = document.querySelector("#setup-banner");
 const platformNav = document.querySelector("#platform-nav");
+
+if (configured) initObservability(supabase);
 
 const appStore = createAppStore();
 const { state } = appStore;
@@ -947,6 +950,7 @@ document.addEventListener("submit", async (event) => {
       return;
     }
   } catch (error) {
+    captureException(error);
     const message = error.message || "Something went wrong.";
     const formMessage = form.querySelector(".form-message");
     if (formMessage) formMessage.textContent = message;
@@ -978,6 +982,7 @@ document.addEventListener("drop",async(event)=>{
 });
 window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
+  captureException(event.reason, { severity: "fatal" });
   showNotice(event.reason?.message || "Something went wrong.", { type: "error", duration: 0 });
 });
 authButton.addEventListener("click", () => {
@@ -1038,5 +1043,6 @@ async function boot() {
 }
 
 boot().catch((error) => {
+  captureException(error, { severity: "fatal" });
   pageLifecycle.error(`<section class="empty-state">OpenStart could not load: ${escapeHtml(error.message)}</section>`);
 });

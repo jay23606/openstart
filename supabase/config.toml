@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.os-series]
 verify_jwt = false
+
+[functions.os-observability]
+verify_jwt = false

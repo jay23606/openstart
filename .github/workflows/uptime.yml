@@ -1,0 +1,28 @@
+name: Production health check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check static application
+        run: curl --fail --silent --show-error --retry 2 --max-time 15 https://jay23606.github.io/openstart/ > /dev/null
+      - name: Check database and provider configuration
+        env:
+          HEALTH_URL: ${{ secrets.OPENSTART_HEALTH_URL }}
+          ANON_KEY: ${{ secrets.OPENSTART_ANON_KEY }}
+        run: |
+          response=$(curl --fail --silent --show-error --retry 2 --max-time 20 \
+            -X POST "$HEALTH_URL" \
+            -H "apikey: $ANON_KEY" \
+            -H "Authorization: Bearer $ANON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"health"}')
+          node -e 'const h=JSON.parse(process.argv[1]); if(!h.database) process.exit(1); console.log(`Database operational; ${h.responseMs} ms`)' "$response"

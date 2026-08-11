@@ -1,5 +1,5 @@
 import Stripe from "npm:stripe@18.5.0";
-import { adminClient, assertAllowedUrl, corsHeaders, enforceRateLimit, json, optionalUserId } from "../_shared/common.ts";
+import { adminClient, assertAllowedUrl, corsHeaders, enforceRateLimit, json, optionalUserId, recordFunctionError } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripe = stripeKey
@@ -223,6 +223,7 @@ Deno.serve(async (request) => {
 
     return json(request, { status: "checkout", registrationId, checkoutUrl: session.url });
   } catch (error) {
+    await recordFunctionError("os-create-checkout",error);
     if (registrationId) {
       await admin.from("os_registrations")
         .update({ status: "cancelled" })

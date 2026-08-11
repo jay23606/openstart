@@ -1,4 +1,4 @@
-import { adminClient, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, corsHeaders, json, requiredUser, recordFunctionError } from "../_shared/common.ts";
 
 const resendKey = Deno.env.get("RESEND_API_KEY");
 const confirmationFrom = Deno.env.get("RESEND_FROM_EMAIL");
@@ -55,6 +55,7 @@ Deno.serve(async (request) => {
       .eq("id", registration.id);
     return json(request, { sent: true });
   } catch (error) {
+    await recordFunctionError("os-registration-email",error);
     return json(request, { error: error instanceof Error ? error.message : "Email failed" }, 400);
   }
 });

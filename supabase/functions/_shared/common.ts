@@ -84,3 +84,22 @@ export async function enforceRateLimit(request: Request, scope: string, limit: n
   if(error) throw error;
   return data===true;
 }
+
+const redactError=(value:unknown)=>String(value instanceof Error ? value.message : value || "Edge Function failed")
+  .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,"[email]")
+  .replace(/\b(?:sk|pk|re|whsec|sb_secret|sb_publishable)_[A-Za-z0-9_-]+\b/g,"[credential]")
+  .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi,"[id]").slice(0,500);
+
+export async function recordFunctionError(functionName:string,error:unknown) {
+  try {
+    const message=redactError(error);
+    const bytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(`${functionName}:${message}`)));
+    const fingerprint=Array.from(bytes.slice(0,12)).map((byte)=>byte.toString(16).padStart(2,"0")).join("");
+    await adminClient().from("os_observability_events").insert({
+      source:"edge",severity:"error",fingerprint,message,route:functionName,
+      release:Deno.env.get("OPENSTART_RELEASE") || "unknown",
+      environment:Deno.env.get("OPENSTART_ENVIRONMENT") || "production",
+      metadata:{errorName:error instanceof Error ? error.name : "Error"},
+    });
+  } catch { /* reporting must not replace the original failure */ }
+}

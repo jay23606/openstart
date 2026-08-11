@@ -235,6 +235,20 @@ npm audit --audit-level=high
 The GitHub quality workflow runs syntax checks, unit and static tests, the
 dependency audit, and Playwright browser tests before deployment.
 
+## Observability
+
+OpenStart records privacy-filtered browser failures and critical Edge Function
+errors in `os_observability_events`. The private platform console combines these
+signals with Stripe webhook failures, email failures, payment reconciliation,
+and capacity drift. Telemetry excludes form contents, stack traces, query
+strings, email addresses, payment fields, and credentials; retained records can
+be pruned with `os_prune_observability_events()`.
+
+The scheduled production health workflow checks the static application and the
+database-backed health endpoint every 15 minutes. Configure its
+`OPENSTART_HEALTH_URL` and `OPENSTART_ANON_KEY` repository secrets before
+enabling alerts from failed GitHub Actions runs.
+
 ### Authenticated browser tests
 
 The opt-in authenticated suite verifies organizer access, runner self-service,

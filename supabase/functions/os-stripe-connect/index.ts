@@ -1,4 +1,4 @@
-import { adminClient, assertAllowedUrl, corsHeaders, json, requiredUser } from "../_shared/common.ts";
+import { adminClient, assertAllowedUrl, corsHeaders, json, requiredUser, recordFunctionError } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const stripeApiVersion = "2026-06-24.dahlia";
@@ -112,6 +112,7 @@ Deno.serve(async (request) => {
     });
     return json(request, { url: link.url });
   } catch (error) {
+    await recordFunctionError("os-stripe-connect",error);
     console.error("Stripe onboarding failed", error);
     return json(request, { error: error instanceof Error ? error.message : "Stripe onboarding failed" }, 400);
   }

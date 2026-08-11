@@ -1,6 +1,6 @@
 import Stripe from "npm:stripe@18.5.0";
 import QRCode from "npm:qrcode@1.5.4";
-import { adminClient, json } from "../_shared/common.ts";
+import { adminClient, json, recordFunctionError } from "../_shared/common.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
@@ -200,6 +200,7 @@ Deno.serve(async (request) => {
     }).eq("provider","stripe").eq("provider_event_id",event.id);
     return json(request, { received: true });
   } catch (error) {
+    await recordFunctionError("os-stripe-webhook",error);
     await admin.from("os_provider_events").upsert({
       provider:"stripe",provider_event_id:providerEventId,event_type:providerEventType,status:"failed",
       error_message:error instanceof Error ? error.message.slice(0,500) : "Webhook failed",
